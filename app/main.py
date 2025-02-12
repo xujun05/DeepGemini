@@ -30,7 +30,7 @@ DEEPSEEK_MODEL = os.getenv("DEEPSEEK_MODEL")
 GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
 GEMINI_API_URL = os.getenv(
     "GEMINI_API_URL", 
-    "https://gemini.52yyds.top/v1/chat/completions"
+    "https://generativelanguage.googleapis.com/v1/models/gemini-exp-1206/versions/1:generate"
 )
 GEMINI_MODEL = os.getenv("GEMINI_MODEL", "gemini-exp-1206")
 

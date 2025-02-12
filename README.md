@@ -1,5 +1,5 @@
 <div>
-<h1>DeepClaude 🐬🧠 - OpenAI Compatible</h1>
+<h1>DeepClaude and Deepgemini 🐬🧠 - OpenAI Compatible</h1>
 
 <a href="https://github.com/getasterisk/deepclaude"> Inspiration from getasterisk/deepclaude</a>
 
