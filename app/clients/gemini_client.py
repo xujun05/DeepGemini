@@ -38,7 +38,7 @@ class GeminiClient(BaseClient):
             "model": model,
             "stream": True,
             "temperature": 0.7,
-            "max_tokens": 16000,
+            "max_tokens": 1024000,
         }
 
         first_chunk = True
