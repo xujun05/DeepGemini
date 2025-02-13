@@ -41,6 +41,7 @@ class GeminiClient(BaseClient):
             "max_tokens": 16000,
         }
 
+        first_chunk = True
         async for chunk in self._make_request(headers, data):
             try:
                 chunk_str = chunk.decode('utf-8')
@@ -54,10 +55,24 @@ class GeminiClient(BaseClient):
                             return
                             
                         data = json.loads(json_str)
-                        content = data.get('choices', [{}])[0].get('delta', {}).get('content', '')
+                        delta = data.get('choices', [{}])[0].get('delta', {})
+                        
+                        # 处理第一个chunk的完整消息
+                        if first_chunk:
+                            content = delta.get('content', '')
+                            role = delta.get('role', '')
+                            if role:  # 如果包含role，这是第一个chunk
+                                first_chunk = False
+                                if content:  # 确保不会丢失第一个chunk中的content
+                                    yield "reasoning", content
+                                continue
+                            
+                        # 处理后续chunks
+                        content = delta.get('content', '')
                         if content:
                             yield "reasoning", content
+                            
             except json.JSONDecodeError:
                 continue
             except Exception as e:
-                logger.error(f"处理 Gemini 响应时发生错误: {e}") 
+                logger.error(f"处理 Gemini 响应时发生错误: {e}")
