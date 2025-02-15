@@ -40,11 +40,12 @@ class GeminiClient(BaseClient):
             "temperature": 0.7,
             "max_tokens": 1024000,
         }
-
+        logger.debug(f"Gemini 请求数据: {data}")
         first_chunk = True
         async for chunk in self._make_request(headers, data):
             try:
                 chunk_str = chunk.decode('utf-8')
+                logger.debug(f"Gemini 响应数据: {chunk_str}")
                 if not chunk_str.strip():
                     continue
                     

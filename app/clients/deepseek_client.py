@@ -6,15 +6,18 @@ from .base_client import BaseClient
 
 
 class DeepSeekClient(BaseClient):
-    def __init__(self, api_key: str, api_url: str = "https://api.siliconflow.cn/v1/chat/completions", provider: str = "deepseek"):
+    def __init__(self, api_key: str, api_url: str, provider: str = "deepseek", is_origin_reasoning: bool = True):
         """初始化 DeepSeek 客户端
         
         Args:
-            api_key: DeepSeek API密钥
-            api_url: DeepSeek API地址
+            api_key: API密钥
+            api_url: API地址
+            provider: 提供商名称
+            is_origin_reasoning: 是否为推理模型客户端
         """
         super().__init__(api_key, api_url)
         self.provider = provider
+        self.is_origin_reasoning = is_origin_reasoning  # 保存标志
         
     def _process_think_tag_content(self, content: str) -> tuple[bool, str]:
         """处理包含 think 标签的内容
@@ -39,16 +42,17 @@ class DeepSeekClient(BaseClient):
         else:
             return True, content
             
-    async def stream_chat(self, messages: list, model: str = "deepseek-ai/DeepSeek-R1", is_origin_reasoning: bool = True) -> AsyncGenerator[tuple[str, str], None]:
+    async def stream_chat(self, messages: list, model: str = "deepseek-ai/DeepSeek-R1", **kwargs) -> AsyncGenerator[tuple[str, str], None]:
         """流式对话
         
         Args:
             messages: 消息列表
             model: 模型名称
+            **kwargs: 其他参数
             
         Yields:
             tuple[str, str]: (内容类型, 内容)
-                内容类型: "reasoning" 或 "content"
+                内容类型: "reasoning" 或 "content" 或 "answer"
                 内容: 实际的文本内容
         """
         headers = {
@@ -64,9 +68,7 @@ class DeepSeekClient(BaseClient):
         
         logger.debug(f"开始流式对话：{data}")
 
-        accumulated_content = ""
-        is_collecting_think = False
-        
+        first_chunk = True
         async for chunk in self._make_request(headers, data):
             chunk_str = chunk.decode('utf-8')
             
@@ -82,8 +84,8 @@ class DeepSeekClient(BaseClient):
                         if data and data.get("choices") and data["choices"][0].get("delta"):
                             delta = data["choices"][0]["delta"]
                             
-                            if is_origin_reasoning:
-                                # 处理 reasoning_content
+                            if self.is_origin_reasoning:
+                                # 处理推理模型的输出
                                 if delta.get("reasoning_content"):
                                     content = delta["reasoning_content"]
                                     logger.debug(f"提取推理内容：{content}")
@@ -91,43 +93,30 @@ class DeepSeekClient(BaseClient):
                                 
                                 if delta.get("reasoning_content") is None and delta.get("content"):
                                     content = delta["content"]
-                                    logger.info(f"提取内容信息，推理阶段结束: {content}")
+                                    logger.debug(f"提取内容信息，推理阶段结束: {content}")
                                     yield "content", content
                             else:
-                                # 处理其他模型的输出
+                                # 处理执行模型的输出
                                 if delta.get("content"):
                                     content = delta["content"]
-                                    if content == "":  # 只跳过完全空的字符串
-                                        continue
-                                    logger.debug(f"非原生推理内容：{content}")
-                                    accumulated_content += content
-                                    
-                                    # 检查累积的内容是否包含完整的 think 标签对
-                                    is_complete, processed_content = self._process_think_tag_content(accumulated_content)
-                                    
-                                    if "<think>" in content and not is_collecting_think:
-                                        # 开始收集推理内容
-                                        logger.debug(f"开始收集推理内容：{content}")
-                                        is_collecting_think = True
-                                        yield "reasoning", content
-                                    elif is_collecting_think:
-                                        if "</think>" in content:
-                                            # 推理内容结束
-                                            logger.debug(f"推理内容结束：{content}")
-                                            is_collecting_think = False
-                                            yield "reasoning", content
-                                            # 输出空的 content 来触发 Claude 处理
-                                            yield "content", ""
-                                            # 重置累积内容
-                                            accumulated_content = ""
+                                    if content.strip():  # 只处理非空内容
+                                        if first_chunk and delta.get("role"):
+                                            # 第一个块可能包含角色信息
+                                            first_chunk = False
+                                            if content.strip():
+                                                logger.debug(f"执行模型首个响应：{content}")
+                                                yield "answer", content
                                         else:
-                                            # 继续收集推理内容
-                                            yield "reasoning", content
-                                    else:
-                                        # 普通内容
-                                        yield "content", content
-                                        
+                                            logger.debug(f"执行模型响应：{content}")
+                                            yield "answer", content
+                                elif delta.get("role") and first_chunk:
+                                    # 处理第一个只包含角色信息的块
+                                    first_chunk = False
+                                    logger.debug("处理执行模型角色信息")
+                                    
             except json.JSONDecodeError as e:
-                logger.error(f"JSON 解析错误: {e}")
+                logger.error(f"JSON解析错误: {e}")
+                continue
             except Exception as e:
-                logger.error(f"处理 chunk 时发生错误: {e}")
+                logger.error(f"处理块数据时发生错误: {e}")
+                continue
