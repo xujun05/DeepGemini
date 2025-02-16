@@ -5,10 +5,124 @@ let stepCounter = 0;
 let availableModels = [];
 let isManualModelInput = false;
 
+// Translations object
+const translations = {
+    en: {
+        modelManagement: 'Model Management',
+        workflowManagement: 'Relay Chain Management',
+        systemSettings: 'System Settings',
+        addNewModel: 'Add New Model',
+        addNewWorkflow: 'Add New Relay Chain',
+        workflowDescription: 'Configure and manage your AI model relay chains',
+        language: 'Language',
+        darkMode: 'Dark Mode',
+        lightMode: 'Light Mode',
+        steps: 'Steps',
+        reasoning: 'Reasoning',
+        execution: 'Execution',
+        active: 'Active',
+        inactive: 'Inactive',
+        edit: 'Edit',
+        duplicate: 'Duplicate',
+        delete: 'Delete',
+        preview: 'Preview',
+        save: 'Save',
+        close: 'Close',
+        configName: 'Configuration Name',
+        systemPrompt: 'System Prompt',
+        modelSelection: 'Model Selection',
+        stepType: 'Step Type',
+        stepOrder: 'Step Order',
+        customName: 'Custom Name',
+        customNamePlaceholder: 'Enter a custom name for this model',
+        apiKey: 'API Key',
+        apiUrl: 'API URL',
+        modelName: 'Model Name',
+        modelNamePlaceholder: 'Please enter API credentials first',
+        type: 'Type',
+        provider: 'Provider',
+        temperature: 'Temperature',
+        topP: 'Top P',
+        presencePenalty: 'Presence Penalty',
+        frequencyPenalty: 'Frequency Penalty',
+        maxTokens: 'Max Tokens',
+        optionalSystemPrompt: 'System Prompt (Optional)',
+        systemPromptPlaceholder: 'Enter system prompt to guide the model\'s behavior',
+        addStep: 'Add Step',
+        removeStep: 'Remove Step',
+        step: 'Step',
+        visualizeWorkflow: 'Relay Chain Visualization'
+    },
+    zh: {
+        modelManagement: '模型管理',
+        workflowManagement: '接力链管理',
+        systemSettings: '系统设置',
+        addNewModel: '添加新模型',
+        addNewWorkflow: '添加新接力链',
+        workflowDescription: '配置和管理您的 AI 模型接力链',
+        language: '语言',
+        darkMode: '夜间模式',
+        lightMode: '日间模式',
+        steps: '步骤',
+        reasoning: '推理',
+        execution: '执行',
+        active: '已启用',
+        inactive: '已禁用',
+        edit: '编辑',
+        duplicate: '复制',
+        delete: '删除',
+        preview: '预览',
+        save: '保存',
+        close: '关闭',
+        configName: '配置名称',
+        systemPrompt: '系统提示词',
+        modelSelection: '模型选择',
+        stepType: '步骤类型',
+        stepOrder: '步骤顺序',
+        customName: '自定义名称',
+        customNamePlaceholder: '请输入模型的自定义名称',
+        apiKey: 'API 密钥',
+        apiUrl: 'API 地址',
+        modelName: '模型名称',
+        modelNamePlaceholder: '请先输入 API 凭证',
+        type: '类型',
+        provider: '提供商',
+        temperature: '温度',
+        topP: 'Top P 值',
+        presencePenalty: '存在惩罚',
+        frequencyPenalty: '频率惩罚',
+        maxTokens: '最大令牌数',
+        optionalSystemPrompt: '系统提示词（可选）',
+        systemPromptPlaceholder: '输入系统提示词以指导模型行为',
+        addStep: '添加步骤',
+        removeStep: '删除步骤',
+        step: '步骤',
+        visualizeWorkflow: '接力链可视化'
+    }
+};
+
 // Initialize the application
 document.addEventListener('DOMContentLoaded', function() {
     loadModels();
     loadConfigurations();
+    
+    // 初始化语言
+    const savedLang = localStorage.getItem('preferred_language') || 'en';
+    document.getElementById('languageSelect').value = savedLang;
+    document.getElementById('languageSelectPopup').value = savedLang;
+    changeLanguage(savedLang);
+    
+    // 初始化主题
+    const savedTheme = localStorage.getItem('dark_theme');
+    if (savedTheme === 'true') {
+        document.body.classList.add('dark-theme');
+        const darkModeControl = document.querySelector('.dark-mode-control');
+        darkModeControl.classList.add('dark');
+        
+        // 初始化时也更新文字
+        const darkModeText = darkModeControl.querySelector('[data-translate="darkMode"]');
+        darkModeText.textContent = savedLang === 'zh' ? '日间模式' : 'Light Mode';
+    }
 });
 
 // API calls
@@ -51,17 +165,29 @@ async function loadModels() {
 }
 
 function updateModelsList() {
+    const lang = localStorage.getItem('preferred_language') || 'en';
+    const t = translations[lang];
     const modelsList = document.getElementById('modelsList');
     modelsList.innerHTML = models.map(model => `
-        <div class="card mb-2">
-            <div class="card-body">
-                <h6 class="card-title">${model.name}</h6>
-                <p class="card-text">Type: ${model.type}</p>
-                <p class="card-text">Provider: ${model.provider}</p>
-                <div class="btn-group" role="group">
-                    <button class="btn btn-sm btn-primary" onclick="editModel(${model.id})">Edit</button>
-                    <button class="btn btn-sm btn-info" onclick="saveAsModel(${model.id})">Save As</button>
-                    <button class="btn btn-sm btn-danger" onclick="deleteModel(${model.id})">Delete</button>
+        <div class="col-md-6 col-lg-4 mb-4">
+            <div class="card">
+                <div class="card-body">
+                    <h5 class="card-title">${model.name}</h5>
+                    <div class="mb-2">
+                        <span class="badge bg-primary">${model.type}</span>
+                        <span class="badge bg-secondary">${model.provider}</span>
+                    </div>
+                    <div class="btn-group">
+                        <button class="btn btn-sm btn-outline-primary" onclick="editModel(${model.id})">
+                            <i class="fas fa-edit"></i> ${t.edit}
+                        </button>
+                        <button class="btn btn-sm btn-outline-info" onclick="saveAsModel(${model.id})">
+                            <i class="fas fa-copy"></i> ${t.duplicate}
+                        </button>
+                        <button class="btn btn-sm btn-outline-danger" onclick="deleteModel(${model.id})">
+                            <i class="fas fa-trash"></i> ${t.delete}
+                        </button>
+                    </div>
                 </div>
             </div>
         </div>
@@ -187,28 +313,52 @@ async function loadConfigurations() {
 
 function updateConfigurationsList() {
     const configsList = document.getElementById('configurationsList');
-    configsList.innerHTML = configurations.map(config => {
-        console.log('Rendering config:', config);
-        return `
-            <div class="card mb-2">
-                <div class="card-body d-flex justify-content-between align-items-center">
-                    <div>
-                        <h6 class="card-title mb-0">${config.name}</h6>
+    configsList.innerHTML = configurations.map(config => `
+        <div class="col-lg-6 mb-4">
+            <div class="workflow-card">
+                <div class="workflow-card-header d-flex justify-content-between align-items-center">
+                    <h5 class="workflow-card-title">${config.name}</h5>
+                    <div class="form-check form-switch">
+                        <input class="form-check-input" type="checkbox" 
+                               ${config.is_active ? 'checked' : ''}
+                               onchange="toggleConfiguration(${config.id}, this.checked)">
+                        <label class="form-check-label">${config.is_active ? 'Active' : 'Inactive'}</label>
                     </div>
-                    <div class="d-flex align-items-center">
-                        <div class="form-check form-switch me-2">
-                            <input class="form-check-input" type="checkbox" 
-                                   ${config.is_active ? 'checked' : ''}
-                                   onchange="toggleConfiguration(${config.id}, this.checked)">
-                            <label class="form-check-label">Active</label>
+                </div>
+                <div class="workflow-card-body">
+                    <div class="workflow-stats">
+                        <div class="stat-item">
+                            <div class="stat-value">${config.steps.length}</div>
+                            <div class="stat-label">Steps</div>
                         </div>
-                        <button class="btn btn-sm btn-primary me-2" onclick="editConfiguration(${config.id})">Edit</button>
-                        <button class="btn btn-sm btn-danger" onclick="deleteConfiguration(${config.id})">Delete</button>
+                        <div class="stat-item">
+                            <div class="stat-value">${config.steps.filter(s => s.step_type === 'reasoning').length}</div>
+                            <div class="stat-label">Reasoning</div>
+                        </div>
+                        <div class="stat-item">
+                            <div class="stat-value">${config.steps.filter(s => s.step_type === 'execution').length}</div>
+                            <div class="stat-label">Execution</div>
+                        </div>
+                    </div>
+                    <div class="workflow-actions">
+                        <button class="btn btn-outline-primary" onclick="editConfiguration(${config.id})">
+                            <i class="fas fa-edit"></i> Edit
+                        </button>
+                        <button class="btn btn-outline-info" onclick="duplicateConfiguration(${config.id})">
+                            <i class="fas fa-copy"></i> Duplicate
+                        </button>
+                        <button class="btn btn-outline-danger" onclick="deleteConfiguration(${config.id})">
+                            <i class="fas fa-trash"></i> Delete
+                        </button>
+                        <button class="preview-btn" onclick="showWorkflowVisualization(${config.id})" 
+                                title="View workflow visualization">
+                            <i class="fas fa-project-diagram"></i>
+                        </button>
                     </div>
                 </div>
             </div>
-        `;
-    }).join('');
+        </div>
+    `).join('');
 }
 
 async function editConfiguration(configId) {
@@ -710,4 +860,298 @@ async function saveAsModel(modelId) {
     // 显示模态框
     const modal = new bootstrap.Modal(document.getElementById('addModelModal'));
     modal.show();
+}
+
+// Sidebar navigation
+document.querySelectorAll('.sidebar-menu li').forEach(item => {
+    item.addEventListener('click', () => {
+        // Remove active class from all items
+        document.querySelectorAll('.sidebar-menu li').forEach(i => i.classList.remove('active'));
+        // Add active class to clicked item
+        item.classList.add('active');
+        
+        // Show corresponding page
+        const pageId = item.dataset.page + '-page';
+        document.querySelectorAll('.content-page').forEach(page => {
+            page.classList.add('d-none');
+        });
+        document.getElementById(pageId).classList.remove('d-none');
+    });
+});
+
+// Add circular workflow visualization
+function updateWorkflowVisualization(config) {
+    const container = document.getElementById('workflowCircle');
+    const steps = config.steps;
+    const centerX = 250;
+    const centerY = 250;
+    const radius = 180;
+
+    // Clear previous visualization
+    container.innerHTML = '';
+
+    // Add steps
+    steps.forEach((step, index) => {
+        const angle = (index / steps.length) * 2 * Math.PI - Math.PI / 2;
+        const x = centerX + radius * Math.cos(angle);
+        const y = centerY + radius * Math.sin(angle);
+
+        const stepEl = document.createElement('div');
+        stepEl.className = `workflow-step ${step.step_type}`;
+        stepEl.style.left = `${x - 70}px`;
+        stepEl.style.top = `${y - 70}px`;
+        
+        // 获取关联的模型信息
+        const model = models.find(m => m.id === step.model_id);
+        const modelName = model ? model.name : 'Unknown Model';
+        
+        stepEl.innerHTML = `
+            <div class="step-content">
+                <div class="step-number">${index + 1}</div>
+                <div class="step-type">${step.step_type}</div>
+                <div class="step-model">${modelName}</div>
+            </div>
+        `;
+
+        // 添加悬停提示
+        stepEl.title = `Step ${index + 1}\nType: ${step.step_type}\nModel: ${modelName}`;
+
+        container.appendChild(stepEl);
+
+        // Add connector if not last step
+        if (index < steps.length - 1) {
+            const nextAngle = ((index + 1) / steps.length) * 2 * Math.PI - Math.PI / 2;
+            const nextX = centerX + radius * Math.cos(nextAngle);
+            const nextY = centerY + radius * Math.sin(nextAngle);
+
+            const connector = document.createElement('div');
+            connector.className = 'workflow-connector';
+            const length = Math.sqrt(Math.pow(nextX - x, 2) + Math.pow(nextY - y, 2));
+            const angle = Math.atan2(nextY - y, nextX - x);
+
+            connector.style.width = `${length}px`;
+            connector.style.left = `${x}px`;
+            connector.style.top = `${y}px`;
+            connector.style.transform = `rotate(${angle}rad)`;
+
+            container.appendChild(connector);
+        }
+    });
+}
+
+// 添加新的可视化展示函数
+function showWorkflowVisualization(configId) {
+    const config = configurations.find(c => c.id === configId);
+    if (!config) {
+        showError('Configuration not found');
+        return;
+    }
+
+    // 清空并更新可视化
+    const container = document.getElementById('workflowCircle');
+    container.innerHTML = '';
+    updateWorkflowVisualization(config);
+
+    // 显示模态框
+    const modal = new bootstrap.Modal(document.getElementById('workflowVisualizationModal'));
+    modal.show();
+}
+
+// Sidebar toggle
+function toggleSidebar() {
+    const sidebar = document.querySelector('.sidebar');
+    const mainContent = document.querySelector('.main-content');
+    const toggleBtn = document.querySelector('.sidebar-toggle i');
+    
+    sidebar.classList.toggle('collapsed');
+    mainContent.classList.toggle('expanded');
+    toggleBtn.classList.toggle('fa-chevron-left');
+    toggleBtn.classList.toggle('fa-chevron-right');
+}
+
+// Language change
+function changeLanguage(lang) {
+    // 保存语言偏好
+    localStorage.setItem('preferred_language', lang);
+    
+    // 同步两个语言选择器的值
+    document.getElementById('languageSelect').value = lang;
+    document.getElementById('languageSelectPopup').value = lang;
+    
+    const t = translations[lang];
+    
+    // 更新页面文本
+    function updateText(element) {
+        const translateKey = element.getAttribute('data-translate');
+        if (translateKey && t[translateKey]) {
+            if (element.tagName.toLowerCase() === 'input' || 
+                element.tagName.toLowerCase() === 'textarea') {
+                if (element.hasAttribute('placeholder')) {
+                    element.placeholder = t[translateKey];
+                } else {
+                    element.value = t[translateKey];
+                }
+            } else {
+                element.textContent = t[translateKey];
+            }
+        }
+        
+        // 递归处理子元素
+        Array.from(element.children).forEach(updateText);
+    }
+    
+    // 从根元素开始更新
+    updateText(document.body);
+    
+    // 更新动态生成的内容
+    updateConfigurationsList();
+    updateModelsList();
+}
+
+// Theme toggle
+function toggleTheme() {
+    const body = document.body;
+    const darkModeControl = document.querySelector('.dark-mode-control');
+    const darkModeText = darkModeControl.querySelector('[data-translate="darkMode"]');
+    
+    body.classList.toggle('dark-theme');
+    darkModeControl.classList.toggle('dark');
+    
+    // 更新文字
+    const lang = localStorage.getItem('preferred_language') || 'en';
+    if (body.classList.contains('dark-theme')) {
+        darkModeText.textContent = lang === 'zh' ? '日间模式' : 'Light Mode';
+    } else {
+        darkModeText.textContent = lang === 'zh' ? '夜间模式' : 'Dark Mode';
+    }
+    
+    // 保存主题偏好
+    const isDark = body.classList.contains('dark-theme');
+    localStorage.setItem('dark_theme', isDark);
+}
+
+// 复制工作流配置
+async function duplicateConfiguration(configId) {
+    try {
+        const config = configurations.find(c => c.id === configId);
+        if (!config) {
+            showError('Configuration not found');
+            return;
+        }
+
+        // 创建配置的副本
+        const duplicatedConfig = {
+            name: `${config.name} (Copy)`,
+            is_active: false, // 默认设置为未激活
+            transfer_content: config.transfer_content || {},
+            steps: config.steps.map(step => ({
+                model_id: step.model_id,
+                step_type: step.step_type,
+                step_order: step.step_order,
+                system_prompt: step.system_prompt || ""
+            }))
+        };
+
+        // 发送创建请求
+        await fetchAPI('configurations', 'POST', duplicatedConfig);
+        
+        // 重新加载配置列表
+        await loadConfigurations();
+        
+        // 显示成功消息
+        const lang = localStorage.getItem('preferred_language') || 'en';
+        const successMessage = lang === 'zh' ? 
+            '接力链复制成功' : 
+            'Relay chain duplicated successfully';
+        alert(successMessage);
+        
+    } catch (error) {
+        console.error('Failed to duplicate configuration:', error);
+        showError('Failed to duplicate configuration: ' + error.message);
+    }
+}
+
+// Delete model
+async function deleteModel(modelId) {
+    try {
+        // 获取当前语言
+        const lang = localStorage.getItem('preferred_language') || 'en';
+        
+        // 确认删除提示
+        const confirmMessage = lang === 'zh' ? 
+            '确定要删除这个模型吗？此操作不可恢复。' : 
+            'Are you sure you want to delete this model? This action cannot be undone.';
+            
+        if (!confirm(confirmMessage)) {
+            return;
+        }
+
+        // 检查模型是否在工作流中使用
+        const isModelInUse = configurations.some(config => 
+            config.steps.some(step => step.model_id === modelId)
+        );
+
+        if (isModelInUse) {
+            const errorMessage = lang === 'zh' ?
+                '无法删除：该模型正在被一个或多个工作流使用。' :
+                'Cannot delete: This model is being used in one or more workflows.';
+            showError(errorMessage);
+            return;
+        }
+
+        // 发送删除请求
+        await fetchAPI(`models/${modelId}`, 'DELETE');
+        
+        // 重新加载模型列表
+        await loadModels();
+        
+        // 显示成功消息
+        const successMessage = lang === 'zh' ? 
+            '模型删除成功' : 
+            'Model deleted successfully';
+        alert(successMessage);
+        
+    } catch (error) {
+        console.error('Failed to delete model:', error);
+        const errorMessage = lang === 'zh' ?
+            '删除模型失败：' + error.message :
+            'Failed to delete model: ' + error.message;
+        showError(errorMessage);
+    }
+}
+
+// Delete configuration
+async function deleteConfiguration(configId) {
+    try {
+        // 获取当前语言
+        const lang = localStorage.getItem('preferred_language') || 'en';
+        
+        // 确认删除提示
+        const confirmMessage = lang === 'zh' ? 
+            '确定要删除这个接力链吗？此操作不可恢复。' : 
+            'Are you sure you want to delete this relay chain? This action cannot be undone.';
+            
+        if (!confirm(confirmMessage)) {
+            return;
+        }
+
+        // 发送删除请求
+        await fetchAPI(`configurations/${configId}`, 'DELETE');
+        
+        // 重新加载配置列表
+        await loadConfigurations();
+        
+        // 显示成功消息
+        const successMessage = lang === 'zh' ? 
+            '接力链删除成功' : 
+            'Relay chain deleted successfully';
+        alert(successMessage);
+        
+    } catch (error) {
+        console.error('Failed to delete configuration:', error);
+        const errorMessage = lang === 'zh' ?
+            '删除接力链失败：' + error.message :
+            'Failed to delete relay chain: ' + error.message;
+        showError(errorMessage);
+    }
 }
