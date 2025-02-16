@@ -1,16 +1,16 @@
 from pydantic import BaseModel, Field, validator
-from typing import Optional, Dict, Union
+from typing import Optional, Dict, Union, List
 
 class ModelBase(BaseModel):
     name: str
-    type: str
+    type: str  # 'reasoning', 'execution', 'general'
     provider: str
     api_key: str
     api_url: str
-    model_name: Optional[str] = ""  # Make model_name optional with default empty string
+    model_name: Optional[str] = ""
     system_prompt: Optional[str] = None
-    temperature: Union[float, str] = Field(default=0.7)  # Accept both float and string
-    top_p: Union[float, str] = Field(default=0.9)  # Accept both float and string
+    temperature: float = 0.7
+    top_p: float = 0.9
     max_tokens: int = 2000
     presence_penalty: float = 0.0
     frequency_penalty: float = 0.0
@@ -23,7 +23,7 @@ class ModelBase(BaseModel):
 
     @validator('type')
     def validate_type(cls, v):
-        valid_types = {'reasoning', 'execution'}
+        valid_types = {'reasoning', 'execution', 'general'}
         if v.lower() not in valid_types:
             raise ValueError(f'Type must be one of {valid_types}')
         return v.lower()
@@ -37,21 +37,38 @@ class Model(ModelBase):
     class Config:
         from_attributes = True
 
-class ConfigurationBase(BaseModel):
-    name: str
-    reasoning_model_id: int
-    execution_model_id: int
-    reasoning_pattern: Optional[str] = None
-    is_active: bool = True
-    transfer_content: Dict = {}
-    reasoning_system_prompt: str = ""  # 添加到基类中
-    execution_system_prompt: str = ""  # 添加到基类中
+class ConfigurationStepBase(BaseModel):
+    model_id: int
+    step_type: str
+    order: int
+    system_prompt: Optional[str] = ""
 
-class ConfigurationCreate(ConfigurationBase):
+class ConfigurationStepCreate(ConfigurationStepBase):
     pass
 
-class Configuration(ConfigurationBase):
+class ConfigurationStep(ConfigurationStepBase):
     id: int
+    configuration_id: int
+
+    class Config:
+        from_attributes = True
+
+class ConfigurationBase(BaseModel):
+    name: str
+    is_active: bool = True
+
+class ConfigurationCreate(ConfigurationBase):
+    steps: List[ConfigurationStepCreate]
+
+class ConfigurationStepResponse(ConfigurationStepBase):
+    id: int
+
+    class Config:
+        from_attributes = True
+
+class ConfigurationResponse(ConfigurationBase):
+    id: int
+    steps: List[ConfigurationStepResponse]
 
     class Config:
         from_attributes = True

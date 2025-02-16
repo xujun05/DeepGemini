@@ -5,28 +5,33 @@ from app.utils.logger import logger
 from .base_client import BaseClient
 
 class GeminiClient(BaseClient):
-    def __init__(self, api_key: str, api_url: str = "https://gemini.yyds.top/v1/chat/completions"):
+    def __init__(
+        self, 
+        api_key: str, 
+        api_url: str = "https://gemini.yyds.top/v1/chat/completions",
+        is_origin_reasoning: bool = True
+    ):
         """初始化 Gemini 客户端
         
         Args:
             api_key: Gemini API密钥
             api_url: Gemini API地址
+            is_origin_reasoning: 是否使用原始推理输出
         """
         super().__init__(api_key, api_url)
         self.provider = "google"
+        self.is_origin_reasoning = is_origin_reasoning
 
     async def stream_chat(
         self, 
         messages: list,
         model: str,
-        is_origin_reasoning: bool = True
     ) -> AsyncGenerator[tuple[str, str], None]:
         """流式对话
         
         Args:
             messages: 消息列表
             model: 模型名称
-            is_origin_reasoning: 是否使用原始推理输出
         """
         headers = {
             "Content-Type": "application/json",
@@ -41,6 +46,7 @@ class GeminiClient(BaseClient):
             "max_tokens": 1024000,
         }
         logger.debug(f"Gemini 请求数据: {data}")
+        
         first_chunk = True
         async for chunk in self._make_request(headers, data):
             try:
@@ -65,15 +71,22 @@ class GeminiClient(BaseClient):
                             if role:  # 如果包含role，这是第一个chunk
                                 first_chunk = False
                                 if content:  # 确保不会丢失第一个chunk中的content
-                                    yield "reasoning", content
+                                    if self.is_origin_reasoning:
+                                        yield "reasoning", content
+                                    else:
+                                        yield "answer", content
                                 continue
                             
                         # 处理后续chunks
                         content = delta.get('content', '')
                         if content:
-                            yield "reasoning", content
+                            if self.is_origin_reasoning:
+                                yield "reasoning", content
+                            else:
+                                yield "answer", content
                             
             except json.JSONDecodeError:
                 continue
             except Exception as e:
-                logger.error(f"处理 Gemini 响应时发生错误: {e}")
+                logger.error(f"处理 Gemini 响应时发生错误: {e}", exc_info=True)
+                continue

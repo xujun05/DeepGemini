@@ -41,6 +41,7 @@ async function loadModels() {
         
         updateModelsList();
         updateModelSelects();
+        updateStepModelOptions();
         
         // Update model name selection dropdowns with available models
         const modelNameSelects = document.querySelectorAll('.model-name-select');
@@ -170,22 +171,36 @@ async function loadConfigurations() {
 function updateConfigurationsList() {
     const configsList = document.getElementById('configurationsList');
     configsList.innerHTML = configurations.map(config => {
-        console.log('Rendering config:', config);
+        const stepsInfo = config.steps.map((step, index) => {
+            const model = models.find(m => m.id === step.model_id);
+            return `
+                <div class="step-info">
+                    Step ${index + 1}: ${model ? model.name : 'Unknown'} 
+                    (${step.step_type.charAt(0).toUpperCase() + step.step_type.slice(1)})
+                </div>
+            `;
+        }).join('');
+
         return `
             <div class="card mb-2">
-                <div class="card-body d-flex justify-content-between align-items-center">
-                    <div>
-                        <h6 class="card-title mb-0">${config.name}</h6>
-                    </div>
-                    <div class="d-flex align-items-center">
-                        <div class="form-check form-switch me-2">
-                            <input class="form-check-input" type="checkbox" 
-                                   ${config.is_active ? 'checked' : ''}
-                                   onchange="toggleConfiguration(${config.id}, this.checked)">
-                            <label class="form-check-label">Active</label>
+                <div class="card-body">
+                    <div class="row">
+                        <div class="col-md-6">
+                            <h6 class="card-title mb-0">${config.name}</h6>
+                            <div class="steps-container mt-2">
+                                ${stepsInfo}
+                            </div>
                         </div>
-                        <button class="btn btn-sm btn-primary me-2" onclick="editConfiguration(${config.id})">Edit</button>
-                        <button class="btn btn-sm btn-danger" onclick="deleteConfiguration(${config.id})">Delete</button>
+                        <div class="col-md-6 text-end">
+                            <div class="form-check form-switch d-inline-block me-2">
+                                <input class="form-check-input" type="checkbox" 
+                                       ${config.is_active ? 'checked' : ''}
+                                       onchange="toggleConfiguration(${config.id}, this.checked)">
+                                <label class="form-check-label">Active</label>
+                            </div>
+                            <button class="btn btn-sm btn-primary me-2" onclick="editConfiguration(${config.id})">Edit</button>
+                            <button class="btn btn-sm btn-danger" onclick="deleteConfiguration(${config.id})">Delete</button>
+                        </div>
                     </div>
                 </div>
             </div>
@@ -200,32 +215,31 @@ async function editConfiguration(configId) {
         return;
     }
 
-    // 打印调试信息
-    console.log('Editing configuration:', config);
-
     const form = document.getElementById('addConfigForm');
+    form.name.value = config.name;
     
-    // 确保所有字段都被正确设置
-    form.name.value = config.name || '';
-    form.reasoning_model_id.value = config.reasoning_model_id || '';
-    form.execution_model_id.value = config.execution_model_id || '';
-    form.reasoning_pattern.value = config.reasoning_pattern || '';
+    // 清空现有步骤
+    document.getElementById('configStepsContainer').innerHTML = '';
+    configSteps = [];
     
-    // 明确设置系统提示词字段
-    const reasoningPromptField = form.querySelector('[name="reasoning_system_prompt"]');
-    const executionPromptField = form.querySelector('[name="execution_system_prompt"]');
-    
-    if (reasoningPromptField) {
-        reasoningPromptField.value = config.reasoning_system_prompt || '';
-        console.log('Setting reasoning prompt:', config.reasoning_system_prompt);
-    }
-    
-    if (executionPromptField) {
-        executionPromptField.value = config.execution_system_prompt || '';
-        console.log('Setting execution prompt:', config.execution_system_prompt);
+    // 添加配置的所有步骤
+    if (config.steps && config.steps.length > 0) {
+        config.steps.forEach(step => {
+            addConfigurationStep();
+            const stepElement = document.querySelector(`.config-step[data-step="${configSteps.length - 1}"]`);
+            if (stepElement) {
+                const modelSelect = stepElement.querySelector('.step-model');
+                modelSelect.value = step.model_id;
+                // 更新步骤类型选项
+                updateStepTypeOptions(modelSelect);
+                // 设置选中的步骤类型
+                stepElement.querySelector('.step-type').value = step.step_type;
+                stepElement.querySelector('.step-prompt').value = step.system_prompt || '';
+            }
+        });
     }
 
-    // Add hidden field for config ID
+    // 添加隐藏的配置ID字段
     let idInput = form.querySelector('input[name="config_id"]');
     if (!idInput) {
         idInput = document.createElement('input');
@@ -235,55 +249,9 @@ async function editConfiguration(configId) {
     }
     idInput.value = configId;
 
-    // Show modal
+    // 显示模态框
     const modal = new bootstrap.Modal(document.getElementById('addConfigModal'));
     modal.show();
-}
-
-async function saveConfiguration() {
-    const form = document.getElementById('addConfigForm');
-    const formData = new FormData(form);
-    const configData = Object.fromEntries(formData.entries());
-    
-    try {
-        // 验证配置名称是否已存在
-        if (!configData.config_id) {  // 只在创建新配置时检查
-            const existingConfig = configurations.find(c => c.name === configData.name);
-            if (existingConfig) {
-                showError('Configuration name already exists. Please choose a different name.');
-                return;
-            }
-        }
-
-        const configId = configData.config_id;
-        delete configData.config_id; // Remove ID from data to be sent
-        
-        // 确保系统提示词被包含在数据中
-        if (!configData.reasoning_system_prompt) {
-            configData.reasoning_system_prompt = "";
-        }
-        if (!configData.execution_system_prompt) {
-            configData.execution_system_prompt = "";
-        }
-        
-        if (configId) {
-            // Update existing configuration
-            await fetchAPI(`configurations/${configId}`, 'PUT', configData);
-        } else {
-            // Create new configuration
-            await fetchAPI('configurations', 'POST', configData);
-        }
-        
-        await loadConfigurations();
-        closeModal('addConfigModal');
-        form.reset();
-        // Remove the hidden config_id field
-        const idInput = form.querySelector('input[name="config_id"]');
-        if (idInput) idInput.remove();
-    } catch (error) {
-        console.error('Failed to save configuration:', error);
-        showError('Failed to save configuration');
-    }
 }
 
 // 修改配置激活/停用功能
@@ -360,4 +328,185 @@ function closeModal(modalId) {
 function showError(message) {
     // You can implement a better error notification system
     alert(message);
+}
+
+// 更新模型类型选项
+function updateModelTypeSelect() {
+    const typeSelect = document.querySelector('select[name="type"]');
+    typeSelect.innerHTML = `
+        <option value="reasoning">Reasoning</option>
+        <option value="execution">Execution</option>
+        <option value="general">General</option>
+    `;
+}
+
+// 更新配置步骤管理
+let configSteps = [];
+
+function addConfigurationStep() {
+    const stepContainer = document.getElementById('configStepsContainer');
+    const stepIndex = configSteps.length;
+    
+    const stepHtml = `
+        <div class="config-step mb-3" data-step="${stepIndex}">
+            <div class="card">
+                <div class="card-body">
+                    <h6 class="card-title">Step ${stepIndex + 1}</h6>
+                    <div class="row">
+                        <div class="col-md-4">
+                            <label class="form-label">Model</label>
+                            <select class="form-select step-model" required onchange="updateStepTypeOptions(this)">
+                                <option value="">Select a model</option>
+                                ${getModelOptions()}
+                            </select>
+                        </div>
+                        <div class="col-md-4">
+                            <label class="form-label">Step Type</label>
+                            <select class="form-select step-type" required>
+                                <option value="reasoning">Reasoning</option>
+                                <option value="execution">Execution</option>
+                                <option value="general">General</option>
+                            </select>
+                        </div>
+                        <div class="col-md-4 d-flex align-items-end">
+                            <button type="button" class="btn btn-danger btn-sm" onclick="removeStep(${stepIndex})">
+                                Remove Step
+                            </button>
+                        </div>
+                    </div>
+                    <div class="mt-2">
+                        <label class="form-label">System Prompt (Optional)</label>
+                        <textarea class="form-control step-prompt" 
+                                placeholder="Enter system prompt for this step"></textarea>
+                    </div>
+                </div>
+            </div>
+        </div>
+    `;
+    
+    stepContainer.insertAdjacentHTML('beforeend', stepHtml);
+    configSteps.push({
+        model_id: null,
+        step_type: 'general',  // 默认使用 general 类型
+        order: stepIndex,
+        system_prompt: ''
+    });
+}
+
+function removeStep(index) {
+    const stepElement = document.querySelector(`.config-step[data-step="${index}"]`);
+    if (stepElement) {
+        stepElement.remove();
+        configSteps.splice(index, 1);
+        // 重新排序剩余步骤
+        document.querySelectorAll('.config-step').forEach((el, idx) => {
+            el.setAttribute('data-step', idx);
+            el.querySelector('.card-title').textContent = `Step ${idx + 1}`;
+        });
+    }
+}
+
+// 更新保存配置的函数
+async function saveConfiguration() {
+    const form = document.getElementById('addConfigForm');
+    const formData = new FormData(form);
+    
+    // 收集所有步骤的数据
+    const steps = [];
+    document.querySelectorAll('.config-step').forEach((stepEl, index) => {
+        steps.push({
+            model_id: parseInt(stepEl.querySelector('.step-model').value),
+            step_type: stepEl.querySelector('.step-type').value,
+            order: index,
+            system_prompt: stepEl.querySelector('.step-prompt').value
+        });
+    });
+    
+    const configData = {
+        name: formData.get('name'),
+        is_active: true,
+        steps: steps
+    };
+    
+    try {
+        const configId = formData.get('config_id');
+        if (configId) {
+            await fetchAPI(`configurations/${configId}`, 'PUT', configData);
+        } else {
+            await fetchAPI('configurations', 'POST', configData);
+        }
+        
+        await loadConfigurations();
+        closeModal('addConfigModal');
+        form.reset();
+        document.getElementById('configStepsContainer').innerHTML = '';
+        configSteps = [];
+    } catch (error) {
+        console.error('Failed to save configuration:', error);
+        showError('Failed to save configuration');
+    }
+}
+
+// 在 app.js 中添加 getModelOptions 函数
+function getModelOptions() {
+    // 过滤并排序模型列表
+    const sortedModels = [...models].sort((a, b) => a.name.localeCompare(b.name));
+    
+    // 生成选项HTML
+    return sortedModels.map(model => {
+        const modelType = model.type === 'general' 
+            ? '(General)' 
+            : model.type === 'reasoning' 
+                ? '(Reasoning)' 
+                : '(Execution)';
+                
+        return `<option value="${model.id}">${model.name} - ${modelType} - ${model.provider}</option>`;
+    }).join('');
+}
+
+// 更新配置步骤的模型选择器
+function updateStepModelOptions() {
+    document.querySelectorAll('.step-model').forEach(select => {
+        select.innerHTML = getModelOptions();
+    });
+}
+
+// 添加新函数来更新步骤类型选项
+function updateStepTypeOptions(modelSelect) {
+    const stepElement = modelSelect.closest('.config-step');
+    const stepTypeSelect = stepElement.querySelector('.step-type');
+    const selectedModel = models.find(m => m.id === parseInt(modelSelect.value));
+    
+    if (selectedModel) {
+        // 如果是通用模型，显示所有选项
+        if (selectedModel.type === 'general') {
+            stepTypeSelect.innerHTML = `
+                <option value="general">General</option>
+                <option value="reasoning">Reasoning</option>
+                <option value="execution">Execution</option>
+            `;
+        } 
+        // 如果是特定类型模型，只显示对应选项和通用选项
+        else {
+            stepTypeSelect.innerHTML = `
+                <option value="general">General</option>
+                <option value="${selectedModel.type}">${
+                    selectedModel.type.charAt(0).toUpperCase() + 
+                    selectedModel.type.slice(1)
+                }</option>
+            `;
+        }
+        
+        // 如果当前选中的类型不在新的选项中，默认选择第一个选项
+        if (!stepTypeSelect.querySelector(`option[value="${stepTypeSelect.value}"]`)) {
+            stepTypeSelect.value = stepTypeSelect.querySelector('option').value;
+        }
+    } else {
+        // 如果没有选择模型，显示所有选项
+        stepTypeSelect.innerHTML = `
+            <option value="general">General</option>
+            <option value="reasoning">Reasoning</option>
+            <option value="execution">Execution</option>
+        `;
+    }
 }

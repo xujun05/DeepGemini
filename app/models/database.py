@@ -15,8 +15,8 @@ class Model(Base):
     
     id = Column(Integer, primary_key=True, index=True)
     name = Column(String, unique=True, index=True)
-    type = Column(String)  # 'reasoning' or 'execution'
-    provider = Column(String)  # 'anthropic', 'google', etc.
+    type = Column(String)  # 'reasoning', 'execution', 'general'
+    provider = Column(String)
     api_key = Column(String)
     api_url = Column(String)
     model_name = Column(String)
@@ -30,45 +30,34 @@ class Model(Base):
     frequency_penalty = Column(Float, default=0.0)
     
     # Relationships
-    reasoning_configurations = relationship(
-        "Configuration",
-        back_populates="reasoning_model",
-        foreign_keys="Configuration.reasoning_model_id"
-    )
-    execution_configurations = relationship(
-        "Configuration",
-        back_populates="execution_model",
-        foreign_keys="Configuration.execution_model_id"
-    )
+    configuration_steps = relationship("ConfigurationStep", back_populates="model")
+
+class ConfigurationStep(Base):
+    __tablename__ = "configuration_steps"
+    
+    id = Column(Integer, primary_key=True, index=True)
+    configuration_id = Column(Integer, ForeignKey("configurations.id"))
+    model_id = Column(Integer, ForeignKey("models.id"))
+    step_type = Column(String)  # 'reasoning' or 'execution'
+    order = Column(Integer)  # 步骤顺序
+    system_prompt = Column(String, default="")
+    
+    configuration = relationship("Configuration", back_populates="steps")
+    model = relationship("Model", back_populates="configuration_steps")
 
 class Configuration(Base):
     __tablename__ = "configurations"
     
     id = Column(Integer, primary_key=True, index=True)
     name = Column(String, unique=True, index=True)
-    reasoning_model_id = Column(Integer, ForeignKey("models.id"))
-    execution_model_id = Column(Integer, ForeignKey("models.id"))
-    reasoning_pattern = Column(String, default="")
     is_active = Column(Boolean, default=True)
-    transfer_content = Column(JSON, default=dict)
-    reasoning_system_prompt = Column(String, default="")
-    execution_system_prompt = Column(String, default="")
     
     # Configuration settings
     reasoning_pattern = Column(String)  # Regex pattern to extract reasoning
     transfer_content = Column(JSON)  # Custom configuration for content transfer
     
     # Relationships
-    reasoning_model = relationship(
-        "Model",
-        back_populates="reasoning_configurations",
-        foreign_keys=[reasoning_model_id]
-    )
-    execution_model = relationship(
-        "Model",
-        back_populates="execution_configurations",
-        foreign_keys=[execution_model_id]
-    )
+    steps = relationship("ConfigurationStep", back_populates="configuration", order_by="ConfigurationStep.order")
 
 # Create all tables
 def init_db():

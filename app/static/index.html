@@ -68,6 +68,7 @@
                                     <select class="form-select" name="type" required>
                                         <option value="reasoning">Reasoning</option>
                                         <option value="execution">Execution</option>
+                                        <option value="general">General</option>
                                     </select>
                                 </div>
                             </div>
@@ -177,38 +178,17 @@
                     <form id="addConfigForm">
                         <div class="mb-3">
                             <label class="form-label">Configuration Name</label>
-                            <input type="text" class="form-control" name="name" required
-                                   placeholder="Enter a unique configuration name"
-                                   oninput="validateConfigurationName(this.value)">
-                            <div class="invalid-feedback">
-                                This configuration name already exists
+                            <input type="text" class="form-control" name="name" required>
+                        </div>
+                        
+                        <div class="mb-3">
+                            <label class="form-label">Configuration Steps</label>
+                            <div id="configStepsContainer">
+                                <!-- 步骤将在这里动态添加 -->
                             </div>
-                        </div>
-                        <div class="mb-3">
-                            <label class="form-label">Reasoning Model</label>
-                            <select class="form-select" name="reasoning_model_id" required>
-                                <!-- Options will be populated by JavaScript -->
-                            </select>
-                        </div>
-                        <div class="mb-3">
-                            <label class="form-label">Execution Model</label>
-                            <select class="form-select" name="execution_model_id" required>
-                                <!-- Options will be populated by JavaScript -->
-                            </select>
-                        </div>
-                        <div class="mb-3">
-                            <label class="form-label">Reasoning Pattern (Regex)</label>
-                            <input type="text" class="form-control" name="reasoning_pattern">
-                        </div>
-                        <div class="mb-3">
-                            <label class="form-label">Reasoning System Prompt</label>
-                            <textarea class="form-control" name="reasoning_system_prompt" rows="3"
-                                      placeholder="Enter system prompt for the reasoning model"></textarea>
-                        </div>
-                        <div class="mb-3">
-                            <label class="form-label">Execution System Prompt</label>
-                            <textarea class="form-control" name="execution_system_prompt" rows="3"
-                                      placeholder="Enter system prompt for the execution model"></textarea>
+                            <button type="button" class="btn btn-secondary mt-2" onclick="addConfigurationStep()">
+                                Add Step
+                            </button>
                         </div>
                     </form>
                 </div>
