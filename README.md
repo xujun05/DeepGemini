@@ -8,11 +8,6 @@
 [![License](https://img.shields.io/badge/License-MIT-green.svg?style=flat-square)](LICENSE)
 
 </div>
-## Preview
-
-![image](https://img.pub/p/02f96adb71b92d9e8009.png)
-![image](https://img.pub/p/1ffdc3728b7944caf807.png)
-![image](https://img.pub/p/439520386b4927c91688.png)
 
 ## ✨ Features
 
@@ -23,6 +18,13 @@
 - **Advanced Configuration**: Fine-grained control over model parameters and system prompts
 - **Database Integration**: SQLite-based configuration storage with Alembic migrations
 - **Web Management UI**: Built-in interface for managing models and configurations
+
+## Preview
+
+![image](https://img.pub/p/02f96adb71b92d9e8009.png)
+![image](https://img.pub/p/1ffdc3728b7944caf807.png)
+![image](https://img.pub/p/439520386b4927c91688.png)
+
 
 ## 🚀 Quick Start
 
