@@ -7,6 +7,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from sqlalchemy.orm import Session
 from typing import List, Dict
+import uvicorn
 
 from app.utils.logger import logger
 from app.utils.auth import verify_api_key
@@ -14,6 +15,7 @@ from app.utils.auth import verify_api_key
 from app.models.database import get_db, init_db, Model as DBModel, Configuration as DBConfiguration, ConfigurationStep
 from app.models.schemas import Model, ModelCreate, Configuration, ConfigurationCreate
 from app.models import ModelCollaboration, MultiStepModelCollaboration
+from app.routes import model_router, configuration_router, api_key_router, auth_router
 
 # 加载环境变量
 load_dotenv()
@@ -37,6 +39,7 @@ app.add_middleware(
 
 # Initialize database
 init_db()
+
 
 # Model routes
 @app.get("/v1/models")
@@ -278,3 +281,18 @@ async def chat_completions(
 @app.get("/")
 async def root():
     return {"message": "Welcome to DeepGemini API"}
+
+# 添加路由
+app.include_router(model_router, prefix="/v1")
+app.include_router(configuration_router, prefix="/v1")
+app.include_router(api_key_router, prefix="/v1")
+app.include_router(auth_router, prefix="/v1")
+
+if __name__ == "__main__":
+    uvicorn.run(
+        "app.main:app",
+        host="0.0.0.0",
+        port=8000,
+        reload=True,
+        log_level="info"
+    )

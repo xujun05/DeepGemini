@@ -4,6 +4,7 @@ let configurations = [];
 let stepCounter = 0;
 let availableModels = [];
 let isManualModelInput = false;
+let apiKeys = [];
 
 // Translations object
 const translations = {
@@ -51,7 +52,18 @@ const translations = {
         addStep: 'Add Step',
         removeStep: 'Remove Step',
         step: 'Step',
-        visualizeWorkflow: 'Relay Chain Visualization'
+        visualizeWorkflow: 'Relay Chain Visualization',
+        apiKeyManagement: 'API Key Management',
+        generalSettings: 'General Settings',
+        advancedSettings: 'Advanced Settings',
+        addNewApiKey: 'Add New API Key',
+        description: 'Description',
+        generate: 'Generate',
+        apiKeyFormat: 'Format: sk-api-xxxxxxxxxx',
+        apiKeyGenerated: 'API key generated',
+        apiKeyInvalid: 'Invalid API key format. Should start with "sk-api-"',
+        copy: 'Copy',
+        noApiKeys: 'No API keys available'
     },
     zh: {
         modelManagement: '模型管理',
@@ -97,12 +109,25 @@ const translations = {
         addStep: '添加步骤',
         removeStep: '删除步骤',
         step: '步骤',
-        visualizeWorkflow: '接力链可视化'
+        visualizeWorkflow: '接力链可视化',
+        apiKeyManagement: 'API 密钥管理',
+        generalSettings: '常规设置',
+        advancedSettings: '高级设置',
+        addNewApiKey: '添加新密钥',
+        description: '描述',
+        generate: '生成',
+        apiKeyFormat: '格式：sk-api-xxxxxxxxxx',
+        apiKeyGenerated: 'API 密钥已生成',
+        apiKeyInvalid: '无效的 API 密钥格式。应以 "sk-api-" 开头',
+        copy: '复制',
+        noApiKeys: '暂无 API 密钥'
     }
 };
 
 // Initialize the application
 document.addEventListener('DOMContentLoaded', function() {
+    if (!checkAuth()) return;
+    
     loadModels();
     loadConfigurations();
     
@@ -131,6 +156,7 @@ async function fetchAPI(endpoint, method = 'GET', data = null) {
         method,
         headers: {
             'Content-Type': 'application/json',
+            'Authorization': `Bearer ${localStorage.getItem('access_token')}`
         },
     };
     
@@ -140,6 +166,11 @@ async function fetchAPI(endpoint, method = 'GET', data = null) {
     
     const response = await fetch(`/v1/${endpoint}`, options);
     if (!response.ok) {
+        if (response.status === 401) {
+            localStorage.removeItem('access_token');
+            window.location.href = '/static/login.html';
+            throw new Error('Authentication failed');
+        }
         throw new Error(`API error: ${response.statusText}`);
     }
     return response.json();
@@ -1154,4 +1185,218 @@ async function deleteConfiguration(configId) {
             'Failed to delete relay chain: ' + error.message;
         showError(errorMessage);
     }
+}
+
+// API Keys management
+async function loadApiKeys() {
+    try {
+        const response = await fetchAPI('api_keys');
+        apiKeys = response;
+        updateApiKeysList();
+    } catch (error) {
+        console.error('Failed to load API keys:', error);
+        showError('Failed to load API keys');
+    }
+}
+
+function updateApiKeysList() {
+    const apiKeysList = document.querySelector('.api-keys-list');
+    const lang = localStorage.getItem('preferred_language') || 'en';
+    const t = translations[lang];
+    
+    if (!apiKeys || apiKeys.length === 0) {
+        apiKeysList.innerHTML = `
+            <div class="alert alert-info">
+                ${lang === 'zh' ? '暂无 API 密钥' : 'No API keys available'}
+            </div>
+        `;
+        return;
+    }
+    
+    apiKeysList.innerHTML = apiKeys.map(key => `
+        <div class="api-key-item">
+            <div class="api-key-info">
+                <div class="api-key-value">
+                    ${key.api_key.substring(0, 16)}...
+                </div>
+                <div class="api-key-description">${key.description || ''}</div>
+            </div>
+            <div class="api-key-actions">
+                <button class="btn btn-sm btn-outline-primary" onclick="copyApiKey('${key.api_key}')">
+                    <i class="fas fa-copy"></i> ${t.copy}
+                </button>
+                <button class="btn btn-sm btn-outline-danger" onclick="deleteApiKey(${key.id})">
+                    <i class="fas fa-trash"></i> ${t.delete}
+                </button>
+            </div>
+        </div>
+    `).join('');
+}
+
+function showAddApiKeyModal() {
+    const modal = new bootstrap.Modal(document.getElementById('addApiKeyModal'));
+    modal.show();
+}
+
+// 生成 API 密钥
+function generateApiKey() {
+    const randomString = Array.from(crypto.getRandomValues(new Uint8Array(16)))
+        .map(b => b.toString(16).padStart(2, '0'))
+        .join('');
+    
+    const apiKey = `sk-api-${randomString}`;
+    
+    // 获取当前活动的模态框中的 API 密钥输入框
+    const activeModal = document.querySelector('.modal.show');
+    if (activeModal) {
+        const apiKeyInput = activeModal.querySelector('input[name="api_key"]');
+        if (apiKeyInput) {
+            apiKeyInput.value = apiKey;
+        }
+    }
+    
+    const lang = localStorage.getItem('preferred_language') || 'en';
+    const message = translations[lang].apiKeyGenerated;
+    showSuccess(message);
+}
+
+// 验证 API 密钥格式
+function validateApiKey(apiKey) {
+    return apiKey.startsWith('sk-api-') && apiKey.length >= 16;
+}
+
+// 修改保存 API 密钥的函数
+async function saveApiKey() {
+    const form = document.getElementById('addApiKeyForm');
+    const formData = new FormData(form);
+    const data = Object.fromEntries(formData.entries());
+    
+    // 验证 API 密钥格式
+    if (!validateApiKey(data.api_key)) {
+        const lang = localStorage.getItem('preferred_language') || 'en';
+        showError(translations[lang].apiKeyInvalid);
+        return;
+    }
+    
+    try {
+        await fetchAPI('api_keys', 'POST', data);
+        await loadApiKeys();
+        
+        const modal = bootstrap.Modal.getInstance(document.getElementById('addApiKeyModal'));
+        modal.hide();
+        form.reset();
+        
+        const lang = localStorage.getItem('preferred_language') || 'en';
+        const successMessage = lang === 'zh' ? 'API 密钥添加成功' : 'API key added successfully';
+        showSuccess(successMessage);
+    } catch (error) {
+        console.error('Failed to save API key:', error);
+        showError('Failed to save API key');
+    }
+}
+
+// 添加成功提示函数
+function showSuccess(message) {
+    // 你可以使用更好的提示系统，这里暂时使用 alert
+    alert(message);
+}
+
+async function deleteApiKey(keyId) {
+    const lang = localStorage.getItem('preferred_language') || 'en';
+    const confirmMessage = lang === 'zh' ? 
+        '确定要删除这个 API 密钥吗？此操作不可恢复。' : 
+        'Are you sure you want to delete this API key? This action cannot be undone.';
+        
+    if (!confirm(confirmMessage)) {
+        return;
+    }
+    
+    try {
+        await fetchAPI(`api_keys/${keyId}`, 'DELETE');
+        await loadApiKeys();
+        
+        const successMessage = lang === 'zh' ? 'API 密钥删除成功' : 'API key deleted successfully';
+        alert(successMessage);
+    } catch (error) {
+        console.error('Failed to delete API key:', error);
+        showError('Failed to delete API key');
+    }
+}
+
+// 复制 API 密钥到剪贴板
+async function copyApiKey(apiKey) {
+    try {
+        await navigator.clipboard.writeText(apiKey);
+        const lang = localStorage.getItem('preferred_language') || 'en';
+        const message = lang === 'zh' ? 'API 密钥已复制' : 'API key copied';
+        showSuccess(message);
+    } catch (err) {
+        console.error('Failed to copy:', err);
+        showError('Failed to copy API key');
+    }
+}
+
+// Settings navigation
+document.addEventListener('DOMContentLoaded', function() {
+    const settingsNavItems = document.querySelectorAll('.settings-nav-item');
+    settingsNavItems.forEach(item => {
+        item.addEventListener('click', function() {
+            // Remove active class from all items and sections
+            settingsNavItems.forEach(i => i.classList.remove('active'));
+            document.querySelectorAll('.settings-section').forEach(s => s.classList.remove('active'));
+            
+            // Add active class to clicked item and corresponding section
+            this.classList.add('active');
+            const sectionId = this.getAttribute('data-section') + '-section';
+            document.getElementById(sectionId).classList.add('active');
+        });
+    });
+    
+    // Load API keys when settings page is loaded
+    loadApiKeys();
+});
+
+// 检查登录状态
+function checkAuth() {
+    const token = localStorage.getItem('access_token');
+    if (!token) {
+        window.location.href = '/static/login.html';
+        return false;
+    }
+    return true;
+}
+
+// 更新凭据
+async function updateCredentials() {
+    if (!checkAuth()) return;
+    
+    const form = document.getElementById('credentialsForm');
+    const formData = new FormData(form);
+    const data = Object.fromEntries(formData.entries());
+    
+    try {
+        const response = await fetch('/v1/update-credentials', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${localStorage.getItem('access_token')}`
+            },
+            body: JSON.stringify(data)
+        });
+        
+        if (!response.ok) {
+            throw new Error('Failed to update credentials');
+        }
+        
+        showSuccess('Credentials updated successfully');
+        form.reset();
+    } catch (error) {
+        showError('Failed to update credentials');
+    }
+}
+
+// 登出
+function logout() {
+    localStorage.removeItem('access_token');
+    window.location.href = '/static/login.html';
 }

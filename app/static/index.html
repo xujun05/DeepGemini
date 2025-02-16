@@ -109,14 +109,71 @@
 
         <!-- Settings Page -->
         <div class="content-page d-none" id="settings-page">
-            <div class="settings-panel">
-                <div class="settings-section">
-                    <h4>General Settings</h4>
-                    <!-- Add your settings controls here -->
+            <div class="settings-container">
+                <!-- Settings Sidebar -->
+                <div class="settings-sidebar">
+                    <div class="settings-nav">
+                        <div class="settings-nav-item active" data-section="api-keys">
+                            <i class="fas fa-key"></i>
+                            <span data-translate="apiKeyManagement">API Key Management</span>
+                        </div>
+                        <div class="settings-nav-item" data-section="general">
+                            <i class="fas fa-cog"></i>
+                            <span data-translate="generalSettings">General Settings</span>
+                        </div>
+                        <div class="settings-nav-item" data-section="advanced">
+                            <i class="fas fa-sliders-h"></i>
+                            <span data-translate="advancedSettings">Advanced Settings</span>
+                        </div>
+                    </div>
                 </div>
-                <div class="settings-section">
-                    <h4>API Configuration</h4>
-                    <!-- Add API configuration controls here -->
+                
+                <!-- Settings Content -->
+                <div class="settings-content">
+                    <!-- API Keys Section -->
+                    <div class="settings-section active" id="api-keys-section">
+                        <div class="section-header">
+                            <h3 data-translate="apiKeyManagement">API Key Management</h3>
+                            <button class="btn btn-primary" onclick="showAddApiKeyModal()">
+                                <i class="fas fa-plus"></i>
+                                <span data-translate="addNewApiKey">Add New API Key</span>
+                            </button>
+                        </div>
+                        <div class="api-keys-list">
+                            <!-- API keys will be dynamically inserted here -->
+                        </div>
+                    </div>
+                    
+                    <!-- General Settings Section -->
+                    <div class="settings-section" id="general-section">
+                        <h3 data-translate="generalSettings">General Settings</h3>
+                        <div class="credentials-form">
+                            <h4 data-translate="adminCredentials">Admin Credentials</h4>
+                            <form id="credentialsForm">
+                                <div class="mb-3">
+                                    <label class="form-label" data-translate="currentPassword">Current Password</label>
+                                    <input type="password" class="form-control" name="current_password" required>
+                                </div>
+                                <div class="mb-3">
+                                    <label class="form-label" data-translate="newUsername">New Username</label>
+                                    <input type="text" class="form-control" name="new_username">
+                                </div>
+                                <div class="mb-3">
+                                    <label class="form-label" data-translate="newPassword">New Password</label>
+                                    <input type="password" class="form-control" name="new_password">
+                                </div>
+                                <button type="button" class="btn btn-primary" onclick="updateCredentials()">
+                                    <span data-translate="updateCredentials">Update Credentials</span>
+                                </button>
+                            </form>
+                        </div>
+                    </div>
+                    
+                    <!-- Advanced Settings Section -->
+                    <div class="settings-section" id="advanced-section">
+                        <h3 data-translate="advancedSettings">Advanced Settings</h3>
+                        <!-- Advanced settings content -->
+                    </div>
                 </div>
             </div>
         </div>
@@ -290,6 +347,45 @@
                             <button type="button" class="btn btn-primary" onclick="saveConfiguration()">Save</button>
                         </div>
                     </form>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Add API Key Modal -->
+    <div class="modal fade" id="addApiKeyModal" tabindex="-1">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title" data-translate="addNewApiKey">Add New API Key</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body">
+                    <form id="addApiKeyForm">
+                        <div class="mb-3">
+                            <label class="form-label" data-translate="apiKey">API Key</label>
+                            <div class="input-group">
+                                <input type="text" class="form-control" name="api_key" required
+                                       placeholder="sk-api-...">
+                                <button class="btn btn-outline-secondary" type="button" onclick="generateApiKey()">
+                                    <i class="fas fa-magic"></i>
+                                    <span data-translate="generate">Generate</span>
+                                </button>
+                            </div>
+                            <div class="form-text" data-translate="apiKeyFormat">
+                                Format: sk-api-xxxxxxxxxx
+                            </div>
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label" data-translate="description">Description</label>
+                            <input type="text" class="form-control" name="description"
+                                   placeholder="Enter a description for this API key">
+                        </div>
+                    </form>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal" data-translate="close">Close</button>
+                    <button type="button" class="btn btn-primary" onclick="saveApiKey()" data-translate="save">Save</button>
                 </div>
             </div>
         </div>
