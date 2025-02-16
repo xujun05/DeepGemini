@@ -11,15 +11,9 @@ from typing import List, Dict
 from app.utils.logger import logger
 from app.utils.auth import verify_api_key
 
-from app.models.database import get_db, init_db, Model as DBModel, Configuration as DBConfiguration, ConfigurationStep as DBConfigurationStep
-from app.models.schemas import (
-    Model, 
-    ModelCreate, 
-    ConfigurationCreate, 
-    ConfigurationResponse,
-    ConfigurationStepResponse
-)
-from app.models.collaboration import ModelCollaboration
+from app.models.database import get_db, init_db, Model as DBModel, Configuration as DBConfiguration, ConfigurationStep
+from app.models.schemas import Model, ModelCreate, Configuration, ConfigurationCreate
+from app.models import ModelCollaboration, MultiStepModelCollaboration
 
 # 加载环境变量
 load_dotenv()
@@ -69,11 +63,31 @@ async def get_model_configs(db: Session = Depends(get_db)):
 
 @app.post("/v1/models", response_model=Model)
 async def create_model(model: ModelCreate, db: Session = Depends(get_db)):
-    db_model = DBModel(**model.dict())
-    db.add(db_model)
-    db.commit()
-    db.refresh(db_model)
-    return db_model
+    try:
+        # 从 model.dict() 中只获取数据库模型中存在的字段
+        model_data = {
+            'name': model.name,
+            'type': model.type,
+            'provider': model.provider,
+            'api_key': model.api_key,
+            'api_url': model.api_url,
+            'model_name': model.model_name,
+            'temperature': model.temperature,
+            'top_p': model.top_p,
+            'max_tokens': model.max_tokens,
+            'presence_penalty': model.presence_penalty,
+            'frequency_penalty': model.frequency_penalty
+        }
+        
+        db_model = DBModel(**model_data)
+        db.add(db_model)
+        db.commit()
+        db.refresh(db_model)
+        return db_model
+    except Exception as e:
+        db.rollback()
+        logger.error(f"创建模型时发生错误: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
 
 @app.put("/v1/models/{model_id}", response_model=Model)
 async def update_model(model_id: int, model: ModelCreate, db: Session = Depends(get_db)):
@@ -99,143 +113,95 @@ async def delete_model(model_id: int, db: Session = Depends(get_db)):
     return {"status": "success"}
 
 # Configuration routes
-@app.get("/v1/configurations")
+@app.get("/v1/configurations", response_model=List[Configuration])
 async def get_configurations(db: Session = Depends(get_db)):
-    try:
-        configurations = db.query(DBConfiguration).all()
-        result = []
-        for config in configurations:
-            # 获取配置的所有步骤
-            steps = db.query(DBConfigurationStep).filter(
-                DBConfigurationStep.configuration_id == config.id
-            ).order_by(DBConfigurationStep.order).all()
-            
-            # 构造响应数据
-            config_data = {
-                "id": config.id,
-                "name": config.name,
-                "is_active": config.is_active,
-                "steps": [
-                    {
-                        "id": step.id,
-                        "model_id": step.model_id,
-                        "step_type": step.step_type,
-                        "order": step.order,
-                        "system_prompt": step.system_prompt
-                    }
-                    for step in steps
-                ]
-            }
-            result.append(config_data)
-        return result
-    except Exception as e:
-        logger.error(f"获取配置列表时发生错误: {str(e)}")
-        raise HTTPException(status_code=500, detail=str(e))
+    return db.query(DBConfiguration).all()
 
-@app.post("/v1/configurations", response_model=ConfigurationResponse)
+@app.post("/v1/configurations", response_model=Configuration)
 async def create_configuration(config: ConfigurationCreate, db: Session = Depends(get_db)):
     try:
-        # 创建基本配置
+        # 验证所有模型是否存在且用途类型正确
+        for step in config.steps:
+            model = db.query(DBModel).filter(DBModel.id == step.model_id).first()
+            if not model:
+                raise HTTPException(status_code=404, detail=f"Model {step.model_id} not found")
+            if model.type not in ["both", step.step_type]:
+                raise HTTPException(
+                    status_code=400,
+                    detail=f"Model {model.name} cannot be used for {step.step_type}"
+                )
+
+        # 创建配置
         db_config = DBConfiguration(
             name=config.name,
             is_active=config.is_active,
-            reasoning_pattern="",  # 设置默认值
-            transfer_content={}    # 设置默认值
+            transfer_content=config.transfer_content
         )
         db.add(db_config)
-        db.flush()  # 获取配置ID
-        
+        db.commit()
+        db.refresh(db_config)
+
         # 创建配置步骤
         for step in config.steps:
-            db_step = DBConfigurationStep(
+            db_step = ConfigurationStep(
                 configuration_id=db_config.id,
                 model_id=step.model_id,
                 step_type=step.step_type,
-                order=step.order,
+                step_order=step.step_order,
                 system_prompt=step.system_prompt
             )
             db.add(db_step)
         
         db.commit()
         db.refresh(db_config)
+        return db_config
         
-        # 构造响应
-        response_data = {
-            "id": db_config.id,
-            "name": db_config.name,
-            "is_active": db_config.is_active,
-            "steps": [
-                {
-                    "id": step.id,
-                    "model_id": step.model_id,
-                    "step_type": step.step_type,
-                    "order": step.order,
-                    "system_prompt": step.system_prompt
-                }
-                for step in db_config.steps
-            ]
-        }
-        return response_data
     except Exception as e:
         db.rollback()
-        logger.error(f"创建配置时发生错误: {str(e)}")
+        logger.error(f"创建配置时发生错误: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
-@app.put("/v1/configurations/{config_id}", response_model=ConfigurationResponse)
-async def update_configuration(
-    config_id: int,
-    config: ConfigurationCreate,
-    db: Session = Depends(get_db)
-):
+@app.put("/v1/configurations/{config_id}", response_model=Configuration)
+async def update_configuration(config_id: int, config: ConfigurationCreate, db: Session = Depends(get_db)):
     try:
         # 获取现有配置
         db_config = db.query(DBConfiguration).filter(DBConfiguration.id == config_id).first()
         if not db_config:
             raise HTTPException(status_code=404, detail="Configuration not found")
         
-        # 更新基本信息
+        # 更新基本字段
         db_config.name = config.name
         db_config.is_active = config.is_active
+        db_config.transfer_content = config.transfer_content
         
         # 删除现有步骤
-        db.query(DBConfigurationStep).filter(
-            DBConfigurationStep.configuration_id == config_id
+        db.query(ConfigurationStep).filter(
+            ConfigurationStep.configuration_id == config_id
         ).delete()
         
         # 创建新步骤
         for step in config.steps:
-            db_step = DBConfigurationStep(
+            db_step = ConfigurationStep(
                 configuration_id=config_id,
                 model_id=step.model_id,
                 step_type=step.step_type,
-                order=step.order,
+                step_order=step.step_order,
                 system_prompt=step.system_prompt
             )
             db.add(db_step)
         
-        db.commit()
-        db.refresh(db_config)
-        
-        # 构造响应
-        response_data = {
-            "id": db_config.id,
-            "name": db_config.name,
-            "is_active": db_config.is_active,
-            "steps": [
-                {
-                    "id": step.id,
-                    "model_id": step.model_id,
-                    "step_type": step.step_type,
-                    "order": step.order,
-                    "system_prompt": step.system_prompt
-                }
-                for step in db_config.steps
-            ]
-        }
-        return response_data
+        try:
+            db.commit()
+            db.refresh(db_config)
+            logger.info(f"配置已更新: {db_config.name}")
+            return db_config
+        except Exception as e:
+            db.rollback()
+            logger.error(f"更新配置时发生错误: {e}")
+            raise HTTPException(status_code=500, detail=str(e))
+            
     except Exception as e:
-        db.rollback()
-        logger.error(f"更新配置时发生错误: {str(e)}")
+        logger.error(f"更新配置时发生错误: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
 @app.delete("/v1/configurations/{config_id}")
@@ -259,9 +225,6 @@ async def chat_completions(
         messages = body.get("messages", [])
         model = body.get("model")
         
-        logger.info(f"收到聊天请求，模型: {model}")
-        logger.debug(f"消息内容: {messages}")
-        
         if not model:
             raise HTTPException(status_code=400, detail="Model is required")
         
@@ -272,81 +235,36 @@ async def chat_completions(
         ).first()
         
         if not config:
-            logger.error(f"未找到模型 {model} 的活跃配置")
             raise HTTPException(status_code=404, detail=f"No active configuration found for model {model}")
         
-        # 获取配置的所有步骤
-        steps = db.query(DBConfigurationStep).filter(
-            DBConfigurationStep.configuration_id == config.id
-        ).order_by(DBConfigurationStep.order).all()
+        # 获取配置步骤
+        steps = db.query(ConfigurationStep).filter(
+            ConfigurationStep.configuration_id == config.id
+        ).order_by(ConfigurationStep.step_order).all()
         
         if not steps:
-            logger.error(f"配置 {config.name} 没有定义任何步骤")
-            raise HTTPException(status_code=400, detail="Configuration has no steps defined")
+            raise HTTPException(status_code=404, detail="Configuration has no steps")
         
-        logger.info(f"找到配置: {config.name}, 步骤数量: {len(steps)}")
-        
-        # 获取所有步骤的模型信息
-        step_models = []
-        for step in steps:
-            model = db.query(DBModel).filter(DBModel.id == step.model_id).first()
-            if not model:
-                logger.error(f"步骤 {step.id} 的模型 {step.model_id} 未找到")
-                raise HTTPException(status_code=404, detail=f"Model not found for step {step.id}")
-            
-            step_models.append({
-                'model': {
-                    'provider': model.provider,
-                    'api_key': model.api_key,
-                    'api_url': model.api_url,
-                    'max_tokens': model.max_tokens,
-                    'model_name': model.model_name,
-                    'temperature': float(model.temperature),
-                    'top_p': float(model.top_p),
-                    'presence_penalty': float(model.presence_penalty),
-                    'frequency_penalty': float(model.frequency_penalty),
-                    'id': model.id
-                },
+        # 创建多步骤处理器
+        processor = MultiStepModelCollaboration(
+            steps=[{
+                'model': db.query(DBModel).get(step.model_id),
                 'step_type': step.step_type,
                 'system_prompt': step.system_prompt
-            })
-            logger.info(f"步骤 {step.order + 1}: {model.name} ({model.provider}) - {step.step_type}")
-        
-        # 创建协作处理器
-        processor = ModelCollaboration({
-            'steps': step_models
-        })
+            } for step in steps]
+        )
         
         # 获取流式参数
         stream = body.get("stream", True)
-        logger.info(f"流式输出: {stream}")
-        
-        # 构建模型参数
-        model_arg = (
-            float(step_models[0]['model']['temperature']),
-            float(step_models[0]['model']['top_p']),
-            float(step_models[0]['model']['presence_penalty']),
-            float(step_models[0]['model']['frequency_penalty'])
-        )
-        
-        logger.debug(f"模型参数: {model_arg}")
         
         # 处理请求
         if stream:
-            logger.info("开始流式处理")
             return StreamingResponse(
-                processor.chat_completions_with_stream(
-                    messages=messages,
-                    model_arg=model_arg
-                ),
+                processor.process_with_stream(messages),
                 media_type="text/event-stream"
             )
         else:
-            logger.info("开始非流式处理")
-            response = await processor.chat_completions_without_stream(
-                messages=messages,
-                model_arg=model_arg
-            )
+            response = await processor.process_without_stream(messages)
             return response
             
     except Exception as e:

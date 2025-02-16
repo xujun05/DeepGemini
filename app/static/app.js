@@ -1,6 +1,9 @@
 // Global variables
 let models = [];
 let configurations = [];
+let stepCounter = 0;
+let availableModels = [];
+let isManualModelInput = false;
 
 // Initialize the application
 document.addEventListener('DOMContentLoaded', function() {
@@ -31,26 +34,18 @@ async function fetchAPI(endpoint, method = 'GET', data = null) {
 // Models management
 async function loadModels() {
     try {
-        // Get model configurations
+        // 获取模型配置
         const response = await fetchAPI('model_configs');
         models = response;
+        console.log('Loaded models:', models); // 添加调试日志
         
-        // Get available models in OpenAI format
-        const modelsResponse = await fetchAPI('models');
-        const availableModels = modelsResponse.data;
-        
+        // 更新界面
         updateModelsList();
-        updateModelSelects();
-        updateStepModelOptions();
         
-        // Update model name selection dropdowns with available models
-        const modelNameSelects = document.querySelectorAll('.model-name-select');
-        modelNameSelects.forEach(select => {
-            select.innerHTML = availableModels.map(model =>
-                `<option value="${model.id}">${model.id}</option>`
-            ).join('');
-        });
+        // 更新所有配置步骤中的模型选择器
+        updateAllModelSelects();
     } catch (error) {
+        console.error('Failed to load models:', error);
         showError('Failed to load models');
     }
 }
@@ -63,32 +58,38 @@ function updateModelsList() {
                 <h6 class="card-title">${model.name}</h6>
                 <p class="card-text">Type: ${model.type}</p>
                 <p class="card-text">Provider: ${model.provider}</p>
-                <button class="btn btn-sm btn-primary" onclick="editModel(${model.id})">Edit</button>
-                <button class="btn btn-sm btn-danger" onclick="deleteModel(${model.id})">Delete</button>
+                <div class="btn-group" role="group">
+                    <button class="btn btn-sm btn-primary" onclick="editModel(${model.id})">Edit</button>
+                    <button class="btn btn-sm btn-info" onclick="saveAsModel(${model.id})">Save As</button>
+                    <button class="btn btn-sm btn-danger" onclick="deleteModel(${model.id})">Delete</button>
+                </div>
             </div>
         </div>
     `).join('');
 }
 
-function updateModelSelects() {
-    const reasoningSelect = document.querySelector('select[name="reasoning_model_id"]');
-    const executionSelect = document.querySelector('select[name="execution_model_id"]');
+function updateAllModelSelects() {
+    // 更新配置步骤中的模型选择器
+    const modelSelects = document.querySelectorAll('select[name$="].model_id"]');
+    modelSelects.forEach(select => {
+        const currentValue = select.value;
+        select.innerHTML = getModelOptions();
+        if (currentValue) {
+            select.value = currentValue;
+        }
+    });
+}
+
+function getModelOptions() {
+    if (!models || models.length === 0) {
+        return '<option value="">No models available</option>';
+    }
     
-    if (!reasoningSelect || !executionSelect) return;
-    
-    // Filter models by type
-    const reasoningModels = models.filter(m => m.type === 'reasoning');
-    const executionModels = models.filter(m => m.type === 'execution');
-    
-    // Update reasoning model select
-    reasoningSelect.innerHTML = reasoningModels.map(model =>
-        `<option value="${model.id}">${model.name} (${model.provider})</option>`
-    ).join('');
-    
-    // Update execution model select
-    executionSelect.innerHTML = executionModels.map(model =>
-        `<option value="${model.id}">${model.name} (${model.provider})</option>`
-    ).join('');
+    return models.map(model => `
+        <option value="${model.id}" data-type="${model.type}">
+            ${model.name} (${model.type}) - ${model.provider}
+        </option>
+    `).join('');
 }
 
 async function editModel(modelId) {
@@ -129,30 +130,46 @@ async function editModel(modelId) {
 }
 
 async function saveModel() {
-    const form = document.getElementById('addModelForm');
-    const formData = new FormData(form);
-    const modelData = Object.fromEntries(formData.entries());
-    
     try {
-        const modelId = modelData.model_id;
-        delete modelData.model_id; // Remove ID from data to be sent
+        const form = document.getElementById('addModelForm');
+        const formData = new FormData(form);
         
+        // 获取模型名称
+        const modelName = isManualModelInput ? 
+            document.getElementById('modelNameInput').value :
+            document.getElementById('modelNameSelect').value;
+            
+        if (!modelName) {
+            showError('Model name is required');
+            return;
+        }
+        
+        const modelData = {
+            name: formData.get('name'),
+            model_name: modelName,
+            type: formData.get('type'),
+            provider: formData.get('provider'),
+            api_key: formData.get('api_key'),
+            api_url: formData.get('api_url'),
+            temperature: parseFloat(formData.get('temperature')),
+            top_p: parseFloat(formData.get('top_p')),
+            max_tokens: parseInt(formData.get('max_tokens')),
+            presence_penalty: parseFloat(formData.get('presence_penalty')),
+            frequency_penalty: parseFloat(formData.get('frequency_penalty'))
+        };
+        
+        const modelId = formData.get('model_id');
         if (modelId) {
-            // Update existing model
             await fetchAPI(`models/${modelId}`, 'PUT', modelData);
         } else {
-            // Create new model
             await fetchAPI('models', 'POST', modelData);
         }
         
         await loadModels();
         closeModal('addModelModal');
-        form.reset();
-        // Remove the hidden model_id field
-        const idInput = form.querySelector('input[name="model_id"]');
-        if (idInput) idInput.remove();
     } catch (error) {
-        showError('Failed to save model');
+        console.error('Failed to save model:', error);
+        showError('Failed to save model: ' + error.message);
     }
 }
 
@@ -171,36 +188,22 @@ async function loadConfigurations() {
 function updateConfigurationsList() {
     const configsList = document.getElementById('configurationsList');
     configsList.innerHTML = configurations.map(config => {
-        const stepsInfo = config.steps.map((step, index) => {
-            const model = models.find(m => m.id === step.model_id);
-            return `
-                <div class="step-info">
-                    Step ${index + 1}: ${model ? model.name : 'Unknown'} 
-                    (${step.step_type.charAt(0).toUpperCase() + step.step_type.slice(1)})
-                </div>
-            `;
-        }).join('');
-
+        console.log('Rendering config:', config);
         return `
             <div class="card mb-2">
-                <div class="card-body">
-                    <div class="row">
-                        <div class="col-md-6">
-                            <h6 class="card-title mb-0">${config.name}</h6>
-                            <div class="steps-container mt-2">
-                                ${stepsInfo}
-                            </div>
+                <div class="card-body d-flex justify-content-between align-items-center">
+                    <div>
+                        <h6 class="card-title mb-0">${config.name}</h6>
+                    </div>
+                    <div class="d-flex align-items-center">
+                        <div class="form-check form-switch me-2">
+                            <input class="form-check-input" type="checkbox" 
+                                   ${config.is_active ? 'checked' : ''}
+                                   onchange="toggleConfiguration(${config.id}, this.checked)">
+                            <label class="form-check-label">Active</label>
                         </div>
-                        <div class="col-md-6 text-end">
-                            <div class="form-check form-switch d-inline-block me-2">
-                                <input class="form-check-input" type="checkbox" 
-                                       ${config.is_active ? 'checked' : ''}
-                                       onchange="toggleConfiguration(${config.id}, this.checked)">
-                                <label class="form-check-label">Active</label>
-                            </div>
-                            <button class="btn btn-sm btn-primary me-2" onclick="editConfiguration(${config.id})">Edit</button>
-                            <button class="btn btn-sm btn-danger" onclick="deleteConfiguration(${config.id})">Delete</button>
-                        </div>
+                        <button class="btn btn-sm btn-primary me-2" onclick="editConfiguration(${config.id})">Edit</button>
+                        <button class="btn btn-sm btn-danger" onclick="deleteConfiguration(${config.id})">Delete</button>
                     </div>
                 </div>
             </div>
@@ -209,49 +212,62 @@ function updateConfigurationsList() {
 }
 
 async function editConfiguration(configId) {
-    const config = configurations.find(c => c.id === configId);
-    if (!config) {
-        showError('Configuration not found');
-        return;
-    }
+    try {
+        const config = configurations.find(c => c.id === configId);
+        if (!config) {
+            showError('Configuration not found');
+            return;
+        }
 
-    const form = document.getElementById('addConfigForm');
-    form.name.value = config.name;
-    
-    // 清空现有步骤
-    document.getElementById('configStepsContainer').innerHTML = '';
-    configSteps = [];
-    
-    // 添加配置的所有步骤
-    if (config.steps && config.steps.length > 0) {
-        config.steps.forEach(step => {
-            addConfigurationStep();
-            const stepElement = document.querySelector(`.config-step[data-step="${configSteps.length - 1}"]`);
-            if (stepElement) {
-                const modelSelect = stepElement.querySelector('.step-model');
-                modelSelect.value = step.model_id;
-                // 更新步骤类型选项
-                updateStepTypeOptions(modelSelect);
-                // 设置选中的步骤类型
-                stepElement.querySelector('.step-type').value = step.step_type;
-                stepElement.querySelector('.step-prompt').value = step.system_prompt || '';
+        // 重置表单
+        const form = document.getElementById('addConfigForm');
+        form.reset();
+        
+        // 设置基本字段
+        form.querySelector('[name="config_id"]').value = config.id;
+        form.querySelector('[name="name"]').value = config.name;
+        form.querySelector('[name="is_active"]').checked = config.is_active;
+        
+        // 清空现有步骤
+        const stepsContainer = document.getElementById('configSteps');
+        stepsContainer.innerHTML = '';
+        stepCounter = 0;
+        
+        // 添加已有步骤
+        if (config.steps && config.steps.length > 0) {
+            for (const step of config.steps) {
+                addConfigurationStep();
+                const stepElement = stepsContainer.querySelector(`[data-step="${stepCounter}"]`);
+                if (stepElement) {
+                    const modelSelect = stepElement.querySelector('[name$="].model_id"]');
+                    const stepTypeSelect = stepElement.querySelector('[name$="].step_type"]');
+                    const stepOrderInput = stepElement.querySelector('[name$="].step_order"]');
+                    const systemPromptInput = stepElement.querySelector('[name$="].system_prompt"]');
+                    
+                    if (modelSelect) modelSelect.value = step.model_id;
+                    if (stepTypeSelect) stepTypeSelect.value = step.step_type;
+                    if (stepOrderInput) stepOrderInput.value = step.step_order;
+                    if (systemPromptInput) systemPromptInput.value = step.system_prompt || '';
+                    
+                    // 更新步骤类型选项
+                    if (modelSelect) {
+                        updateStepTypeOptions(modelSelect);
+                    }
+                }
             }
-        });
+        } else {
+            // 如果没有步骤，添加一个默认步骤
+            addConfigurationStep();
+        }
+        
+        // 显示模态框
+        const modal = new bootstrap.Modal(document.getElementById('addConfigModal'));
+        modal.show();
+        
+    } catch (error) {
+        console.error('Failed to edit configuration:', error);
+        showError('Failed to edit configuration');
     }
-
-    // 添加隐藏的配置ID字段
-    let idInput = form.querySelector('input[name="config_id"]');
-    if (!idInput) {
-        idInput = document.createElement('input');
-        idInput.type = 'hidden';
-        idInput.name = 'config_id';
-        form.appendChild(idInput);
-    }
-    idInput.value = configId;
-
-    // 显示模态框
-    const modal = new bootstrap.Modal(document.getElementById('addConfigModal'));
-    modal.show();
 }
 
 // 修改配置激活/停用功能
@@ -277,12 +293,13 @@ async function toggleConfiguration(configId, isActive) {
     }
 }
 
-// 添加配置名称验证
-function validateConfigurationName(name) {
+// 修改配置名称验证函数
+function validateConfigurationName(name, currentId = null) {
     const nameInput = document.querySelector('#addConfigForm input[name="name"]');
     const existingConfig = configurations.find(c => c.name === name);
     
-    if (existingConfig) {
+    // 如果找到同名配置，但是是当前正在编辑的配置，则允许保存
+    if (existingConfig && existingConfig.id !== currentId) {
         nameInput.setCustomValidity('Configuration name already exists');
         return false;
     }
@@ -291,16 +308,115 @@ function validateConfigurationName(name) {
     return true;
 }
 
-// 添加表单验证
-document.getElementById('addConfigForm').addEventListener('submit', function(e) {
-    e.preventDefault();
-    const nameInput = this.querySelector('input[name="name"]');
-    if (!validateConfigurationName(nameInput.value)) {
-        showError('Configuration name already exists. Please choose a different name.');
-        return;
+// 修改保存配置函数
+async function saveConfiguration() {
+    try {
+        const form = document.getElementById('addConfigForm');
+        const formData = new FormData(form);
+        const configId = formData.get('config_id');
+        
+        // 验证配置名称
+        const configName = formData.get('name');
+        if (!validateConfigurationName(configName, configId ? parseInt(configId) : null)) {
+            showError('Configuration name already exists. Please choose a different name.');
+            return;
+        }
+        
+        // 收集步骤数据
+        const steps = [];
+        const stepElements = document.querySelectorAll('.configuration-step');
+        
+        stepElements.forEach(stepElement => {
+            const stepNum = stepElement.dataset.step;
+            const modelId = formData.get(`steps[${stepNum}].model_id`);
+            const stepType = formData.get(`steps[${stepNum}].step_type`);
+            const stepOrder = formData.get(`steps[${stepNum}].step_order`);
+            const systemPrompt = formData.get(`steps[${stepNum}].system_prompt`);
+
+            if (modelId && stepType && stepOrder) {
+                steps.push({
+                    model_id: parseInt(modelId),
+                    step_type: stepType,
+                    step_order: parseInt(stepOrder),
+                    system_prompt: systemPrompt || ""
+                });
+            }
+        });
+        
+        // 确保至少有一个步骤
+        if (steps.length === 0) {
+            showError('At least one step is required');
+            return;
+        }
+        
+        // 构建配置数据
+        const configData = {
+            name: configName,
+            is_active: formData.get('is_active') === 'true',
+            transfer_content: {},
+            steps: steps
+        };
+        
+        try {
+            if (configId) {
+                await fetchAPI(`configurations/${configId}`, 'PUT', configData);
+                console.log('Configuration updated successfully');
+            } else {
+                await fetchAPI('configurations', 'POST', configData);
+                console.log('Configuration created successfully');
+            }
+            
+            await loadConfigurations();
+            closeModal('addConfigModal');
+            form.reset();
+            document.getElementById('configSteps').innerHTML = '';
+            stepCounter = 0;
+        } catch (error) {
+            console.error('Failed to save configuration:', error);
+            showError('Failed to save configuration: ' + error.message);
+            throw error;
+        }
+    } catch (error) {
+        console.error('Form processing error:', error);
+        showError('Error processing form: ' + error.message);
     }
-    saveConfiguration();
-});
+}
+
+// 修改显示添加配置模态框的函数
+function showAddConfigModal() {
+    // 重置表单
+    const form = document.getElementById('addConfigForm');
+    form.reset();
+    
+    // 清除隐藏的 config_id
+    const configIdInput = form.querySelector('[name="config_id"]');
+    if (configIdInput) {
+        configIdInput.value = '';
+    }
+    
+    // 重置步骤计数器和步骤容器
+    stepCounter = 0;
+    const stepsContainer = document.getElementById('configSteps');
+    if (stepsContainer) {
+        stepsContainer.innerHTML = '';
+    }
+    
+    // 显示模态框
+    const modal = new bootstrap.Modal(document.getElementById('addConfigModal'));
+    modal.show();
+    
+    // 添加第一个步骤
+    addConfigurationStep();
+}
+
+// 移除表单提交事件监听器，因为我们已经在 saveConfiguration 中处理了验证
+const configForm = document.getElementById('addConfigForm');
+if (configForm) {
+    configForm.onsubmit = function(e) {
+        e.preventDefault();
+        saveConfiguration();
+    };
+}
 
 // Utility functions
 function getModelName(id) {
@@ -309,12 +425,29 @@ function getModelName(id) {
 }
 
 function showAddModelModal() {
+    // 重置表单
+    const form = document.getElementById('addModelForm');
+    form.reset();
+    
+    // 重置模型名称输入状态
+    isManualModelInput = false;
+    const select = document.getElementById('modelNameSelect');
+    const input = document.getElementById('modelNameInput');
+    select.style.display = 'block';
+    input.style.display = 'none';
+    
+    // 重置模型选择器
+    select.innerHTML = '<option value="">Please enter API credentials first</option>';
+    select.disabled = false;
+    
+    // 清除状态信息
+    const statusDiv = document.getElementById('modelLoadStatus');
+    if (statusDiv) {
+        statusDiv.textContent = '';
+    }
+    
+    // 显示模态框
     const modal = new bootstrap.Modal(document.getElementById('addModelModal'));
-    modal.show();
-}
-
-function showAddConfigModal() {
-    const modal = new bootstrap.Modal(document.getElementById('addConfigModal'));
     modal.show();
 }
 
@@ -330,183 +463,251 @@ function showError(message) {
     alert(message);
 }
 
-// 更新模型类型选项
-function updateModelTypeSelect() {
-    const typeSelect = document.querySelector('select[name="type"]');
-    typeSelect.innerHTML = `
-        <option value="reasoning">Reasoning</option>
-        <option value="execution">Execution</option>
-        <option value="general">General</option>
-    `;
-}
-
-// 更新配置步骤管理
-let configSteps = [];
-
 function addConfigurationStep() {
-    const stepContainer = document.getElementById('configStepsContainer');
-    const stepIndex = configSteps.length;
+    stepCounter++;
+    const stepsContainer = document.getElementById('configSteps');
     
     const stepHtml = `
-        <div class="config-step mb-3" data-step="${stepIndex}">
-            <div class="card">
+        <div class="configuration-step" data-step="${stepCounter}">
+            <div class="card mb-3">
                 <div class="card-body">
-                    <h6 class="card-title">Step ${stepIndex + 1}</h6>
+                    <h5 class="card-title">Step ${stepCounter}</h5>
                     <div class="row">
                         <div class="col-md-4">
-                            <label class="form-label">Model</label>
-                            <select class="form-select step-model" required onchange="updateStepTypeOptions(this)">
-                                <option value="">Select a model</option>
-                                ${getModelOptions()}
-                            </select>
+                            <div class="mb-3">
+                                <label class="form-label">Model</label>
+                                <select class="form-select" name="steps[${stepCounter}].model_id" required onchange="updateStepTypeOptions(this)">
+                                    ${getModelOptions()}
+                                </select>
+                            </div>
                         </div>
                         <div class="col-md-4">
-                            <label class="form-label">Step Type</label>
-                            <select class="form-select step-type" required>
-                                <option value="reasoning">Reasoning</option>
-                                <option value="execution">Execution</option>
-                                <option value="general">General</option>
-                            </select>
+                            <div class="mb-3">
+                                <label class="form-label">Step Type</label>
+                                <select class="form-select" name="steps[${stepCounter}].step_type" required>
+                                    <option value="reasoning">Reasoning</option>
+                                    <option value="execution">Execution</option>
+                                </select>
+                            </div>
                         </div>
-                        <div class="col-md-4 d-flex align-items-end">
-                            <button type="button" class="btn btn-danger btn-sm" onclick="removeStep(${stepIndex})">
-                                Remove Step
-                            </button>
+                        <div class="col-md-4">
+                            <div class="mb-3">
+                                <label class="form-label">Step Order</label>
+                                <input type="number" class="form-control" name="steps[${stepCounter}].step_order" value="${stepCounter}" required>
+                            </div>
                         </div>
                     </div>
-                    <div class="mt-2">
-                        <label class="form-label">System Prompt (Optional)</label>
-                        <textarea class="form-control step-prompt" 
-                                placeholder="Enter system prompt for this step"></textarea>
+                    <div class="mb-3">
+                        <label class="form-label">System Prompt</label>
+                        <textarea class="form-control" name="steps[${stepCounter}].system_prompt" rows="3"></textarea>
                     </div>
+                    <button type="button" class="btn btn-danger" onclick="removeStep(${stepCounter})">Remove Step</button>
                 </div>
             </div>
         </div>
     `;
     
-    stepContainer.insertAdjacentHTML('beforeend', stepHtml);
-    configSteps.push({
-        model_id: null,
-        step_type: 'general',  // 默认使用 general 类型
-        order: stepIndex,
-        system_prompt: ''
-    });
-}
-
-function removeStep(index) {
-    const stepElement = document.querySelector(`.config-step[data-step="${index}"]`);
-    if (stepElement) {
-        stepElement.remove();
-        configSteps.splice(index, 1);
-        // 重新排序剩余步骤
-        document.querySelectorAll('.config-step').forEach((el, idx) => {
-            el.setAttribute('data-step', idx);
-            el.querySelector('.card-title').textContent = `Step ${idx + 1}`;
-        });
+    stepsContainer.insertAdjacentHTML('beforeend', stepHtml);
+    
+    // 初始化新添加的步骤的模型选择器
+    const newModelSelect = stepsContainer.querySelector(`[data-step="${stepCounter}"] select[name$="].model_id"]`);
+    if (newModelSelect) {
+        updateStepTypeOptions(newModelSelect);
     }
 }
 
-// 更新保存配置的函数
-async function saveConfiguration() {
-    const form = document.getElementById('addConfigForm');
-    const formData = new FormData(form);
+function removeStep(stepNum) {
+    const step = document.querySelector(`[data-step="${stepNum}"]`);
+    if (step) {
+        step.remove();
+    }
+}
+
+function updateStepTypeOptions(modelSelect) {
+    const modelId = parseInt(modelSelect.value);
+    const model = models.find(m => m.id === modelId);
+    const stepTypeSelect = modelSelect.closest('.configuration-step')
+        .querySelector('select[name$="].step_type"]');
     
-    // 收集所有步骤的数据
-    const steps = [];
-    document.querySelectorAll('.config-step').forEach((stepEl, index) => {
-        steps.push({
-            model_id: parseInt(stepEl.querySelector('.step-model').value),
-            step_type: stepEl.querySelector('.step-type').value,
-            order: index,
-            system_prompt: stepEl.querySelector('.step-prompt').value
-        });
-    });
+    if (model && stepTypeSelect) {
+        // 清空现有选项
+        stepTypeSelect.innerHTML = '';
+        
+        // 添加适用的选项
+        if (model.type === 'reasoning' || model.type === 'both') {
+            stepTypeSelect.add(new Option('Reasoning', 'reasoning'));
+        }
+        if (model.type === 'execution' || model.type === 'both') {
+            stepTypeSelect.add(new Option('Execution', 'execution'));
+        }
+        
+        // 如果没有选项被添加（这种情况不应该发生），添加一个默认选项
+        if (stepTypeSelect.options.length === 0) {
+            stepTypeSelect.add(new Option('Select type', ''));
+        }
+    }
+}
+
+// 加载可用模型列表
+async function loadAvailableModels() {
+    const form = document.getElementById('addModelForm');
+    const apiKey = form.querySelector('[name="api_key"]').value;
+    const apiUrl = form.querySelector('[name="api_url"]').value;
     
-    const configData = {
-        name: formData.get('name'),
-        is_active: true,
-        steps: steps
-    };
+    if (!apiKey || !apiUrl) {
+        const select = document.getElementById('modelNameSelect');
+        select.innerHTML = '<option value="">Please enter API credentials first</option>';
+        return;
+    }
+    
+    await handleAPICredentialsChange();
+}
+
+// 更新模型名称下拉列表
+function updateModelNameSelect() {
+    const select = document.getElementById('modelNameSelect');
+    select.innerHTML = `
+        <option value="">Select a model</option>
+        ${availableModels.map(model => `
+            <option value="${model.id}">${model.id}</option>
+        `).join('')}
+        <option value="custom">Custom...</option>
+    `;
+}
+
+// 处理模型名称选择
+function handleModelNameSelect(select) {
+    const input = document.getElementById('modelNameInput');
+    if (select.value === 'custom') {
+        select.style.display = 'none';
+        input.style.display = 'block';
+        input.focus();
+    } else if (select.value) {
+        input.value = select.value;
+    }
+}
+
+// 切换手动输入/下拉选择
+function toggleModelNameInput() {
+    const select = document.getElementById('modelNameSelect');
+    const input = document.getElementById('modelNameInput');
+    isManualModelInput = !isManualModelInput;
+    
+    if (isManualModelInput) {
+        select.style.display = 'none';
+        input.style.display = 'block';
+        input.focus();
+    } else {
+        select.style.display = 'block';
+        input.style.display = 'none';
+        if (select.value === 'custom') {
+            select.value = '';
+        }
+    }
+}
+
+// 添加新的函数来处理 API 凭证变更
+async function handleAPICredentialsChange() {
+    const form = document.getElementById('addModelForm');
+    const apiKey = form.querySelector('[name="api_key"]').value;
+    const apiUrl = form.querySelector('[name="api_url"]').value;
+    const statusDiv = document.getElementById('modelLoadStatus');
+    const modelSelect = document.getElementById('modelNameSelect');
+    
+    // 重置选择器
+    modelSelect.innerHTML = '<option value="">Loading models...</option>';
+    modelSelect.disabled = true;
+    
+    if (!apiKey || !apiUrl) {
+        modelSelect.innerHTML = '<option value="">Please enter API credentials first</option>';
+        statusDiv.textContent = '';
+        return;
+    }
     
     try {
-        const configId = formData.get('config_id');
-        if (configId) {
-            await fetchAPI(`configurations/${configId}`, 'PUT', configData);
-        } else {
-            await fetchAPI('configurations', 'POST', configData);
-        }
-        
-        await loadConfigurations();
-        closeModal('addConfigModal');
-        form.reset();
-        document.getElementById('configStepsContainer').innerHTML = '';
-        configSteps = [];
+        statusDiv.textContent = 'Loading available models...';
+        const models = await fetchAvailableModels(apiUrl, apiKey);
+        updateModelNameSelectWithModels(models);
+        statusDiv.textContent = 'Models loaded successfully';
     } catch (error) {
-        console.error('Failed to save configuration:', error);
-        showError('Failed to save configuration');
+        console.error('Failed to load models:', error);
+        modelSelect.innerHTML = '<option value="">Failed to load models</option>';
+        statusDiv.textContent = 'Error: ' + error.message;
+        modelSelect.disabled = false;
     }
 }
 
-// 在 app.js 中添加 getModelOptions 函数
-function getModelOptions() {
-    // 过滤并排序模型列表
-    const sortedModels = [...models].sort((a, b) => a.name.localeCompare(b.name));
+// 从 API 获取可用模型
+async function fetchAvailableModels(apiUrl, apiKey) {
+    const baseUrl = new URL(apiUrl);
+    const modelsUrl = new URL('/v1/models', baseUrl.origin);
     
-    // 生成选项HTML
-    return sortedModels.map(model => {
-        const modelType = model.type === 'general' 
-            ? '(General)' 
-            : model.type === 'reasoning' 
-                ? '(Reasoning)' 
-                : '(Execution)';
-                
-        return `<option value="${model.id}">${model.name} - ${modelType} - ${model.provider}</option>`;
-    }).join('');
-}
-
-// 更新配置步骤的模型选择器
-function updateStepModelOptions() {
-    document.querySelectorAll('.step-model').forEach(select => {
-        select.innerHTML = getModelOptions();
+    const response = await fetch(modelsUrl.toString(), {
+        headers: {
+            'Authorization': `Bearer ${apiKey}`,
+            'Content-Type': 'application/json'
+        }
     });
+    
+    if (!response.ok) {
+        throw new Error(`Failed to fetch models: ${response.statusText}`);
+    }
+    
+    const data = await response.json();
+    return data.data || [];
 }
 
-// 添加新函数来更新步骤类型选项
-function updateStepTypeOptions(modelSelect) {
-    const stepElement = modelSelect.closest('.config-step');
-    const stepTypeSelect = stepElement.querySelector('.step-type');
-    const selectedModel = models.find(m => m.id === parseInt(modelSelect.value));
-    
-    if (selectedModel) {
-        // 如果是通用模型，显示所有选项
-        if (selectedModel.type === 'general') {
-            stepTypeSelect.innerHTML = `
-                <option value="general">General</option>
-                <option value="reasoning">Reasoning</option>
-                <option value="execution">Execution</option>
-            `;
-        } 
-        // 如果是特定类型模型，只显示对应选项和通用选项
-        else {
-            stepTypeSelect.innerHTML = `
-                <option value="general">General</option>
-                <option value="${selectedModel.type}">${
-                    selectedModel.type.charAt(0).toUpperCase() + 
-                    selectedModel.type.slice(1)
-                }</option>
-            `;
-        }
-        
-        // 如果当前选中的类型不在新的选项中，默认选择第一个选项
-        if (!stepTypeSelect.querySelector(`option[value="${stepTypeSelect.value}"]`)) {
-            stepTypeSelect.value = stepTypeSelect.querySelector('option').value;
-        }
-    } else {
-        // 如果没有选择模型，显示所有选项
-        stepTypeSelect.innerHTML = `
-            <option value="general">General</option>
-            <option value="reasoning">Reasoning</option>
-            <option value="execution">Execution</option>
-        `;
+// 使用获取到的模型更新下拉列表
+function updateModelNameSelectWithModels(models) {
+    const select = document.getElementById('modelNameSelect');
+    select.innerHTML = `
+        <option value="">Select a model</option>
+        ${models.map(model => `
+            <option value="${model.id}">${model.id}</option>
+        `).join('')}
+        <option value="custom">Custom...</option>
+    `;
+    select.disabled = false;
+}
+
+// 添加另存模型函数
+async function saveAsModel(modelId) {
+    const model = models.find(m => m.id === modelId);
+    if (!model) {
+        showError('Model not found');
+        return;
     }
+
+    // 复制模型数据
+    const form = document.getElementById('addModelForm');
+    form.reset();
+    
+    // 设置基本字段，但不包括 ID
+    form.name.value = model.name + ' (Copy)';  // 添加 (Copy) 后缀
+    form.type.value = model.type;
+    form.provider.value = model.provider;
+    form.api_key.value = model.api_key;
+    form.api_url.value = model.api_url;
+    
+    // 设置模型名称
+    const modelSelect = document.getElementById('modelNameSelect');
+    const modelInput = document.getElementById('modelNameInput');
+    modelInput.value = model.model_name || '';
+    
+    // 如果有 API 凭证，尝试加载模型列表
+    if (model.api_key && model.api_url) {
+        await handleAPICredentialsChange();
+    }
+    
+    // 设置其他参数
+    form.temperature.value = model.temperature;
+    form.top_p.value = model.top_p;
+    form.max_tokens.value = model.max_tokens;
+    form.presence_penalty.value = model.presence_penalty;
+    form.frequency_penalty.value = model.frequency_penalty;
+    form.system_prompt.value = model.system_prompt || '';
+
+    // 显示模态框
+    const modal = new bootstrap.Modal(document.getElementById('addModelModal'));
+    modal.show();
 }

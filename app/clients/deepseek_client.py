@@ -83,13 +83,18 @@ class DeepSeekClient(BaseClient):
                         data = json.loads(json_str)
                         if data and data.get("choices") and data["choices"][0].get("delta"):
                             delta = data["choices"][0]["delta"]
+                            
                             if self.is_origin_reasoning:
                                 # 处理推理模型的输出
                                 if delta.get("reasoning_content"):
                                     content = delta["reasoning_content"]
                                     logger.debug(f"提取推理内容：{content}")
                                     yield "reasoning", content
-                                
+                                # 如果推理步数为最后一个，则提取内容
+                                if kwargs.get("is_last_step"):
+                                    content = delta["content"]
+                                    logger.debug(f"提取内容信息，推理阶段结束: {content}")
+                                    yield "content", content
                             else:
                                 # 处理执行模型的输出
                                 if delta.get("content"):

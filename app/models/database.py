@@ -15,8 +15,8 @@ class Model(Base):
     
     id = Column(Integer, primary_key=True, index=True)
     name = Column(String, unique=True, index=True)
-    type = Column(String)  # 'reasoning', 'execution', 'general'
-    provider = Column(String)
+    type = Column(String)  # 'reasoning', 'execution', or 'both'
+    provider = Column(String)  # 'anthropic', 'google', etc.
     api_key = Column(String)
     api_url = Column(String)
     model_name = Column(String)
@@ -24,26 +24,13 @@ class Model(Base):
     
     # Default parameters
     temperature = Column(Float, default=0.7)
-    top_p = Column(Float, default=0.9)
+    top_p = Column(Float, default=1.0)
     max_tokens = Column(Integer, default=2000)
     presence_penalty = Column(Float, default=0.0)
     frequency_penalty = Column(Float, default=0.0)
     
-    # Relationships
+    # 添加与配置步骤的关系
     configuration_steps = relationship("ConfigurationStep", back_populates="model")
-
-class ConfigurationStep(Base):
-    __tablename__ = "configuration_steps"
-    
-    id = Column(Integer, primary_key=True, index=True)
-    configuration_id = Column(Integer, ForeignKey("configurations.id"))
-    model_id = Column(Integer, ForeignKey("models.id"))
-    step_type = Column(String)  # 'reasoning' or 'execution'
-    order = Column(Integer)  # 步骤顺序
-    system_prompt = Column(String, default="")
-    
-    configuration = relationship("Configuration", back_populates="steps")
-    model = relationship("Model", back_populates="configuration_steps")
 
 class Configuration(Base):
     __tablename__ = "configurations"
@@ -51,13 +38,29 @@ class Configuration(Base):
     id = Column(Integer, primary_key=True, index=True)
     name = Column(String, unique=True, index=True)
     is_active = Column(Boolean, default=True)
+    transfer_content = Column(JSON, default=dict)
     
-    # Configuration settings
-    reasoning_pattern = Column(String)  # Regex pattern to extract reasoning
-    transfer_content = Column(JSON)  # Custom configuration for content transfer
+    # 保留步骤关系
+    steps = relationship(
+        "ConfigurationStep",
+        back_populates="configuration",
+        cascade="all, delete-orphan",
+        order_by="ConfigurationStep.step_order"
+    )
+
+class ConfigurationStep(Base):
+    __tablename__ = "configuration_steps"
     
-    # Relationships
-    steps = relationship("ConfigurationStep", back_populates="configuration", order_by="ConfigurationStep.order")
+    id = Column(Integer, primary_key=True, index=True)
+    configuration_id = Column(Integer, ForeignKey("configurations.id", ondelete="CASCADE"))
+    model_id = Column(Integer, ForeignKey("models.id"))
+    step_type = Column(String)  # reasoning 或 execution
+    step_order = Column(Integer)  # 步骤顺序
+    system_prompt = Column(String, default="")
+    
+    # 关系
+    configuration = relationship("Configuration", back_populates="steps")
+    model = relationship("Model", back_populates="configuration_steps")
 
 # Create all tables
 def init_db():

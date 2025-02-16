@@ -22,7 +22,8 @@ class ClaudeClient(BaseClient):
         messages: list,
         model_arg: tuple[float, float, float, float],
         model: str,
-        stream: bool = True
+        stream: bool = True,
+        **kwargs
     ) -> AsyncGenerator[tuple[str, str], None]:
         """流式或非流式对话
         

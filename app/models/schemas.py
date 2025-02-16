@@ -3,15 +3,14 @@ from typing import Optional, Dict, Union, List
 
 class ModelBase(BaseModel):
     name: str
-    type: str  # 'reasoning', 'execution', 'general'
+    type: str
     provider: str
     api_key: str
     api_url: str
-    model_name: Optional[str] = ""
-    system_prompt: Optional[str] = None
-    temperature: float = 0.7
-    top_p: float = 0.9
+    model_name: str
     max_tokens: int = 2000
+    temperature: float = 0.7
+    top_p: float = 1.0
     presence_penalty: float = 0.0
     frequency_penalty: float = 0.0
 
@@ -23,7 +22,7 @@ class ModelBase(BaseModel):
 
     @validator('type')
     def validate_type(cls, v):
-        valid_types = {'reasoning', 'execution', 'general'}
+        valid_types = {'reasoning', 'execution', 'both'}
         if v.lower() not in valid_types:
             raise ValueError(f'Type must be one of {valid_types}')
         return v.lower()
@@ -39,9 +38,9 @@ class Model(ModelBase):
 
 class ConfigurationStepBase(BaseModel):
     model_id: int
-    step_type: str
-    order: int
-    system_prompt: Optional[str] = ""
+    step_type: str  # "reasoning" or "execution"
+    step_order: int
+    system_prompt: str = ""
 
 class ConfigurationStepCreate(ConfigurationStepBase):
     pass
@@ -51,24 +50,19 @@ class ConfigurationStep(ConfigurationStepBase):
     configuration_id: int
 
     class Config:
-        from_attributes = True
+        orm_mode = True
 
 class ConfigurationBase(BaseModel):
     name: str
     is_active: bool = True
+    transfer_content: Dict = {}
 
 class ConfigurationCreate(ConfigurationBase):
     steps: List[ConfigurationStepCreate]
 
-class ConfigurationStepResponse(ConfigurationStepBase):
+class Configuration(ConfigurationBase):
     id: int
-
-    class Config:
-        from_attributes = True
-
-class ConfigurationResponse(ConfigurationBase):
-    id: int
-    steps: List[ConfigurationStepResponse]
+    steps: List[ConfigurationStep]
 
     class Config:
         from_attributes = True
