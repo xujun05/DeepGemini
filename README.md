@@ -8,6 +8,11 @@
 [![License](https://img.shields.io/badge/License-MIT-green.svg?style=flat-square)](LICENSE)
 
 </div>
+## Preview
+
+![image](https://img.pub/p/8c7a5bb02bb3711c0bd6.png)
+![image](https://img.pub/p/1ffdc3728b7944caf807.png)
+![image](https://img.pub/p/439520386b4927c91688.png)
 
 ## ✨ Features
 
