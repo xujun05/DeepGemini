@@ -63,7 +63,31 @@ const translations = {
         apiKeyGenerated: 'API key generated',
         apiKeyInvalid: 'Invalid API key format. Should start with "sk-api-"',
         copy: 'Copy',
-        noApiKeys: 'No API keys available'
+        noApiKeys: 'No API keys available',
+        workflowName: 'Workflow Name',
+        workflowStatus: 'Status',
+        saved: 'Saved',
+        saving: 'Saving...',
+        copied: 'Copied',
+        deleted: 'Deleted',
+        confirmDelete: 'Confirm deletion?',
+        passwordUpdated: 'Password updated',
+        passwordMismatch: 'Passwords do not match',
+        operationSuccess: 'Operation successful',
+        operationFailed: 'Operation failed',
+        accountSettings: 'Account Settings',
+        changePassword: 'Change Password',
+        currentPassword: 'Current Password',
+        newPassword: 'New Password',
+        confirmPassword: 'Confirm Password',
+        updatePassword: 'Update Password',
+        transferContent: 'Transfer Content',
+        editWorkflow: 'Edit Workflow',
+        deleteWorkflow: 'Delete Workflow',
+        selectModel: 'Select Model',
+        adminCredentials: 'Admin Credentials',
+        newUsername: 'New Username',
+        updateCredentials: 'Update Credentials'
     },
     zh: {
         modelManagement: '模型管理',
@@ -120,7 +144,31 @@ const translations = {
         apiKeyGenerated: 'API 密钥已生成',
         apiKeyInvalid: '无效的 API 密钥格式。应以 "sk-api-" 开头',
         copy: '复制',
-        noApiKeys: '暂无 API 密钥'
+        noApiKeys: '暂无 API 密钥',
+        workflowName: '接力链名称',
+        workflowStatus: '状态',
+        saved: '已保存',
+        saving: '保存中...',
+        copied: '已复制',
+        deleted: '已删除',
+        confirmDelete: '确认删除？',
+        passwordUpdated: '密码已更新',
+        passwordMismatch: '两次输入的密码不一致',
+        operationSuccess: '操作成功',
+        operationFailed: '操作失败',
+        accountSettings: '账号设置',
+        changePassword: '修改密码',
+        currentPassword: '当前密码',
+        newPassword: '新密码',
+        confirmPassword: '确认密码',
+        updatePassword: '更新密码',
+        transferContent: '传递内容',
+        editWorkflow: '编辑接力链',
+        deleteWorkflow: '删除接力链',
+        selectModel: '选择模型',
+        adminCredentials: '管理员凭据',
+        newUsername: '新用户名',
+        updateCredentials: '更新凭据'
     }
 };
 
@@ -343,6 +391,8 @@ async function loadConfigurations() {
 }
 
 function updateConfigurationsList() {
+    const lang = localStorage.getItem('preferred_language') || 'en';
+    const t = translations[lang];
     const configsList = document.getElementById('configurationsList');
     configsList.innerHTML = configurations.map(config => `
         <div class="col-lg-6 mb-4">
@@ -353,36 +403,36 @@ function updateConfigurationsList() {
                         <input class="form-check-input" type="checkbox" 
                                ${config.is_active ? 'checked' : ''}
                                onchange="toggleConfiguration(${config.id}, this.checked)">
-                        <label class="form-check-label">${config.is_active ? 'Active' : 'Inactive'}</label>
+                        <label class="form-check-label">${config.is_active ? t.active : t.inactive}</label>
                     </div>
                 </div>
                 <div class="workflow-card-body">
                     <div class="workflow-stats">
                         <div class="stat-item">
                             <div class="stat-value">${config.steps.length}</div>
-                            <div class="stat-label">Steps</div>
+                            <div class="stat-label">${t.steps}</div>
                         </div>
                         <div class="stat-item">
                             <div class="stat-value">${config.steps.filter(s => s.step_type === 'reasoning').length}</div>
-                            <div class="stat-label">Reasoning</div>
+                            <div class="stat-label">${t.reasoning}</div>
                         </div>
                         <div class="stat-item">
                             <div class="stat-value">${config.steps.filter(s => s.step_type === 'execution').length}</div>
-                            <div class="stat-label">Execution</div>
+                            <div class="stat-label">${t.execution}</div>
                         </div>
                     </div>
                     <div class="workflow-actions">
                         <button class="btn btn-outline-primary" onclick="editConfiguration(${config.id})">
-                            <i class="fas fa-edit"></i> Edit
+                            <i class="fas fa-edit"></i> ${t.edit}
                         </button>
                         <button class="btn btn-outline-info" onclick="duplicateConfiguration(${config.id})">
-                            <i class="fas fa-copy"></i> Duplicate
+                            <i class="fas fa-copy"></i> ${t.duplicate}
                         </button>
                         <button class="btn btn-outline-danger" onclick="deleteConfiguration(${config.id})">
-                            <i class="fas fa-trash"></i> Delete
+                            <i class="fas fa-trash"></i> ${t.delete}
                         </button>
                         <button class="preview-btn" onclick="showWorkflowVisualization(${config.id})" 
-                                title="View workflow visualization">
+                                title="${t.visualizeWorkflow}">
                             <i class="fas fa-project-diagram"></i>
                         </button>
                     </div>

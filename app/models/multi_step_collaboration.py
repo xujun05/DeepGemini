@@ -4,6 +4,7 @@ import json
 import time
 from app.utils.logger import logger
 from app.clients import DeepSeekClient, ClaudeClient, GeminiClient
+from app.clients.uni_client import UniClient
 
 class MultiStepModelCollaboration:
     """处理多步骤模型协作的类"""
@@ -19,6 +20,11 @@ class MultiStepModelCollaboration:
         """
         self.steps = steps
         self.clients = []
+        
+        # 检查是否为单模型情况
+        self.is_single_model = len(steps) == 1
+        if self.is_single_model:
+            self.uni_client = UniClient.create_client(steps[0]['model'])
         
         # 初始化每个步骤的客户端
         for step in steps:
@@ -66,11 +72,22 @@ class MultiStepModelCollaboration:
         current_messages = messages.copy()
         previous_result = ""
         
+        # 如果是单模型，直接使用通用客户端
+        if self.is_single_model:
+            step = self.steps[0]
+            async for chunk in self.uni_client.generate_stream(
+                messages=messages,
+                system_prompt=step.get('system_prompt')
+            ):
+                yield chunk
+            return
+        
         for idx, client_info in enumerate(self.clients):
             client = client_info['client']
             step_type = client_info['step_type']
             system_prompt = client_info['system_prompt']
             is_last_step = idx == len(self.clients) - 1
+            is_first_step = idx == 0
             
             # 添加系统提示词
             if system_prompt:
@@ -89,14 +106,15 @@ class MultiStepModelCollaboration:
             async for content_type, content in client.stream_chat(
                 messages=current_messages,
                 model=client_info['model_name'],
-                is_last_step=is_last_step
+                is_last_step=is_last_step,
+                is_first_step=is_first_step
             ):
                 current_output.append(content)
                 
                 # 构建响应
                 delta = {
                     "role": "assistant",
-                    f"{step_type}_content": content
+                    f"{step_type}_content": content if step_type == "reasoning" else ""
                 }
                 
                 # 只有执行模型或最后一步的推理模型才输出 content
@@ -141,12 +159,20 @@ class MultiStepModelCollaboration:
             "content": ""
         }
         
+        # 如果是单模型，直接使用通用客户端
+        if self.is_single_model:
+            step = self.steps[0]
+            return await self.uni_client.generate(
+                messages=messages,
+                system_prompt=step.get('system_prompt')
+            )
+        
         for idx, client_info in enumerate(self.clients):
             client = client_info['client']
             step_type = client_info['step_type']
             system_prompt = client_info['system_prompt']
             is_last_step = idx == len(self.clients) - 1
-            
+            is_first_step = idx == 0
             if system_prompt:
                 current_messages = self._add_system_prompt(current_messages, system_prompt)
             
@@ -161,7 +187,8 @@ class MultiStepModelCollaboration:
             async for content_type, content in client.stream_chat(
                 messages=current_messages,
                 model=client_info['model_name'],
-                is_last_step=is_last_step
+                is_last_step=is_last_step,
+                is_first_step=is_first_step
             ):
                 current_output.append(content)
             

@@ -20,7 +20,12 @@ try:
     # 移除可能的多余空格和换行符
     api_keys_json = api_keys_json.strip()
     api_keys_data = json.loads(api_keys_json)
-    ALLOW_API_KEYS = [key_data["key"] for key_data in api_keys_data]
+    # 确保 api_keys_data 是列表
+    if isinstance(api_keys_data, list):
+        ALLOW_API_KEYS = [key_data["key"] for key_data in api_keys_data if isinstance(key_data, dict) and "key" in key_data]
+    else:
+        logger.error("API 密钥数据格式错误，应为 JSON 数组")
+        ALLOW_API_KEYS = []
 except json.JSONDecodeError:
     logger.warning("无法解析 API 密钥 JSON，使用空列表初始化")
     ALLOW_API_KEYS = []
@@ -35,7 +40,7 @@ if not ALLOW_API_KEYS:
 
 # 打印API密钥的前4位用于调试
 for key in ALLOW_API_KEYS:
-    logger.info(f"Loaded API key starting with: {key[:4] if len(key) >= 4 else key}")
+    logger.info(f"已加载 API 密钥，前缀为: {key[:8] if len(key) >= 8 else key}")
 
 # 安全配置
 SECRET_KEY = os.getenv("JWT_SECRET", "your-secret-key")
@@ -104,8 +109,11 @@ async def verify_api_key(authorization: Optional[str] = Header(None)) -> None:
         )
     
     api_key = authorization.replace("Bearer ", "").strip()
+    logger.info(f"正在验证 API 密钥: {api_key[:8]}...")
+    logger.info(f"可用的 API 密钥: {[k[:8] for k in ALLOW_API_KEYS]}")
+    
     if api_key not in ALLOW_API_KEYS:
-        logger.warning(f"无效的API密钥: {api_key}")
+        logger.warning(f"无效的API密钥: {api_key[:8]}...")
         raise HTTPException(
             status_code=401,
             detail="Invalid API key"
