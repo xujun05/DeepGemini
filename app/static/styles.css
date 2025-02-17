@@ -1197,3 +1197,34 @@ body.dark-theme {
     background: #202020;
     color: #ecf0f1;
 }
+
+.logout-control {
+    cursor: pointer;
+    padding: 8px 12px;
+    border-radius: 4px;
+    transition: background-color 0.3s;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.logout-control:hover {
+    background-color: var(--hover-bg-color);
+}
+
+.logout-control i {
+    font-size: 16px;
+    color: var(--text-color);
+}
+
+.dark-theme .logout-control i {
+    color: var(--dark-text-color);
+}
+
+.logout-control span {
+    color: var(--text-color);
+}
+
+.dark-theme .logout-control span {
+    color: var(--dark-text-color);
+}

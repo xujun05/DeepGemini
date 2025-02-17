@@ -19,17 +19,16 @@ class GeminiClient(BaseClient):
         self, 
         messages: list,
         model: str,
-        is_origin_reasoning: bool = True,
-        is_last_step: bool = False,
+        stream: bool = True,
         **kwargs
     ) -> AsyncGenerator[tuple[str, str], None]:
-        """流式对话
+        """流式或非流式对话
         
         Args:
             messages: 消息列表
             model: 模型名称
-            is_origin_reasoning: 是否使用原始推理输出
-            is_last_step: 是否为最后一步
+            stream: 是否使用流式输出，默认为 True
+            **kwargs: 其他参数
         """
         headers = {
             "Content-Type": "application/json",
@@ -39,44 +38,61 @@ class GeminiClient(BaseClient):
         data = {
             "messages": messages,
             "model": model,
-            "stream": True,
+            "stream": stream,
             "temperature": 0.7,
             "max_tokens": 1024000,
         }
         logger.debug(f"Gemini 请求数据: {data}")
-        first_chunk = True
-        async for chunk in self._make_request(headers, data):
-            try:
-                chunk_str = chunk.decode('utf-8')
-                logger.debug(f"Gemini 响应数据: {chunk_str}")
-                if not chunk_str.strip():
-                    continue
-                    
-                for line in chunk_str.split('\n'):
-                    if line.startswith('data: '):
-                        json_str = line[6:]
-                        if json_str.strip() == '[DONE]':
-                            return
-                            
-                        data = json.loads(json_str)
-                        delta = data.get('choices', [{}])[0].get('delta', {})
+        
+        if stream:
+            # 流式输出处理
+            first_chunk = True
+            async for chunk in self._make_request(headers, data):
+                try:
+                    chunk_str = chunk.decode('utf-8')
+                    logger.debug(f"Gemini 响应数据: {chunk_str}")
+                    if not chunk_str.strip():
+                        continue
                         
-                        # 处理第一个chunk的完整消息
-                        if first_chunk:
+                    for line in chunk_str.split('\n'):
+                        if line.startswith('data: '):
+                            json_str = line[6:]
+                            if json_str.strip() == '[DONE]':
+                                return
+                                
+                            data = json.loads(json_str)
+                            delta = data.get('choices', [{}])[0].get('delta', {})
+                            
+                            # 处理第一个chunk的完整消息
+                            if first_chunk:
+                                content = delta.get('content', '')
+                                role = delta.get('role', '')
+                                if role:  # 如果包含role，这是第一个chunk
+                                    first_chunk = False
+                                    if content:  # 确保不会丢失第一个chunk中的content
+                                        yield "reasoning", content
+                                    continue
+                                
+                            # 处理后续chunks
                             content = delta.get('content', '')
-                            role = delta.get('role', '')
-                            if role:  # 如果包含role，这是第一个chunk
-                                first_chunk = False
-                                if content:  # 确保不会丢失第一个chunk中的content
-                                    yield "reasoning", content
-                                continue
-                            
-                        # 处理后续chunks
-                        content = delta.get('content', '')
-                        if content:
-                            yield "reasoning", content
-                            
-            except json.JSONDecodeError:
-                continue
-            except Exception as e:
-                logger.error(f"处理 Gemini 响应时发生错误: {e}")
+                            if content:
+                                yield "reasoning", content
+                                
+                except json.JSONDecodeError:
+                    continue
+                except Exception as e:
+                    logger.error(f"处理 Gemini 响应时发生错误: {e}")
+        else:
+            # 非流式输出处理
+            async for chunk in self._make_request(headers, data):
+                try:
+                    response = json.loads(chunk.decode('utf-8'))
+                    content = response.get('choices', [{}])[0].get('message', {}).get('content', '')
+                    if content:
+                        logger.debug(f"Gemini 非流式响应: {content}")
+                        yield "reasoning", content
+                        return  # 非流式只需要返回一次完整内容
+                except json.JSONDecodeError:
+                    continue
+                except Exception as e:
+                    logger.error(f"处理 Gemini 非流式响应时发生错误: {e}")

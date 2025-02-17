@@ -69,6 +69,8 @@ class DeepSeekClient(BaseClient):
         logger.debug(f"开始流式对话：{data}")
 
         first_chunk = True
+        reasoning_completed = False  # 添加标志来追踪推理是否完成
+        
         async for chunk in self._make_request(headers, data):
             chunk_str = chunk.decode('utf-8')
             
@@ -83,18 +85,24 @@ class DeepSeekClient(BaseClient):
                         data = json.loads(json_str)
                         if data and data.get("choices") and data["choices"][0].get("delta"):
                             delta = data["choices"][0]["delta"]
-                            
+                            # logger.debug(f"delta: {delta}")
                             if self.is_origin_reasoning:
                                 # 处理推理模型的输出
                                 if delta.get("reasoning_content"):
                                     content = delta["reasoning_content"]
                                     logger.debug(f"提取推理内容：{content}")
                                     yield "reasoning", content
-                                # 如果推理步数为最后一个，则提取内容
-                                if kwargs.get("is_last_step"):
-                                    content = delta["content"]
-                                    logger.debug(f"提取内容信息，推理阶段结束: {content}")
-                                    yield "content", content
+                                # 检测推理内容是否结束
+                                elif delta.get("content") and not reasoning_completed:
+                                    reasoning_completed = True
+                                    # 如果不是最后一步，直接结束流
+                                    if not kwargs.get("is_last_step"):
+                                        return
+                                    # 如果是最后一步，继续处理 content
+                                    else:
+                                        content = delta["content"]
+                                        logger.debug(f"提取内容信息，推理阶段结束: {content}")
+                                        yield "content", content
                             else:
                                 # 处理执行模型的输出
                                 if delta.get("content"):

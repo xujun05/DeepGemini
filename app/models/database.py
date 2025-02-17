@@ -20,7 +20,6 @@ class Model(Base):
     api_key = Column(String)
     api_url = Column(String)
     model_name = Column(String)
-    system_prompt = Column(String)
     
     # Default parameters
     temperature = Column(Float, default=0.7)

@@ -87,7 +87,9 @@ const translations = {
         selectModel: 'Select Model',
         adminCredentials: 'Admin Credentials',
         newUsername: 'New Username',
-        updateCredentials: 'Update Credentials'
+        updateCredentials: 'Update Credentials',
+        logout: 'Logout',
+        logoutConfirm: 'Are you sure you want to logout?'
     },
     zh: {
         modelManagement: '模型管理',
@@ -168,7 +170,9 @@ const translations = {
         selectModel: '选择模型',
         adminCredentials: '管理员凭据',
         newUsername: '新用户名',
-        updateCredentials: '更新凭据'
+        updateCredentials: '更新凭据',
+        logout: '退出登录',
+        logoutConfirm: '确定要退出登录吗？'
     }
 };
 
@@ -312,7 +316,6 @@ async function editModel(modelId) {
     form.api_key.value = model.api_key;
     form.api_url.value = model.api_url;
     form.model_name.value = model.model_name || '';
-    form.system_prompt.value = model.system_prompt || '';
     form.temperature.value = model.temperature;
     form.top_p.value = model.top_p;
     form.max_tokens.value = model.max_tokens;
@@ -936,7 +939,6 @@ async function saveAsModel(modelId) {
     form.max_tokens.value = model.max_tokens;
     form.presence_penalty.value = model.presence_penalty;
     form.frequency_penalty.value = model.frequency_penalty;
-    form.system_prompt.value = model.system_prompt || '';
 
     // 显示模态框
     const modal = new bootstrap.Modal(document.getElementById('addModelModal'));
@@ -1446,7 +1448,20 @@ async function updateCredentials() {
 }
 
 // 登出
-function logout() {
-    localStorage.removeItem('access_token');
-    window.location.href = '/static/login.html';
+async function logout() {
+    const lang = localStorage.getItem('preferred_language') || 'en';
+    const confirmMessage = translations[lang].logoutConfirm;
+    
+    if (confirm(confirmMessage)) {
+        try {
+            // 调用登出 API
+            await fetchAPI('auth/logout', 'POST');
+        } catch (error) {
+            console.error('Logout API call failed:', error);
+        } finally {
+            // 无论 API 调用是否成功，都清除本地存储并跳转
+            localStorage.removeItem('access_token');
+            window.location.href = '/static/login.html';
+        }
+    }
 }
