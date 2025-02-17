@@ -52,7 +52,7 @@ Required environment variables:
 uv run uvicorn app.main:app --host 0.0.0.0 --port 8000
 ```
 
-Visit `http://localhost:8000` to access the web management interface.
+Visit `http://localhost:8000/dashboard` to access the web management interface.
 
 ## 🔧 Model Configuration
 
