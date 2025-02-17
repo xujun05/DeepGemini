@@ -49,7 +49,7 @@ class MultiStepModelCollaboration:
             return DeepSeekClient(api_key, api_url, provider, is_reasoning)
         elif provider == "google":
             return GeminiClient(api_key, api_url)
-        elif provider == "anthropic":
+        elif provider in ["anthropic", "oneapi", "openrouter"]:
             return ClaudeClient(api_key, api_url, provider)
         else:
             raise ValueError(f"Unsupported provider: {provider}")

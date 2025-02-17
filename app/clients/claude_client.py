@@ -20,8 +20,8 @@ class ClaudeClient(BaseClient):
     async def stream_chat(
         self,
         messages: list,
-        model_arg: tuple[float, float, float, float],
-        model: str,
+        model_arg: tuple[float, float, float, float] = (0.7, 0.7, 0, 0),
+        model: str = "claude-3-5-sonnet-20240620",
         stream: bool = True,
         **kwargs
     ) -> AsyncGenerator[tuple[str, str], None]:
@@ -29,8 +29,8 @@ class ClaudeClient(BaseClient):
         
         Args:
             messages: 消息列表
-            model_arg: 模型参数元组[temperature, top_p, presence_penalty, frequency_penalty]
-            model: 模型名称。如果是 OpenRouter, 会自动转换为 'anthropic/claude-3.5-sonnet' 格式
+            model_arg: 模型参数元组[temperature, top_p, presence_penalty, frequency_penalty]，默认值(0.7, 0.7, 0, 0)
+            model: 模型名称，默认为 'claude-3-sonnet-20240229'。如果是 OpenRouter, 会自动转换为 'anthropic/claude-3.5-sonnet' 格式
             stream: 是否使用流式输出，默认为 True
             
         Yields:

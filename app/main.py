@@ -2,7 +2,7 @@ import os
 import sys
 from dotenv import load_dotenv
 from fastapi import FastAPI, Depends, Request, HTTPException
-from fastapi.responses import StreamingResponse, JSONResponse
+from fastapi.responses import StreamingResponse, JSONResponse, RedirectResponse
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from sqlalchemy.orm import Session
@@ -287,6 +287,10 @@ app.include_router(model_router, prefix="/v1")
 app.include_router(configuration_router, prefix="/v1")
 app.include_router(api_key_router, prefix="/v1")
 app.include_router(auth_router, prefix="/v1")
+
+@app.get("/dashboard")
+async def dashboard():
+    return RedirectResponse(url="/static/index.html", status_code=301)
 
 if __name__ == "__main__":
     uvicorn.run(

@@ -27,6 +27,13 @@ class ModelBase(BaseModel):
             raise ValueError(f'Type must be one of {valid_types}')
         return v.lower()
 
+    @validator('provider')
+    def validate_provider(cls, v):
+        valid_providers = {'deepseek', 'google', 'anthropic', 'oneapi', 'openrouter', '腾讯云', 'other'}
+        if v.lower() not in valid_providers:
+            raise ValueError(f'Provider must be one of {valid_providers}')
+        return v.lower()
+
 class ModelCreate(ModelBase):
     pass
 
