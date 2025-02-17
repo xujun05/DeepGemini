@@ -111,6 +111,7 @@ class UniClient:
                 async with client.stream('POST', self.api_url, json=payload, headers=self.headers) as response:
                     response.raise_for_status()
                     async for line in response.aiter_lines():
+                        # logger.debug(f"line: {line}")
                         if line.strip():
                             if line.startswith('data: '):
                                 line = line[6:]  # 移除 "data: " 前缀

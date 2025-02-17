@@ -1228,3 +1228,69 @@ body.dark-theme {
 .dark-theme .logout-control span {
     color: var(--dark-text-color);
 }
+
+/* Active/Inactive switch styling */
+.workflow-status-switch {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 0.25rem;
+    border-radius: 20px;
+    background: rgba(0, 0, 0, 0.05);
+    transition: all 0.3s ease;
+}
+
+.dark-theme .workflow-status-switch {
+    background: rgba(255, 255, 255, 0.05);
+}
+
+.form-switch.workflow-switch {
+    margin: 0;
+    padding-left: 2.5em;
+}
+
+.form-switch.workflow-switch .form-check-input {
+    width: 2.5em;
+    height: 1.25em;
+    margin-left: -2.5em;
+    background-color: #dc3545;
+    border-color: #dc3545;
+    cursor: pointer;
+    box-shadow: none;
+}
+
+.form-switch.workflow-switch .form-check-input:checked {
+    background-color: #198754;
+    border-color: #198754;
+}
+
+.form-switch.workflow-switch .form-check-input:focus {
+    box-shadow: 0 0 0 0.2rem rgba(25, 135, 84, 0.25);
+}
+
+.workflow-status-label {
+    font-size: 0.875rem;
+    font-weight: 500;
+    color: #6c757d;
+    transition: color 0.3s ease;
+}
+
+.dark-theme .workflow-status-label {
+    color: #adb5bd;
+}
+
+.workflow-status-switch.active .workflow-status-label {
+    color: #198754;
+}
+
+.workflow-status-switch.inactive .workflow-status-label {
+    color: #dc3545;
+}
+
+.dark-theme .workflow-status-switch.active .workflow-status-label {
+    color: #2ecc71;
+}
+
+.dark-theme .workflow-status-switch.inactive .workflow-status-label {
+    color: #e74c3c;
+}

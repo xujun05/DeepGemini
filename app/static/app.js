@@ -402,11 +402,15 @@ function updateConfigurationsList() {
             <div class="workflow-card">
                 <div class="workflow-card-header d-flex justify-content-between align-items-center">
                     <h5 class="workflow-card-title">${config.name}</h5>
-                    <div class="form-check form-switch">
-                        <input class="form-check-input" type="checkbox" 
-                               ${config.is_active ? 'checked' : ''}
-                               onchange="toggleConfiguration(${config.id}, this.checked)">
-                        <label class="form-check-label">${config.is_active ? t.active : t.inactive}</label>
+                    <div class="workflow-status-switch ${config.is_active ? 'active' : 'inactive'}">
+                        <div class="form-check form-switch workflow-switch">
+                            <input class="form-check-input" type="checkbox" 
+                                   ${config.is_active ? 'checked' : ''}
+                                   onchange="toggleConfiguration(${config.id}, this.checked)">
+                        </div>
+                        <span class="workflow-status-label">
+                            ${config.is_active ? t.active : t.inactive}
+                        </span>
                     </div>
                 </div>
                 <div class="workflow-card-body">
