@@ -31,7 +31,7 @@
 ### 1. Installation
 
 ```bash
-git clone https://github.com/ErlichLiu/DeepGemini.git
+git clone https://github.com/sligter/DeepGemini.git
 cd DeepGemini
 uv sync
 ```
