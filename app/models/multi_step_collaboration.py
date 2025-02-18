@@ -5,6 +5,7 @@ import time
 from app.utils.logger import logger
 from app.clients import DeepSeekClient, ClaudeClient, GeminiClient
 from app.clients.uni_client import UniClient
+from app.clients.openai_client import OpenAIClient
 
 class MultiStepModelCollaboration:
     """处理多步骤模型协作的类"""
@@ -51,6 +52,8 @@ class MultiStepModelCollaboration:
             return GeminiClient(api_key, api_url)
         elif provider in ["anthropic", "oneapi", "openrouter"]:
             return ClaudeClient(api_key, api_url, provider)
+        elif provider == "openai":
+            return OpenAIClient(api_key, api_url)
         else:
             raise ValueError(f"Unsupported provider: {provider}")
 

@@ -1294,3 +1294,12 @@ body.dark-theme {
 .dark-theme .workflow-status-switch.inactive .workflow-status-label {
     color: #e74c3c;
 }
+
+/* 添加到现有的 CSS 文件中 */
+.emoji {
+    font-family: "Apple Color Emoji", "Segoe UI Emoji", "Segoe UI Symbol", "Noto Color Emoji";
+}
+
+.sidebar-header h3 {
+    font-family: 'Inter', "Apple Color Emoji", "Segoe UI Emoji", "Segoe UI Symbol", "Noto Color Emoji", sans-serif;
+}
