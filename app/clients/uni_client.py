@@ -1,4 +1,4 @@
-from typing import List, Dict, Optional
+from typing import List, Dict, Optional, AsyncGenerator
 import httpx
 import json
 import time
@@ -50,7 +50,7 @@ class UniClient:
             if self.provider == "grok3" and "reasoner" in chunk_data:
                 # Grok3 格式
                 if "choices" in chunk_data and chunk_data["choices"]:
-                    logger.debug(f"chunk_data: {chunk_data}")
+                    # logger.debug(f"chunk_data: {chunk_data}")
                     content = chunk_data["choices"][0].get("delta", {}).get("content", "")
                     if content:
                         # 初始化或获取当前行缓存
@@ -128,7 +128,7 @@ class UniClient:
                 "execution_content": ""
             }
 
-    async def generate_stream(self, messages: List[Dict], system_prompt: Optional[str] = None) -> str:
+    async def generate_stream(self, messages: List[Dict], system_prompt: Optional[str] = None) -> AsyncGenerator[bytes, None]:
         """
         流式生成响应
         
@@ -137,7 +137,7 @@ class UniClient:
             system_prompt (Optional[str]): 系统提示词
         
         Yields:
-            str: 生成的响应片段
+            bytes: 生成的响应片段
         """
         chat_id = f"chatcmpl-{hex(int(time.time() * 1000))[2:]}"
         created_time = int(time.time())

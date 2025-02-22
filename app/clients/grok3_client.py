@@ -95,6 +95,9 @@ class Grok3Client(BaseClient):
                                 while "\n" in self._current_line:
                                     line, self._current_line = self._current_line.split("\n", 1)
                                     line = line.strip()
+                                    # 跳过分隔符行
+                                    if line == "---":
+                                        continue
                                     if line:  # 忽略空行
                                         if line.startswith(">"):
                                             if self.is_origin_reasoning:
