@@ -24,7 +24,7 @@ def get_log_level() -> int:
     level = os.getenv('LOG_LEVEL', 'INFO').upper()
     return level_map.get(level, logging.INFO)
 
-def setup_logger(name: str = "DeepClaude") -> logging.Logger:
+def setup_logger(name: str = "DeepGemini") -> logging.Logger:
     """设置一个彩色的logger
 
     Args:

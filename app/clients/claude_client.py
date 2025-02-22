@@ -59,7 +59,7 @@ class ClaudeClient(BaseClient):
                 "presence_penalty": model_arg[2],
                 "frequency_penalty": model_arg[3]
             }
-        elif self.provider == "oneapi":
+        elif self.provider == "oneapi" or self.provider == "openai-completion":
             headers = {
                 "Authorization": f"Bearer {self.api_key}",
                 "Content-Type": "application/json"

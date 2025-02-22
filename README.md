@@ -9,15 +9,26 @@
 
 </div>
 
+[English](#features)
+
 ## ✨ Features
 
 - **Multi-Model Orchestration**: Seamlessly combine multiple AI models in customizable workflows
-- **Provider Flexibility**: Support for multiple AI providers including DeepSeek, Claude, Gemini, and more
+- **Provider Flexibility**: Support for multiple AI providers:
+  - DeepSeek
+  - Claude
+  - Gemini
+  - Grok3
+  - OpenAI
+  - OneAPI
+  - OpenRouter
+  - Tencent Cloud
 - **OpenAI Compatible**: Drop-in replacement for OpenAI's API in existing applications
 - **Stream Support**: Real-time streaming responses for better user experience
 - **Advanced Configuration**: Fine-grained control over model parameters and system prompts
 - **Database Integration**: SQLite-based configuration storage with Alembic migrations
 - **Web Management UI**: Built-in interface for managing models and configurations
+- **Multi-language Support**: English and Chinese interface
 
 ## Preview
 
@@ -61,6 +72,7 @@ DeepGemini supports various AI providers:
 - **DeepSeek**: Advanced reasoning capabilities
 - **Claude**: Refined text generation
 - **Gemini**: Google's AI model
+- **Grok3**: Grok's AI model
 - **Custom**: Add your own provider integration
 
 Each model can be configured with:

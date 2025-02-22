@@ -29,7 +29,10 @@ class ModelBase(BaseModel):
 
     @validator('provider')
     def validate_provider(cls, v):
-        valid_providers = {'deepseek', 'google', 'anthropic', 'oneapi', 'openrouter', '腾讯云', 'other'}
+        valid_providers = {
+            'deepseek', 'google', 'anthropic', 'oneapi', 
+            'openrouter', '腾讯云', 'grok3', 'openai-completion', 'other'
+        }
         if v.lower() not in valid_providers:
             raise ValueError(f'Provider must be one of {valid_providers}')
         return v.lower()

@@ -47,7 +47,57 @@ class UniClient:
             delta = {}
             
             # 根据不同的模型提供商处理响应
-            if self.provider in ["deepseek", "腾讯云"]:
+            if self.provider == "grok3" and "reasoner" in chunk_data:
+                # Grok3 格式
+                if "choices" in chunk_data and chunk_data["choices"]:
+                    logger.debug(f"chunk_data: {chunk_data}")
+                    content = chunk_data["choices"][0].get("delta", {}).get("content", "")
+                    if content:
+                        # 初始化或获取当前行缓存
+                        if not hasattr(self, '_current_line'):
+                            self._current_line = ""
+                        
+                        # 追加新内容到当前行
+                        self._current_line += content
+                        
+                        # 处理完整行
+                        lines = []
+                        while "\n" in self._current_line:
+                            line, self._current_line = self._current_line.split("\n", 1)
+                            line = line.strip()
+                            if line:  # 忽略空行
+                                lines.append(line)
+                        
+                        # 处理完整的行
+                        reasoning_lines = []
+                        answer_lines = []
+                        
+                        for line in lines:
+                            if line.startswith(">"):
+                                # 添加到推理内容
+                                reasoning_lines.append("\n"+line)
+                            else:
+                                answer_lines.append("\n"+line)
+                        
+                        # 如果是结束标记，处理最后一行
+                        if chunk_data.get("finish_reason") == "stop":
+                            last_line = self._current_line.strip()
+                            if last_line:
+                                if last_line.startswith(">"):
+                                    reasoning_lines.append("\n"+last_line)
+                                else:
+                                    answer_lines.append("\n"+last_line)
+                            self._current_line = ""
+                        
+                        # 构造响应
+                        delta = {
+                            "role": "assistant",
+                            "content": "\n".join(answer_lines) if answer_lines else "",
+                            "reasoning_content": "\n".join(reasoning_lines) if reasoning_lines else "",
+                            "execution_content": ""
+                        }
+                        
+            elif self.provider in ["deepseek", "腾讯云","oneapi","opanai-completion"]:
                 # DeepSeek 格式
                 if "choices" in chunk_data and chunk_data["choices"]:
                     original_delta = chunk_data["choices"][0].get("delta", {})

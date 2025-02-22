@@ -45,17 +45,28 @@ class MultiStepModelCollaboration:
 
     def _init_client(self, provider: str, api_key: str, api_url: str, is_reasoning: bool):
         """初始化对应的客户端"""
-        provider = provider.lower()
-        if provider in ["deepseek", "腾讯云"]:
-            return DeepSeekClient(api_key, api_url, provider, is_reasoning)
-        elif provider == "google":
-            return GeminiClient(api_key, api_url)
-        elif provider in ["anthropic", "oneapi", "openrouter"]:
-            return ClaudeClient(api_key, api_url, provider)
-        elif provider == "openai":
-            return OpenAIClient(api_key, api_url)
-        else:
-            raise ValueError(f"Unsupported provider: {provider}")
+        try:
+            # 根据提供商类型初始化对应的客户端
+            if provider == "deepseek":
+                return DeepSeekClient(api_key, api_url, is_origin_reasoning=is_reasoning)
+            elif provider == "google":
+                return GeminiClient(api_key, api_url)
+            elif provider == "anthropic":
+                return ClaudeClient(api_key, api_url)
+            elif provider == "grok3":
+                from app.clients import Grok3Client
+                return Grok3Client(api_key, api_url, is_origin_reasoning=is_reasoning)
+            elif provider in ["oneapi", "openrouter", "openai-completion"]:
+                from app.clients import OpenAIClient
+                return OpenAIClient(api_key, api_url)
+            elif provider == "腾讯云":
+                # 腾讯云使用与 DeepSeek 相同的客户端
+                return DeepSeekClient(api_key, api_url, provider="腾讯云", is_origin_reasoning=is_reasoning)
+            else:
+                raise ValueError(f"Unsupported provider: {provider}")
+        except Exception as e:
+            logger.error(f"初始化客户端时发生错误: {e}")
+            raise
 
     async def process_with_stream(
         self,
