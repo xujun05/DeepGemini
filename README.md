@@ -9,7 +9,7 @@
 
 </div>
 
-[English](#features)
+[中文](README_zh.md) | [English](#features)
 
 ## ✨ Features
 
@@ -33,7 +33,9 @@
 ## Preview
 
 ![image](https://img.pub/p/02f96adb71b92d9e8009.png)
+
 ![image](https://img.pub/p/1ffdc3728b7944caf807.png)
+
 ![image](https://img.pub/p/439520386b4927c91688.png)
 
 
@@ -65,6 +67,51 @@ uv run uvicorn app.main:app --host 0.0.0.0 --port 8000
 
 Visit `http://localhost:8000/dashboard` to access the web management interface.
 
+
+
+## 🐳 Docker Deployment
+
+### Using Docker Compose (Recommended)
+
+1. Create and configure your `.env` file:
+
+```bash
+cp .env.example .env
+```
+
+2. Build and start the container:
+
+```bash
+docker-compose up -d
+```
+
+3. Access the web interface at `http://localhost:8000/dashboard`
+
+### Using Docker Directly
+
+1. Pull the image:
+```bash
+docker pull bradleylzh/deepgemini:latest
+```
+
+2. Run the container:
+
+For Linux/Mac:
+```bash
+docker run -d \
+-p 8000:8000 \
+-v $(pwd)/.env:/app/.env \
+-v $(pwd)/deepgemini.db:/app/deepgemini.db \
+--name deepgemini \
+bradleylzh/deepgemini:latest
+```
+
+For Windows PowerShell:
+```powershell
+docker run -d -p 8000:8000 -v ${PWD}\.env:/app/.env -v ${PWD}\deepgemini.db:/app/deepgemini.db --name deepgemini bradleylzh/deepgemini:latest
+```
+
+
 ## 🔧 Model Configuration
 
 DeepGemini supports various AI providers:
@@ -81,9 +128,9 @@ Each model can be configured with:
 - System prompts
 - Usage type (reasoning/execution/both)
 
-## 🔄 Workflow Configuration
+## 🔄 Relay Chain Configuration
 
-Create custom workflows by combining models:
+Create custom Relay Chain by combining models:
 
 1. **Reasoning Step**: Initial analysis and planning
 2. **Execution Step**: Final response generation
