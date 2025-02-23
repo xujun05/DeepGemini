@@ -94,7 +94,29 @@ docker-compose up -d
 docker pull bradleylzh/deepgemini:latest
 ```
 
-2. Run the container:
+2. Create necessary files:
+
+For Linux/Mac:
+```bash
+# Create .env file
+cp .env.example .env
+
+# Create empty database file
+touch deepgemini.db
+chmod 666 deepgemini.db
+```
+
+For Windows PowerShell:
+```powershell
+# Create .env file
+cp .env.example .env
+
+# Create empty database file
+touch deepgemini.db
+chmod 666 deepgemini.db
+```
+
+3. Run the container:
 
 For Linux/Mac:
 ```bash
@@ -102,13 +124,19 @@ docker run -d \
 -p 8000:8000 \
 -v $(pwd)/.env:/app/.env \
 -v $(pwd)/deepgemini.db:/app/deepgemini.db \
+-e DATABASE_URL=sqlite:///app/deepgemini.db \
 --name deepgemini \
 bradleylzh/deepgemini:latest
 ```
 
 For Windows PowerShell:
 ```powershell
-docker run -d -p 8000:8000 -v ${PWD}\.env:/app/.env -v ${PWD}\deepgemini.db:/app/deepgemini.db --name deepgemini bradleylzh/deepgemini:latest
+docker run -d -p 8000:8000 `
+-v ${PWD}\.env:/app/.env `
+-v ${PWD}\deepgemini.db:/app/deepgemini.db `
+-e DATABASE_URL=sqlite:///app/deepgemini.db `
+--name deepgemini `
+bradleylzh/deepgemini:latest
 ```
 
 

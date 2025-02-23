@@ -13,6 +13,9 @@ COPY . .
 # 使用 uv 安装依赖
 RUN uv sync
 
+# 设置数据库文件权限
+RUN touch /app/deepgemini.db && chmod 666 /app/deepgemini.db
+
 # 暴露端口
 EXPOSE 8000
 
