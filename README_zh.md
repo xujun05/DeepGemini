@@ -117,8 +117,7 @@ Windows PowerShell 用户：
 ```powershell
 cp .env.example .env
 
-touch deepgemini.db
-chmod 666 deepgemini.db
+echo "" > deepgemini.db
 ```
 
 运行容器

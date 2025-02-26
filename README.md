@@ -112,8 +112,7 @@ For Windows PowerShell:
 cp .env.example .env
 
 # Create empty database file
-touch deepgemini.db
-chmod 666 deepgemini.db
+echo "" > deepgemini.db
 ```
 
 3. Run the container:
