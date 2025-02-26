@@ -157,7 +157,9 @@ class UniClient:
         }
         
         try:
-            async with httpx.AsyncClient() as client:
+            # 设置 timeout 为 30 秒
+            timeout = httpx.Timeout(30.0, connect=30.0, read=30.0)
+            async with httpx.AsyncClient(timeout=timeout) as client:
                 async with client.stream('POST', self.api_url, json=payload, headers=self.headers) as response:
                     response.raise_for_status()
                     async for line in response.aiter_lines():
@@ -218,7 +220,9 @@ class UniClient:
         }
         
         try:
-            async with httpx.AsyncClient() as client:
+            # 设置 timeout 为 30 秒
+            timeout = httpx.Timeout(30.0, connect=30.0, read=30.0)
+            async with httpx.AsyncClient(timeout=timeout) as client:
                 response = await client.post(
                     self.api_url,
                     json=payload,

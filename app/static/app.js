@@ -308,8 +308,11 @@ async function editModel(modelId) {
         return;
     }
 
-    // Populate form with model data
+    // 重置表单
     const form = document.getElementById('addModelForm');
+    form.reset();
+
+    // 填充表单数据
     form.name.value = model.name;
     form.type.value = model.type;
     form.provider.value = model.provider;
@@ -322,7 +325,7 @@ async function editModel(modelId) {
     form.presence_penalty.value = model.presence_penalty;
     form.frequency_penalty.value = model.frequency_penalty;
 
-    // Add hidden field for model ID
+    // 添加或更新隐藏的 model_id 字段
     let idInput = form.querySelector('input[name="model_id"]');
     if (!idInput) {
         idInput = document.createElement('input');
@@ -332,7 +335,7 @@ async function editModel(modelId) {
     }
     idInput.value = modelId;
 
-    // Show modal
+    // 显示模态框
     const modal = new bootstrap.Modal(document.getElementById('addModelModal'));
     modal.show();
 }
@@ -365,19 +368,55 @@ async function saveModel() {
             presence_penalty: parseFloat(formData.get('presence_penalty')),
             frequency_penalty: parseFloat(formData.get('frequency_penalty'))
         };
-        
-        const modelId = formData.get('model_id');
+
+        // 获取隐藏的 model_id 字段
+        const modelIdInput = form.querySelector('input[name="model_id"]');
+        const modelId = modelIdInput ? modelIdInput.value : null;
+        let response;
+
         if (modelId) {
-            await fetchAPI(`models/${modelId}`, 'PUT', modelData);
+            // 更新现有模型
+            response = await fetchAPI(`models/${modelId}`, 'PUT', modelData);
         } else {
-            await fetchAPI('models', 'POST', modelData);
+            // 创建新模型
+            response = await fetchAPI('models', 'POST', modelData);
+        }
+
+        // 重新加载模型列表
+        await loadModels();
+        
+        // 关闭模态框
+        const modal = bootstrap.Modal.getInstance(document.getElementById('addModelModal'));
+        modal.hide();
+        
+        // 重置表单并移除 model_id 输入字段
+        form.reset();
+        if (modelIdInput) {
+            modelIdInput.remove();
         }
         
-        await loadModels();
-        closeModal('addModelModal');
+        // 重置模型名称相关状态
+        isManualModelInput = false;
+        const modelSelect = document.getElementById('modelNameSelect');
+        const modelInput = document.getElementById('modelNameInput');
+        modelSelect.style.display = 'block';
+        modelInput.style.display = 'none';
+        modelInput.value = '';
+        
+        // 显示成功消息
+        // const lang = localStorage.getItem('preferred_language') || 'en';
+        // const successMessage = lang === 'zh' ? 
+        //     '模型保存成功' : 
+        //     'Model saved successfully';
+        // showSuccess(successMessage);
+        
     } catch (error) {
         console.error('Failed to save model:', error);
-        showError('Failed to save model: ' + error.message);
+        const lang = localStorage.getItem('preferred_language') || 'en';
+        const errorMessage = lang === 'zh' ?
+            '保存模型失败：' + error.message :
+            'Failed to save model: ' + error.message;
+        showError(errorMessage);
     }
 }
 
@@ -667,18 +706,22 @@ function showAddModelModal() {
     const form = document.getElementById('addModelForm');
     form.reset();
     
-    // 重置模型名称输入状态
+    // 移除可能存在的 model_id 输入字段
+    const modelIdInput = form.querySelector('input[name="model_id"]');
+    if (modelIdInput) {
+        modelIdInput.remove();
+    }
+    
+    // 重置模型名称相关状态
     isManualModelInput = false;
-    const select = document.getElementById('modelNameSelect');
-    const input = document.getElementById('modelNameInput');
-    select.style.display = 'block';
-    input.style.display = 'none';
+    const modelSelect = document.getElementById('modelNameSelect');
+    const modelInput = document.getElementById('modelNameInput');
+    modelSelect.style.display = 'block';
+    modelInput.style.display = 'none';
+    modelInput.value = '';
+    modelSelect.innerHTML = '<option value="">Please enter API credentials first</option>';
     
-    // 重置模型选择器
-    select.innerHTML = '<option value="">Please enter API credentials first</option>';
-    select.disabled = false;
-    
-    // 清除状态信息
+    // 重置状态信息
     const statusDiv = document.getElementById('modelLoadStatus');
     if (statusDiv) {
         statusDiv.textContent = '';
