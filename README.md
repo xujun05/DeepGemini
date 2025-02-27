@@ -144,14 +144,14 @@ bradleylzh/deepgemini:latest
 DeepGemini supports various AI providers:
 
 - **DeepSeek**: Advanced reasoning capabilities
-- **Claude**: Refined text generation
+- **Claude**: Refined text generation and thinking
 - **Gemini**: Google's AI model
 - **Grok3**: Grok's AI model
 - **Custom**: Add your own provider integration
 
 Each model can be configured with:
 - API credentials
-- Model parameters (temperature, top_p, etc.)
+- Model parameters (temperature, top_p, tool, etc.)
 - System prompts
 - Usage type (reasoning/execution/both)
 

@@ -39,7 +39,7 @@ class OpenAIClient(BaseClient):
         headers = {
             "Authorization": f"Bearer {self.api_key}",
             "Content-Type": "application/json",
-            "Accept": "text/event-stream" if stream else "application/json",
+            # "Accept": "text/event-stream" if stream else "application/json",
         }
 
         data = {
@@ -52,7 +52,7 @@ class OpenAIClient(BaseClient):
             "presence_penalty": kwargs.get("presence_penalty", 0.0),
             "frequency_penalty": kwargs.get("frequency_penalty", 0.0)
         }
-        
+        logger.debug(f"OpenAI 请求数据: {data}")
         if stream:
             first_chunk = True
             async for chunk in self._make_request(headers, data):

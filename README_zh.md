@@ -136,7 +136,7 @@ bradleylzh/deepgemini:latest
 DeepGemini 支持多种 AI 提供商：
 
 - **DeepSeek**：先进的推理能力
-- **Claude**：精细的文本生成
+- **Claude**：精细的文本生成和思考
 - **Gemini**：Google 的 AI 模型
 - **Grok3**：Grok 的 AI 模型
 - **自定义**：添加你自己的提供商集成

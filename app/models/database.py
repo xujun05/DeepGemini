@@ -28,6 +28,15 @@ class Model(Base):
     presence_penalty = Column(Float, default=0.0)
     frequency_penalty = Column(Float, default=0.0)
     
+    # Tool configuration
+    enable_tools = Column(Boolean, server_default='0', nullable=False)
+    tools = Column(JSON, nullable=True)  # 存储工具配置的JSON
+    tool_choice = Column(JSON, nullable=True)  # 存储工具选择配置的JSON
+    
+    # Thinking configuration
+    enable_thinking = Column(Boolean, server_default='0', nullable=False)
+    thinking_budget_tokens = Column(Integer, server_default='16000', nullable=False)
+    
     # 添加与配置步骤的关系
     configuration_steps = relationship("ConfigurationStep", back_populates="model")
 

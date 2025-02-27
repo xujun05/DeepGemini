@@ -40,7 +40,11 @@ class MultiStepModelCollaboration:
                 'client': client,
                 'model_name': model.model_name,
                 'step_type': step['step_type'],
-                'system_prompt': step['system_prompt']
+                'system_prompt': step['system_prompt'],
+                'tools': model.tools,
+                'tool_choice': model.tool_choice,
+                'enable_thinking': model.enable_thinking,
+                'thinking_budget_tokens': model.thinking_budget_tokens
             })
 
     def _init_client(self, provider: str, api_key: str, api_url: str, is_reasoning: bool):
@@ -52,7 +56,7 @@ class MultiStepModelCollaboration:
             elif provider == "google":
                 return GeminiClient(api_key, api_url)
             elif provider == "anthropic":
-                return ClaudeClient(api_key, api_url)
+                return ClaudeClient(api_key, api_url, is_origin_reasoning=is_reasoning)
             elif provider == "grok3":
                 from app.clients import Grok3Client
                 return Grok3Client(api_key, api_url, is_origin_reasoning=is_reasoning)
@@ -106,7 +110,7 @@ class MultiStepModelCollaboration:
             # 添加系统提示词
             if system_prompt:
                 current_messages = self._add_system_prompt(current_messages, system_prompt)
-            
+            # logger.debug(f"current_messages: {current_messages}")
             # 如果不是第一步，添加前一步的结果到提示中
             if idx > 0:
                 current_messages = self._add_previous_step_result(
@@ -121,13 +125,19 @@ class MultiStepModelCollaboration:
                 messages=current_messages,
                 model=client_info['model_name'],
                 is_last_step=is_last_step,
-                is_first_step=is_first_step
+                is_first_step=is_first_step,
+                tools=client_info.get('tools'),
+                tool_choice=client_info.get('tool_choice'),
+                enable_thinking=client_info.get('enable_thinking', False),
+                thinking_budget_tokens=client_info.get('thinking_budget_tokens', 16000)
             ):
                 current_output.append(content)
                 
                 # 构建响应
                 delta = {
                     "role": "assistant",
+                    "thinking_content": content if content_type == "thinking" else "",
+                    "tool_use_content": content if content_type == "tool_use" else "",
                     f"{step_type}_content": content if step_type == "reasoning" else ""
                 }
                 

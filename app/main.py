@@ -227,6 +227,10 @@ async def chat_completions(
         body = await request.json()
         messages = body.get("messages", [])
         model = body.get("model")
+        tools = body.get("tools")
+        tool_choice = body.get("tool_choice")
+        enable_thinking = body.get("thinking", {}).get("type") == "enabled"
+        thinking_budget_tokens = body.get("thinking", {}).get("budget_tokens", 16000)
         
         if not model:
             raise HTTPException(status_code=400, detail="Model is required")
@@ -248,14 +252,18 @@ async def chat_completions(
         if not steps:
             raise HTTPException(status_code=404, detail="Configuration has no steps")
         
-        # 创建多步骤处理器
-        processor = MultiStepModelCollaboration(
-            steps=[{
-                'model': db.query(DBModel).get(step.model_id),
-                'step_type': step.step_type,
-                'system_prompt': step.system_prompt
-            } for step in steps]
-        )
+        # 更新步骤配置
+        steps = [{
+            'model': db.query(DBModel).get(step.model_id),
+            'step_type': step.step_type,
+            'system_prompt': step.system_prompt,
+            'tools': tools if step.step_type == "execution" else None,
+            'tool_choice': tool_choice if step.step_type == "execution" else None,
+            'enable_thinking': enable_thinking,
+            'thinking_budget_tokens': thinking_budget_tokens
+        } for step in steps]
+        
+        processor = MultiStepModelCollaboration(steps=steps)
         
         # 获取流式参数
         stream = body.get("stream", True)

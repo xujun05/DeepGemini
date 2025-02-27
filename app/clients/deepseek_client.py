@@ -70,6 +70,8 @@ class DeepSeekClient(BaseClient):
 
         first_chunk = True
         reasoning_completed = False  # 添加标志来追踪推理是否完成
+        think_content_buffer = ""  # 添加缓冲区来收集 think 标签内的内容
+        in_think_tag = False  # 添加标志来追踪是否在 think 标签内
         
         async for chunk in self._make_request(headers, data):
             chunk_str = chunk.decode('utf-8')
@@ -85,24 +87,41 @@ class DeepSeekClient(BaseClient):
                         data = json.loads(json_str)
                         if data and data.get("choices") and data["choices"][0].get("delta"):
                             delta = data["choices"][0]["delta"]
-                            # logger.debug(f"delta: {delta}")
                             if self.is_origin_reasoning:
                                 # 处理推理模型的输出
                                 if delta.get("reasoning_content"):
                                     content = delta["reasoning_content"]
                                     logger.debug(f"提取推理内容：{content}")
                                     yield "reasoning", content
-                                # 检测推理内容是否结束
-                                elif delta.get("content") and not reasoning_completed:
-                                    reasoning_completed = True
-                                    # 如果不是最后一步，直接结束流
-                                    if not kwargs.get("is_last_step"):
+                                # 处理 content 中的 think 标签内容
+                                elif delta.get("content"):
+                                    content = delta["content"]
+                                    think_content_buffer += content
+                                    
+                                    if "<think>" in content or in_think_tag:
+                                        # 开始收集推理内容
+                                        logger.debug(f"检测到推理开始标记：{content}")
+                                        in_think_tag = True
+                                        # 提取 <think> 标签后的内容
+                                        after_think = content.split("<think>")[-1]
+                                        if in_think_tag:
+                                            logger.debug(f"开始提取 think 标签后的推理内容")
+                                            yield "reasoning", content
+
+                                    elif "</think>" in content or not in_think_tag:
+                                        # 推理内容结束
+                                        in_think_tag = False
+                                        logger.debug(f"检测到推理结束标记：{content}")
+                                        # 提取 </think> 标签前的内容
+                                        before_end_think = content.split("</think>")[0]
+                                        if before_end_think.strip():
+                                            logger.debug(f"开始提取 think 结束标签前的推理内容")
+                                            yield "reasoning", content
+                                        reasoning_completed = True
+                                        think_content_buffer = ""
+                                        
+                                    elif not kwargs.get("is_last_step"):
                                         return
-                                    # 如果是最后一步，继续处理 content
-                                    else:
-                                        content = delta["content"]
-                                        logger.debug(f"提取内容信息，推理阶段结束: {content}")
-                                        yield "content", content
                             else:
                                 # 处理执行模型的输出
                                 if delta.get("content"):

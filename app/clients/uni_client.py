@@ -109,6 +109,7 @@ class UniClient:
                     }
             else:
                 # 其他模型的默认格式
+                logger.debug(f"chunk_data: {chunk_data}")
                 if "choices" in chunk_data and chunk_data["choices"]:
                     content = chunk_data["choices"][0].get("delta", {}).get("content", "")
                     delta = {

@@ -200,6 +200,16 @@ document.addEventListener('DOMContentLoaded', function() {
         const darkModeText = darkModeControl.querySelector('[data-translate="darkMode"]');
         darkModeText.textContent = savedLang === 'zh' ? '日间模式' : 'Light Mode';
     }
+
+    // 工具配置显示控制
+    document.getElementById('enableTools').addEventListener('change', function() {
+        document.getElementById('toolsConfig').style.display = this.checked ? 'block' : 'none';
+    });
+
+    // 思考配置显示控制
+    document.getElementById('enableThinking').addEventListener('change', function() {
+        document.getElementById('thinkingConfig').style.display = this.checked ? 'block' : 'none';
+    });
 });
 
 // API calls
@@ -256,9 +266,13 @@ function updateModelsList() {
             <div class="card">
                 <div class="card-body">
                     <h5 class="card-title">${model.name}</h5>
-                    <div class="mb-2">
+                    <div class="mb-3">
                         <span class="badge bg-primary">${model.type}</span>
                         <span class="badge bg-secondary">${model.provider}</span>
+                        ${model.enable_tools ? 
+                            '<span class="badge bg-success">Tools</span>' : ''}
+                        ${model.enable_thinking ? 
+                            '<span class="badge bg-info">Thinking</span>' : ''}
                     </div>
                     <div class="btn-group">
                         <button class="btn btn-sm btn-outline-primary" onclick="editModel(${model.id})">
@@ -303,28 +317,10 @@ function getModelOptions() {
 
 async function editModel(modelId) {
     const model = models.find(m => m.id === modelId);
-    if (!model) {
-        showError('Model not found');
-        return;
-    }
+    if (!model) return;
 
-    // 重置表单
     const form = document.getElementById('addModelForm');
-    form.reset();
-
-    // 填充表单数据
-    form.name.value = model.name;
-    form.type.value = model.type;
-    form.provider.value = model.provider;
-    form.api_key.value = model.api_key;
-    form.api_url.value = model.api_url;
-    form.model_name.value = model.model_name || '';
-    form.temperature.value = model.temperature;
-    form.top_p.value = model.top_p;
-    form.max_tokens.value = model.max_tokens;
-    form.presence_penalty.value = model.presence_penalty;
-    form.frequency_penalty.value = model.frequency_penalty;
-
+    
     // 添加或更新隐藏的 model_id 字段
     let idInput = form.querySelector('input[name="model_id"]');
     if (!idInput) {
@@ -334,7 +330,45 @@ async function editModel(modelId) {
         form.appendChild(idInput);
     }
     idInput.value = modelId;
-
+    
+    // 填充基本字段
+    form.name.value = model.name;
+    form.type.value = model.type;
+    form.provider.value = model.provider;
+    form.api_key.value = model.api_key;
+    form.api_url.value = model.api_url;
+    form.model_name.value = model.model_name;
+    form.temperature.value = model.temperature;
+    form.top_p.value = model.top_p;
+    form.max_tokens.value = model.max_tokens;
+    form.presence_penalty.value = model.presence_penalty;
+    form.frequency_penalty.value = model.frequency_penalty;
+    
+    // 填充工具配置
+    const enableToolsCheckbox = document.getElementById('enableTools');
+    enableToolsCheckbox.checked = model.enable_tools;
+    const toolsConfig = document.getElementById('toolsConfig');
+    toolsConfig.style.display = model.enable_tools ? 'block' : 'none';
+    
+    if (model.tools) {
+        form.tools.value = JSON.stringify(model.tools, null, 2);
+    } else {
+        form.tools.value = '';
+    }
+    
+    if (model.tool_choice) {
+        form.tool_choice.value = JSON.stringify(model.tool_choice, null, 2);
+    } else {
+        form.tool_choice.value = '';
+    }
+    
+    // 填充思考配置
+    const enableThinkingCheckbox = document.getElementById('enableThinking');
+    enableThinkingCheckbox.checked = model.enable_thinking;
+    const thinkingConfig = document.getElementById('thinkingConfig');
+    thinkingConfig.style.display = model.enable_thinking ? 'block' : 'none';
+    form.thinking_budget_tokens.value = model.thinking_budget_tokens;
+    
     // 显示模态框
     const modal = new bootstrap.Modal(document.getElementById('addModelModal'));
     modal.show();
@@ -344,42 +378,52 @@ async function saveModel() {
     try {
         const form = document.getElementById('addModelForm');
         const formData = new FormData(form);
+        const data = Object.fromEntries(formData.entries());
         
-        // 获取模型名称
-        const modelName = isManualModelInput ? 
-            document.getElementById('modelNameInput').value :
-            document.getElementById('modelNameSelect').value;
-            
-        if (!modelName) {
-            showError('Model name is required');
-            return;
+        // 获取 model_id
+        const modelId = data.model_id;
+        delete data.model_id; // 从数据中移除 model_id
+        
+        // 处理工具配置
+        if (data.tools) {
+            try {
+                data.tools = JSON.parse(data.tools);
+            } catch (e) {
+                data.tools = null;
+            }
         }
         
-        const modelData = {
-            name: formData.get('name'),
-            model_name: modelName,
-            type: formData.get('type'),
-            provider: formData.get('provider'),
-            api_key: formData.get('api_key'),
-            api_url: formData.get('api_url'),
-            temperature: parseFloat(formData.get('temperature')),
-            top_p: parseFloat(formData.get('top_p')),
-            max_tokens: parseInt(formData.get('max_tokens')),
-            presence_penalty: parseFloat(formData.get('presence_penalty')),
-            frequency_penalty: parseFloat(formData.get('frequency_penalty'))
-        };
-
-        // 获取隐藏的 model_id 字段
-        const modelIdInput = form.querySelector('input[name="model_id"]');
-        const modelId = modelIdInput ? modelIdInput.value : null;
+        if (data.tool_choice) {
+            try {
+                data.tool_choice = JSON.parse(data.tool_choice);
+            } catch (e) {
+                data.tool_choice = null;
+            }
+        }
+        
+        // 处理布尔值
+        data.enable_tools = formData.get('enable_tools') === 'on';
+        data.enable_thinking = formData.get('enable_thinking') === 'on';
+        
         let response;
-
         if (modelId) {
             // 更新现有模型
-            response = await fetchAPI(`models/${modelId}`, 'PUT', modelData);
+            response = await fetch(`/v1/models/${modelId}`, {
+                method: 'PUT',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(data)
+            });
         } else {
             // 创建新模型
-            response = await fetchAPI('models', 'POST', modelData);
+            response = await fetch('/v1/models', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(data)
+            });
+        }
+
+        if (!response.ok) {
+            throw new Error(`HTTP error! status: ${response.status}`);
         }
 
         // 重新加载模型列表
@@ -389,34 +433,19 @@ async function saveModel() {
         const modal = bootstrap.Modal.getInstance(document.getElementById('addModelModal'));
         modal.hide();
         
-        // 重置表单并移除 model_id 输入字段
+        // 重置表单
         form.reset();
-        if (modelIdInput) {
-            modelIdInput.remove();
+        
+        // 清除 model_id
+        const idInput = form.querySelector('input[name="model_id"]');
+        if (idInput) {
+            idInput.value = '';
         }
         
-        // 重置模型名称相关状态
-        isManualModelInput = false;
-        const modelSelect = document.getElementById('modelNameSelect');
-        const modelInput = document.getElementById('modelNameInput');
-        modelSelect.style.display = 'block';
-        modelInput.style.display = 'none';
-        modelInput.value = '';
-        
-        // 显示成功消息
-        // const lang = localStorage.getItem('preferred_language') || 'en';
-        // const successMessage = lang === 'zh' ? 
-        //     '模型保存成功' : 
-        //     'Model saved successfully';
-        // showSuccess(successMessage);
-        
+        // showSuccess('Model saved successfully');
     } catch (error) {
-        console.error('Failed to save model:', error);
-        const lang = localStorage.getItem('preferred_language') || 'en';
-        const errorMessage = lang === 'zh' ?
-            '保存模型失败：' + error.message :
-            'Failed to save model: ' + error.message;
-        showError(errorMessage);
+        console.error('Error saving model:', error);
+        showError('Failed to save model');
     }
 }
 
@@ -702,32 +731,19 @@ function getModelName(id) {
 }
 
 function showAddModelModal() {
-    // 重置表单
     const form = document.getElementById('addModelForm');
     form.reset();
     
-    // 移除可能存在的 model_id 输入字段
-    const modelIdInput = form.querySelector('input[name="model_id"]');
-    if (modelIdInput) {
-        modelIdInput.remove();
+    // 清除 model_id
+    const idInput = form.querySelector('input[name="model_id"]');
+    if (idInput) {
+        idInput.value = '';
     }
     
-    // 重置模型名称相关状态
-    isManualModelInput = false;
-    const modelSelect = document.getElementById('modelNameSelect');
-    const modelInput = document.getElementById('modelNameInput');
-    modelSelect.style.display = 'block';
-    modelInput.style.display = 'none';
-    modelInput.value = '';
-    modelSelect.innerHTML = '<option value="">Please enter API credentials first</option>';
+    // 重置工具和思考配置的显示状态
+    document.getElementById('toolsConfig').style.display = 'none';
+    document.getElementById('thinkingConfig').style.display = 'none';
     
-    // 重置状态信息
-    const statusDiv = document.getElementById('modelLoadStatus');
-    if (statusDiv) {
-        statusDiv.textContent = '';
-    }
-    
-    // 显示模态框
     const modal = new bootstrap.Modal(document.getElementById('addModelModal'));
     modal.show();
 }

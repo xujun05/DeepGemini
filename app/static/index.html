@@ -249,17 +249,84 @@
                             <div class="col-md-6">
                                 <div class="mb-3">
                                     <label class="form-label">Temperature</label>
-                                    <input type="number" class="form-control" name="temperature" 
-                                           value="0.7" step="0.1" min="0" max="2"
-                                           title="Controls randomness in the output">
+                                    <input type="number" class="form-control" name="temperature" value="0.7" step="0.1" min="0" max="1">
                                 </div>
                             </div>
                             <div class="col-md-6">
                                 <div class="mb-3">
                                     <label class="form-label">Top P</label>
-                                    <input type="number" class="form-control" name="top_p" 
-                                           value="0.9" step="0.1" min="0" max="1"
-                                           title="Controls diversity of the output">
+                                    <input type="number" class="form-control" name="top_p" value="1.0" step="0.1" min="0" max="1">
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Tool Configuration -->
+                        <div class="row">
+                            <div class="col-md-12">
+                                <div class="mb-3">
+                                    <div class="form-check">
+                                        <input class="form-check-input" type="checkbox" name="enable_tools" id="enableTools">
+                                        <label class="form-check-label" for="enableTools">
+                                            启用工具调用
+                                        </label>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <div id="toolsConfig" style="display: none;">
+                            <div class="row">
+                                <div class="col-md-12">
+                                    <div class="mb-3">
+                                        <label class="form-label">工具配置 (JSON格式)</label>
+                                        <textarea class="form-control" name="tools" rows="4" placeholder='[{
+    "name": "get_weather",
+    "description": "获取指定位置的当前天气",
+    "input_schema": {
+        "type": "object",
+        "properties": {
+            "location": {
+                "type": "string",
+                "description": "城市和州，例如 San Francisco, CA"
+            }
+        },
+        "required": ["location"]
+    }
+}]'></textarea>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="row">
+                                <div class="col-md-12">
+                                    <div class="mb-3">
+                                        <label class="form-label">工具选择配置 (JSON格式)</label>
+                                        <textarea class="form-control" name="tool_choice" rows="2" placeholder='{"type": "any"}'></textarea>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Thinking Configuration -->
+                        <div class="row">
+                            <div class="col-md-12">
+                                <div class="mb-3">
+                                    <div class="form-check">
+                                        <input class="form-check-input" type="checkbox" name="enable_thinking" id="enableThinking">
+                                        <label class="form-check-label" for="enableThinking">
+                                            启用扩展思考
+                                        </label>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <div id="thinkingConfig" style="display: none;">
+                            <div class="row">
+                                <div class="col-md-6">
+                                    <div class="mb-3">
+                                        <label class="form-label">思考Token预算</label>
+                                        <input type="number" class="form-control" name="thinking_budget_tokens" value="16000" min="1000" step="1000">
+                                    </div>
                                 </div>
                             </div>
                         </div>

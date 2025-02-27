@@ -1,5 +1,6 @@
 from pydantic import BaseModel, Field, validator
 from typing import Optional, Dict, Union, List
+import json
 
 class ModelBase(BaseModel):
     name: str
@@ -13,6 +14,11 @@ class ModelBase(BaseModel):
     top_p: float = 1.0
     presence_penalty: float = 0.0
     frequency_penalty: float = 0.0
+    enable_tools: bool = False
+    tools: Optional[List[Dict]] = None
+    tool_choice: Optional[Dict] = None
+    enable_thinking: bool = False
+    thinking_budget_tokens: int = 16000
 
     @validator('temperature', 'top_p', pre=True)
     def convert_to_float(cls, v):
@@ -37,14 +43,23 @@ class ModelBase(BaseModel):
             raise ValueError(f'Provider must be one of {valid_providers}')
         return v.lower()
 
+    @validator('tools', 'tool_choice', pre=True)
+    def validate_json_fields(cls, v):
+        if isinstance(v, str):
+            try:
+                return json.loads(v)
+            except:
+                return None
+        return v
+
+    class Config:
+        from_attributes = True
+
 class ModelCreate(ModelBase):
     pass
 
 class Model(ModelBase):
     id: int
-
-    class Config:
-        from_attributes = True
 
 class ConfigurationStepBase(BaseModel):
     model_id: int

@@ -25,7 +25,12 @@ async def create_model(model: ModelCreate, db: Session = Depends(get_db)):
             'top_p': model.top_p,
             'max_tokens': model.max_tokens,
             'presence_penalty': model.presence_penalty,
-            'frequency_penalty': model.frequency_penalty
+            'frequency_penalty': model.frequency_penalty,
+            'enable_tools': model.enable_tools,
+            'tools': model.tools,
+            'tool_choice': model.tool_choice,
+            'enable_thinking': model.enable_thinking,
+            'thinking_budget_tokens': model.thinking_budget_tokens
         }
         
         db_model = DBModel(**model_data)
@@ -46,9 +51,13 @@ async def update_model(model_id: int, model: ModelCreate, db: Session = Depends(
     for key, value in model.dict().items():
         setattr(db_model, key, value)
     
-    db.commit()
-    db.refresh(db_model)
-    return db_model
+    try:
+        db.commit()
+        db.refresh(db_model)
+        return db_model
+    except Exception as e:
+        db.rollback()
+        raise HTTPException(status_code=500, detail=str(e))
 
 @router.delete("/models/{model_id}")
 async def delete_model(model_id: int, db: Session = Depends(get_db)):
