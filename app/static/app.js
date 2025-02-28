@@ -5,6 +5,7 @@ let stepCounter = 0;
 let availableModels = [];
 let isManualModelInput = false;
 let apiKeys = [];
+let paramCounter = 0;
 
 // Translations object
 const translations = {
@@ -89,7 +90,16 @@ const translations = {
         newUsername: 'New Username',
         updateCredentials: 'Update Credentials',
         logout: 'Logout',
-        logoutConfirm: 'Are you sure you want to logout?'
+        logoutConfirm: 'Are you sure you want to logout?',
+        customParameters: 'Custom Parameters',
+        addParameter: 'Add Parameter',
+        parameterName: 'Parameter Name',
+        parameterValue: 'Parameter Value',
+        parameterType: 'Parameter Type',
+        removeParameter: 'Remove',
+        string: 'String',
+        number: 'Number',
+        boolean: 'Boolean'
     },
     zh: {
         modelManagement: '模型管理',
@@ -172,7 +182,16 @@ const translations = {
         newUsername: '新用户名',
         updateCredentials: '更新凭据',
         logout: '退出登录',
-        logoutConfirm: '确定要退出登录吗？'
+        logoutConfirm: '确定要退出登录吗？',
+        customParameters: '自定义参数',
+        addParameter: '添加参数',
+        parameterName: '参数名称',
+        parameterValue: '参数值',
+        parameterType: '参数类型',
+        removeParameter: '删除',
+        string: '字符串',
+        number: '数字',
+        boolean: '布尔值'
     }
 };
 
@@ -319,6 +338,8 @@ async function editModel(modelId) {
     const model = models.find(m => m.id === modelId);
     if (!model) return;
 
+    const lang = localStorage.getItem('preferred_language') || 'en';
+
     const form = document.getElementById('addModelForm');
     
     // 添加或更新隐藏的 model_id 字段
@@ -369,6 +390,64 @@ async function editModel(modelId) {
     thinkingConfig.style.display = model.enable_thinking ? 'block' : 'none';
     form.thinking_budget_tokens.value = model.thinking_budget_tokens;
     
+    // 填充自定义参数
+    const customParametersContainer = document.getElementById('customParametersContainer');
+    customParametersContainer.innerHTML = '';
+    paramCounter = 0;
+    
+    if (model.custom_parameters) {
+        Object.entries(model.custom_parameters).forEach(([name, value]) => {
+            paramCounter++;
+            const type = typeof value;
+            const paramHtml = `
+                <div class="custom-parameter mb-3" data-param="${paramCounter}">
+                    <div class="row">
+                        <div class="col-md-3">
+                            <input type="text" class="form-control" 
+                                   name="param_name_${paramCounter}" 
+                                   value="${name}" required>
+                        </div>
+                        <div class="col-md-3">
+                            <select class="form-select" name="param_type_${paramCounter}" 
+                                    onchange="updateValueInput(${paramCounter})">
+                                <option value="string" ${type === 'string' ? 'selected' : ''}>
+                                    ${translations[lang].string}
+                                </option>
+                                <option value="number" ${type === 'number' ? 'selected' : ''}>
+                                    ${translations[lang].number}
+                                </option>
+                                <option value="boolean" ${type === 'boolean' ? 'selected' : ''}>
+                                    ${translations[lang].boolean}
+                                </option>
+                            </select>
+                        </div>
+                        <div class="col-md-4">
+                            <div class="value-container">
+                                ${type === 'boolean' 
+                                    ? `<select class="form-select" name="param_value_${paramCounter}">
+                                        <option value="true" ${value ? 'selected' : ''}>True</option>
+                                        <option value="false" ${!value ? 'selected' : ''}>False</option>
+                                       </select>`
+                                    : `<input type="${type === 'number' ? 'number' : 'text'}" 
+                                             class="form-control" 
+                                             name="param_value_${paramCounter}" 
+                                             value="${value}">`
+                                }
+                            </div>
+                        </div>
+                        <div class="col-md-2">
+                            <button type="button" class="btn btn-danger" 
+                                    onclick="removeParameter(${paramCounter})">
+                                ${translations[lang].removeParameter}
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            `;
+            customParametersContainer.insertAdjacentHTML('beforeend', paramHtml);
+        });
+    }
+    
     // 显示模态框
     const modal = new bootstrap.Modal(document.getElementById('addModelModal'));
     modal.show();
@@ -379,10 +458,6 @@ async function saveModel() {
         const form = document.getElementById('addModelForm');
         const formData = new FormData(form);
         const data = Object.fromEntries(formData.entries());
-        
-        // 获取 model_id
-        const modelId = data.model_id;
-        delete data.model_id; // 从数据中移除 model_id
         
         // 处理工具配置
         if (data.tools) {
@@ -405,47 +480,58 @@ async function saveModel() {
         data.enable_tools = formData.get('enable_tools') === 'on';
         data.enable_thinking = formData.get('enable_thinking') === 'on';
         
-        let response;
+        // 处理自定义参数
+        const customParameters = {};
+        document.querySelectorAll('.custom-parameter').forEach(param => {
+            const paramId = param.dataset.param;
+            const name = formData.get(`param_name_${paramId}`);
+            const type = formData.get(`param_type_${paramId}`);
+            let value = formData.get(`param_value_${paramId}`);
+            
+            if (name) {
+                switch(type) {
+                    case 'number':
+                        value = parseFloat(value);
+                        break;
+                    case 'boolean':
+                        value = value === 'true';
+                        break;
+                }
+                customParameters[name] = value;
+            }
+        });
+        
+        // 确保自定义参数是一个有效的对象
+        data.custom_parameters = Object.keys(customParameters).length > 0 ? customParameters : {};
+        
+        // 获取 model_id
+        const modelId = formData.get('model_id');
+        
         if (modelId) {
             // 更新现有模型
-            response = await fetch(`/v1/models/${modelId}`, {
-                method: 'PUT',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify(data)
-            });
+            await fetchAPI(`models/${modelId}`, 'PUT', data);
         } else {
             // 创建新模型
-            response = await fetch('/v1/models', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify(data)
-            });
+            await fetchAPI('models', 'POST', data);
         }
-
-        if (!response.ok) {
-            throw new Error(`HTTP error! status: ${response.status}`);
-        }
-
+        
         // 重新加载模型列表
         await loadModels();
         
         // 关闭模态框
-        const modal = bootstrap.Modal.getInstance(document.getElementById('addModelModal'));
+        const modal = bootstrap.Modal.getInstance(document.getElementById('addModelForm').closest('.modal'));
         modal.hide();
         
-        // 重置表单
-        form.reset();
+        // 显示成功消息
+        const lang = localStorage.getItem('preferred_language') || 'en';
+        const successMessage = lang === 'zh' ? '模型保存成功' : 'Model saved successfully';
+        // alert(successMessage);
         
-        // 清除 model_id
-        const idInput = form.querySelector('input[name="model_id"]');
-        if (idInput) {
-            idInput.value = '';
-        }
-        
-        // showSuccess('Model saved successfully');
     } catch (error) {
-        console.error('Error saving model:', error);
-        showError('Failed to save model');
+        console.error('Failed to save model:', error);
+        const lang = localStorage.getItem('preferred_language') || 'en';
+        const errorMessage = lang === 'zh' ? '保存模型失败' : 'Failed to save model';
+        showError(errorMessage);
     }
 }
 
@@ -740,10 +826,18 @@ function showAddModelModal() {
         idInput.value = '';
     }
     
-    // 重置工具和思考配置的显示状态
+    // 清空自定义参数容器
+    const customParametersContainer = document.getElementById('customParametersContainer');
+    customParametersContainer.innerHTML = '';
+    paramCounter = 0;
+    
+    // 重置工具配置显示
     document.getElementById('toolsConfig').style.display = 'none';
+    
+    // 重置思考配置显示
     document.getElementById('thinkingConfig').style.display = 'none';
     
+    // 显示模态框
     const modal = new bootstrap.Modal(document.getElementById('addModelModal'));
     modal.show();
 }
@@ -763,16 +857,18 @@ function showError(message) {
 function addConfigurationStep() {
     stepCounter++;
     const stepsContainer = document.getElementById('configSteps');
+    const lang = localStorage.getItem('preferred_language') || 'en';
+    const t = translations[lang];
     
     const stepHtml = `
         <div class="configuration-step" data-step="${stepCounter}">
             <div class="card mb-3">
                 <div class="card-body">
-                    <h5 class="card-title">Step ${stepCounter}</h5>
+                    <h5 class="card-title">${t.step} ${stepCounter}</h5>
                     <div class="row">
                         <div class="col-md-4">
                             <div class="mb-3">
-                                <label class="form-label">Model</label>
+                                <label class="form-label">${t.modelSelection}</label>
                                 <select class="form-select" name="steps[${stepCounter}].model_id" required onchange="updateStepTypeOptions(this)">
                                     ${getModelOptions()}
                                 </select>
@@ -780,25 +876,25 @@ function addConfigurationStep() {
                         </div>
                         <div class="col-md-4">
                             <div class="mb-3">
-                                <label class="form-label">Step Type</label>
+                                <label class="form-label">${t.stepType}</label>
                                 <select class="form-select" name="steps[${stepCounter}].step_type" required>
-                                    <option value="reasoning">Reasoning</option>
-                                    <option value="execution">Execution</option>
+                                    <option value="reasoning">${t.reasoning}</option>
+                                    <option value="execution">${t.execution}</option>
                                 </select>
                             </div>
                         </div>
                         <div class="col-md-4">
                             <div class="mb-3">
-                                <label class="form-label">Step Order</label>
+                                <label class="form-label">${t.stepOrder}</label>
                                 <input type="number" class="form-control" name="steps[${stepCounter}].step_order" value="${stepCounter}" required>
                             </div>
                         </div>
                     </div>
                     <div class="mb-3">
-                        <label class="form-label">System Prompt</label>
-                        <textarea class="form-control" name="steps[${stepCounter}].system_prompt" rows="3"></textarea>
+                        <label class="form-label">${t.systemPrompt}</label>
+                        <textarea class="form-control" name="steps[${stepCounter}].system_prompt" rows="3" placeholder="${t.systemPromptPlaceholder}"></textarea>
                     </div>
-                    <button type="button" class="btn btn-danger" onclick="removeStep(${stepCounter})">Remove Step</button>
+                    <button type="button" class="btn btn-danger" onclick="removeStep(${stepCounter})">${t.removeStep}</button>
                 </div>
             </div>
         </div>
@@ -969,6 +1065,9 @@ function updateModelNameSelectWithModels(models) {
 
 // 添加另存模型函数
 async function saveAsModel(modelId) {
+    // 获取当前语言
+    const lang = localStorage.getItem('preferred_language') || 'en';
+    
     const model = models.find(m => m.id === modelId);
     if (!model) {
         showError('Model not found');
@@ -978,6 +1077,12 @@ async function saveAsModel(modelId) {
     // 复制模型数据
     const form = document.getElementById('addModelForm');
     form.reset();
+    
+    // 清除隐藏的 model_id 字段
+    const idInput = form.querySelector('input[name="model_id"]');
+    if (idInput) {
+        idInput.value = '';
+    }
     
     // 设置基本字段，但不包括 ID
     form.name.value = model.name + ' (Copy)';  // 添加 (Copy) 后缀
@@ -1002,6 +1107,89 @@ async function saveAsModel(modelId) {
     form.max_tokens.value = model.max_tokens;
     form.presence_penalty.value = model.presence_penalty;
     form.frequency_penalty.value = model.frequency_penalty;
+
+    // 设置工具配置
+    const enableToolsCheckbox = document.getElementById('enableTools');
+    enableToolsCheckbox.checked = model.enable_tools;
+    const toolsConfig = document.getElementById('toolsConfig');
+    toolsConfig.style.display = model.enable_tools ? 'block' : 'none';
+    
+    if (model.tools) {
+        form.tools.value = JSON.stringify(model.tools, null, 2);
+    } else {
+        form.tools.value = '';
+    }
+    
+    if (model.tool_choice) {
+        form.tool_choice.value = JSON.stringify(model.tool_choice, null, 2);
+    } else {
+        form.tool_choice.value = '';
+    }
+    
+    // 设置思考配置
+    const enableThinkingCheckbox = document.getElementById('enableThinking');
+    enableThinkingCheckbox.checked = model.enable_thinking;
+    const thinkingConfig = document.getElementById('thinkingConfig');
+    thinkingConfig.style.display = model.enable_thinking ? 'block' : 'none';
+    form.thinking_budget_tokens.value = model.thinking_budget_tokens;
+    
+    // 复制自定义参数
+    const customParametersContainer = document.getElementById('customParametersContainer');
+    customParametersContainer.innerHTML = '';
+    paramCounter = 0;
+    
+    if (model.custom_parameters) {
+        Object.entries(model.custom_parameters).forEach(([name, value]) => {
+            paramCounter++;
+            const type = typeof value;
+            const paramHtml = `
+                <div class="custom-parameter mb-3" data-param="${paramCounter}">
+                    <div class="row">
+                        <div class="col-md-3">
+                            <input type="text" class="form-control" 
+                                   name="param_name_${paramCounter}" 
+                                   value="${name}" required>
+                        </div>
+                        <div class="col-md-3">
+                            <select class="form-select" name="param_type_${paramCounter}" 
+                                    onchange="updateValueInput(${paramCounter})">
+                                <option value="string" ${type === 'string' ? 'selected' : ''}>
+                                    ${translations[lang].string}
+                                </option>
+                                <option value="number" ${type === 'number' ? 'selected' : ''}>
+                                    ${translations[lang].number}
+                                </option>
+                                <option value="boolean" ${type === 'boolean' ? 'selected' : ''}>
+                                    ${translations[lang].boolean}
+                                </option>
+                            </select>
+                        </div>
+                        <div class="col-md-4">
+                            <div class="value-container">
+                                ${type === 'boolean' 
+                                    ? `<select class="form-select" name="param_value_${paramCounter}">
+                                        <option value="true" ${value ? 'selected' : ''}>True</option>
+                                        <option value="false" ${!value ? 'selected' : ''}>False</option>
+                                       </select>`
+                                    : `<input type="${type === 'number' ? 'number' : 'text'}" 
+                                             class="form-control" 
+                                             name="param_value_${paramCounter}" 
+                                             value="${value}">`
+                                }
+                            </div>
+                        </div>
+                        <div class="col-md-2">
+                            <button type="button" class="btn btn-danger" 
+                                    onclick="removeParameter(${paramCounter})">
+                                ${translations[lang].removeParameter}
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            `;
+            customParametersContainer.insertAdjacentHTML('beforeend', paramHtml);
+        });
+    }
 
     // 显示模态框
     const modal = new bootstrap.Modal(document.getElementById('addModelModal'));
@@ -1527,4 +1715,79 @@ async function logout() {
             window.location.href = '/static/login.html';
         }
     }
+}
+
+// 添加自定义参数相关函数
+function addCustomParameter() {
+    const lang = localStorage.getItem('preferred_language') || 'en';
+    paramCounter++;
+    const container = document.getElementById('customParametersContainer');
+    const paramHtml = `
+        <div class="custom-parameter mb-3" data-param="${paramCounter}">
+            <div class="row">
+                <div class="col-md-3">
+                    <input type="text" class="form-control" 
+                           name="param_name_${paramCounter}" 
+                           placeholder="${translations[lang].parameterName}" required>
+                </div>
+                <div class="col-md-3">
+                    <select class="form-select" name="param_type_${paramCounter}" 
+                            onchange="updateValueInput(${paramCounter})">
+                        <option value="string">${translations[lang].string}</option>
+                        <option value="number">${translations[lang].number}</option>
+                        <option value="boolean">${translations[lang].boolean}</option>
+                    </select>
+                </div>
+                <div class="col-md-4">
+                    <div class="value-container">
+                        <input type="text" class="form-control" 
+                               name="param_value_${paramCounter}" 
+                               placeholder="${translations[lang].parameterValue}" required>
+                    </div>
+                </div>
+                <div class="col-md-2">
+                    <button type="button" class="btn btn-danger" 
+                            onclick="removeParameter(${paramCounter})">
+                        ${translations[lang].removeParameter}
+                    </button>
+                </div>
+            </div>
+        </div>
+    `;
+    container.insertAdjacentHTML('beforeend', paramHtml);
+}
+
+function removeParameter(paramId) {
+    const paramElement = document.querySelector(`.custom-parameter[data-param="${paramId}"]`);
+    if (paramElement) {
+        paramElement.remove();
+    }
+}
+
+function updateValueInput(paramId) {
+    const typeSelect = document.querySelector(`[name="param_type_${paramId}"]`);
+    const valueContainer = typeSelect.closest('.row').querySelector('.value-container');
+    const currentValue = valueContainer.querySelector('input, select').value;
+    const lang = localStorage.getItem('preferred_language') || 'en';
+    const t = translations[lang];
+    
+    let newInput;
+    switch(typeSelect.value) {
+        case 'boolean':
+            newInput = `<select class="form-select" name="param_value_${paramId}">
+                <option value="true">True</option>
+                <option value="false">False</option>
+            </select>`;
+            break;
+        case 'number':
+            newInput = `<input type="number" class="form-control" name="param_value_${paramId}" 
+                              value="${currentValue}" step="any" 
+                              placeholder="${t.parameterValue}">`;
+            break;
+        default:
+            newInput = `<input type="text" class="form-control" name="param_value_${paramId}" 
+                              value="${currentValue}" 
+                              placeholder="${t.parameterValue}">`;
+    }
+    valueContainer.innerHTML = newInput;
 }

@@ -32,6 +32,9 @@ class UniClient:
         self.max_tokens = model.max_tokens
         self.presence_penalty = model.presence_penalty
         self.frequency_penalty = model.frequency_penalty
+        
+        # 自定义参数
+        self.custom_parameters = model.custom_parameters or {}
 
     def _process_chunk(self, chunk: str) -> Dict:
         """处理不同模型的响应块格式
@@ -262,4 +265,20 @@ class UniClient:
         Returns:
             UniClient: 通用客户端实例
         """
-        return UniClient(model) 
+        return UniClient(model)
+
+    def _prepare_request_kwargs(self) -> dict:
+        """准备请求参数"""
+        kwargs = {
+            "temperature": self.temperature,
+            "top_p": self.top_p,
+            "max_tokens": self.max_tokens,
+            "presence_penalty": self.presence_penalty,
+            "frequency_penalty": self.frequency_penalty,
+        }
+        
+        # 添加自定义参数
+        if self.custom_parameters:
+            kwargs["custom_parameters"] = self.custom_parameters
+            
+        return kwargs 

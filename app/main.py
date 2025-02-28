@@ -79,7 +79,13 @@ async def create_model(model: ModelCreate, db: Session = Depends(get_db)):
             'top_p': model.top_p,
             'max_tokens': model.max_tokens,
             'presence_penalty': model.presence_penalty,
-            'frequency_penalty': model.frequency_penalty
+            'frequency_penalty': model.frequency_penalty,
+            'enable_tools': model.enable_tools,
+            'tools': model.tools,
+            'tool_choice': model.tool_choice,
+            'enable_thinking': model.enable_thinking,
+            'thinking_budget_tokens': model.thinking_budget_tokens,
+            'custom_parameters': model.custom_parameters if model.custom_parameters else {}
         }
         
         db_model = DBModel(**model_data)

@@ -37,6 +37,9 @@ class Model(Base):
     enable_thinking = Column(Boolean, server_default='0', nullable=False)
     thinking_budget_tokens = Column(Integer, server_default='16000', nullable=False)
     
+    # 添加自定义参数字段，确保有默认值
+    custom_parameters = Column(JSON, nullable=False, server_default='{}')
+    
     # 添加与配置步骤的关系
     configuration_steps = relationship("ConfigurationStep", back_populates="model")
 

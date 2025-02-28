@@ -28,8 +28,8 @@ class OpenAIClient(BaseClient):
         Args:
             messages: 消息列表
             model: 模型名称
-            stream: 是否使用流式输出，默认为 True
-            **kwargs: 其他参数
+            stream: 是否使用流式输出
+            **kwargs: 其他参数，包括自定义参数
             
         Yields:
             tuple[str, str]: (内容类型, 内容)
@@ -42,16 +42,8 @@ class OpenAIClient(BaseClient):
             # "Accept": "text/event-stream" if stream else "application/json",
         }
 
-        data = {
-            "model": model,
-            "messages": messages,
-            "stream": stream,
-            "temperature": kwargs.get("temperature", 0.7),
-            "max_tokens": kwargs.get("max_tokens", 2000),
-            "top_p": kwargs.get("top_p", 1.0),
-            "presence_penalty": kwargs.get("presence_penalty", 0.0),
-            "frequency_penalty": kwargs.get("frequency_penalty", 0.0)
-        }
+        # 使用基类方法准备请求数据
+        data = self._prepare_request_data(messages, model, stream=stream, **kwargs)
         logger.debug(f"OpenAI 请求数据: {data}")
         if stream:
             first_chunk = True

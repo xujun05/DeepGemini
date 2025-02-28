@@ -47,16 +47,8 @@ class Grok3Client(BaseClient):
             "Accept": "text/event-stream" if stream else "application/json",
         }
         
-        data = {
-            "model": model,
-            "messages": messages,
-            "stream": stream,
-            "temperature": kwargs.get("temperature", 0.7),
-            "max_tokens": kwargs.get("max_tokens", 2000),
-            "top_p": kwargs.get("top_p", 1.0),
-            "presence_penalty": kwargs.get("presence_penalty", 0.0),
-            "frequency_penalty": kwargs.get("frequency_penalty", 0.0)
-        }
+        # 准备请求数据
+        data = self._prepare_request_data(messages, model, stream=stream, **kwargs)
         
         if stream:
             # 重置行缓存

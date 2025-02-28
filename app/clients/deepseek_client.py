@@ -42,31 +42,22 @@ class DeepSeekClient(BaseClient):
         else:
             return True, content
             
-    async def stream_chat(self, messages: list, model: str = "deepseek-ai/DeepSeek-R1", **kwargs) -> AsyncGenerator[tuple[str, str], None]:
-        """流式对话
-        
-        Args:
-            messages: 消息列表
-            model: 模型名称
-            **kwargs: 其他参数
-            
-        Yields:
-            tuple[str, str]: (内容类型, 内容)
-                内容类型: "reasoning" 或 "content" 或 "answer"
-                内容: 实际的文本内容
-        """
+    async def stream_chat(
+        self,
+        messages: list,
+        model: str = "deepseek-ai/DeepSeek-R1",
+        **kwargs
+    ) -> AsyncGenerator[tuple[str, str], None]:
+        """流式对话"""
         headers = {
             "Authorization": f"Bearer {self.api_key}",
-            "Content-Type": "application/json",
-            "Accept": "text/event-stream",
-        }
-        data = {
-            "model": model,
-            "messages": messages,
-            "stream": True,
+            "Content-Type": "application/json"
         }
         
-        logger.debug(f"开始流式对话：{data}")
+        # 准备请求数据
+        data = self._prepare_request_data(messages, model, **kwargs)
+        
+        logger.debug(f"DeepSeek 请求数据：{data}")
 
         first_chunk = True
         reasoning_completed = False  # 添加标志来追踪推理是否完成

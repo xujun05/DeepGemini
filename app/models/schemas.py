@@ -19,6 +19,7 @@ class ModelBase(BaseModel):
     tool_choice: Optional[Dict] = None
     enable_thinking: bool = False
     thinking_budget_tokens: int = 16000
+    custom_parameters: Optional[Dict[str, Union[str, int, float, bool]]] = Field(default_factory=dict)
 
     @validator('temperature', 'top_p', pre=True)
     def convert_to_float(cls, v):
@@ -51,6 +52,15 @@ class ModelBase(BaseModel):
             except:
                 return None
         return v
+
+    @validator('custom_parameters', pre=True)
+    def validate_custom_parameters(cls, v):
+        if isinstance(v, str):
+            try:
+                return json.loads(v)
+            except:
+                return {}
+        return v if isinstance(v, dict) else {}
 
     class Config:
         from_attributes = True

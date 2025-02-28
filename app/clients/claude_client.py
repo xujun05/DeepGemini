@@ -45,34 +45,34 @@ class ClaudeClient(BaseClient):
             enable_thinking: 是否启用扩展思考
             thinking_budget_tokens: 思考token预算
         """
+        temperature, top_p, presence_penalty, frequency_penalty = model_arg
+        
+        # 准备基础请求数据
+        data = self._prepare_request_data(
+            messages=messages,
+            model=model,
+            stream=stream,
+            temperature=temperature,
+            top_p=top_p,
+            presence_penalty=presence_penalty,
+            frequency_penalty=frequency_penalty,
+            **kwargs
+        )
+        
+        # 添加 Claude 特定参数
+        if tools:
+            data["tools"] = tools
+        if tool_choice:
+            data["tool_choice"] = tool_choice
+        if enable_thinking:
+            data["thinking_budget_tokens"] = thinking_budget_tokens
+
         if self.provider == "anthropic":
             headers = {
                 "Authorization": f"Bearer {self.api_key}",
                 "Content-Type": "application/json",
                 "Accept": "text/event-stream" if stream else "application/json",
             }
-
-            data = {
-                "model": model,
-                "messages": messages,
-                "max_tokens": 8192,
-                "stream": stream,
-                "temperature": model_arg[0],
-                "top_p": model_arg[1]
-            }
-
-            # 添加工具配置
-            if tools:
-                data["tools"] = tools
-                if tool_choice:
-                    data["tool_choice"] = tool_choice
-
-            # 添加思考配置
-            if enable_thinking:
-                data["thinking"] = {
-                    "type": "enabled",
-                    "budget_tokens": thinking_budget_tokens
-                }
 
             # 用于收集推理内容
             self.reasoning_content = []

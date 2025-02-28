@@ -16,6 +16,35 @@ class BaseClient(ABC):
         self.api_key = api_key
         self.api_url = api_url
         
+    def _prepare_request_data(self, messages: list, model: str, **kwargs) -> dict:
+        """准备请求数据，包括自定义参数
+        
+        Args:
+            messages: 消息列表
+            model: 模型名称
+            **kwargs: 其他参数，包括自定义参数
+            
+        Returns:
+            dict: 处理后的请求数据
+        """
+        data = {
+            "model": model,
+            "messages": messages,
+            "stream": kwargs.get("stream", True),
+            "temperature": kwargs.get("temperature", 0.7),
+            "max_tokens": kwargs.get("max_tokens", 2000),
+            "top_p": kwargs.get("top_p", 1.0),
+            "presence_penalty": kwargs.get("presence_penalty", 0.0),
+            "frequency_penalty": kwargs.get("frequency_penalty", 0.0)
+        }
+        
+        # 添加自定义参数
+        custom_parameters = kwargs.get("custom_parameters", {})
+        if custom_parameters:
+            data.update(custom_parameters)
+            
+        return data
+        
     async def _make_request(self, headers: dict, data: dict) -> AsyncGenerator[bytes, None]:
         """发送请求并处理响应
         
