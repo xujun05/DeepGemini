@@ -7,8 +7,5 @@ services:
       - "8000:8000"
     volumes:
       - ./.env:/app/.env
-      - ./data:/app/data
-      - ./data/deepgemini.db:/app/deepgemini.db
-    environment:
-      - DATABASE_URL=sqlite:///app/deepgemini.db
+      - ./:/app/
     restart: unless-stopped 

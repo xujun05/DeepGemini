@@ -1,5 +1,5 @@
-from fastapi import HTTPException, Header, Depends
-from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
+from fastapi import HTTPException, Header, Depends, status
+from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials, APIKeyHeader
 from jwt import InvalidTokenError, encode, decode  # 从 PyJWT 导入
 from passlib.context import CryptContext
 from datetime import datetime, timedelta
@@ -50,6 +50,9 @@ ACCESS_TOKEN_EXPIRE_MINUTES = 60 * 24  # 24 小时
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 security = HTTPBearer()
 
+# 定义 API 密钥头部
+api_key_header = APIKeyHeader(name="Authorization", auto_error=False)
+
 def verify_password(plain_password, hashed_password):
     return pwd_context.verify(plain_password, hashed_password)
 
@@ -92,31 +95,48 @@ def update_admin_credentials(username: str, password: str):
     load_dotenv(override=True)
     return {"message": "Credentials updated successfully"}
 
-async def verify_api_key(authorization: Optional[str] = Header(None)) -> None:
-    """验证API密钥
-
-    Args:
-        authorization (Optional[str], optional): Authorization header中的API密钥. Defaults to Header(None).
-
-    Raises:
-        HTTPException: 当Authorization header缺失或API密钥无效时抛出401错误
-    """
-    if authorization is None:
-        logger.warning("请求缺少Authorization header")
+def get_api_key_header(api_key_header: str = Depends(api_key_header)):
+    if not api_key_header:
         raise HTTPException(
-            status_code=401,
-            detail="Missing Authorization header"
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Missing API key",
+            headers={"WWW-Authenticate": "Bearer"},
         )
     
-    api_key = authorization.replace("Bearer ", "").strip()
-    logger.info(f"正在验证 API 密钥: {api_key[:8]}...")
-    logger.info(f"可用的 API 密钥: {[k[:8] for k in ALLOW_API_KEYS]}")
+    # 移除 "Bearer " 前缀（如果有）
+    if api_key_header.startswith("Bearer "):
+        api_key_header = api_key_header[7:]
     
-    if api_key not in ALLOW_API_KEYS:
-        logger.warning(f"无效的API密钥: {api_key[:8]}...")
+    return api_key_header
+
+def verify_api_key(api_key: str = Depends(get_api_key_header)):
+    """验证 API 密钥"""
+    # 每次都从环境变量获取最新的 API 密钥列表
+    try:
+        api_keys_json = os.getenv('ALLOW_API_KEY', '[]')
+        api_keys_data = json.loads(api_keys_json)
+        available_keys = [key_data["key"] for key_data in api_keys_data]
+        
+        logger.info(f"正在验证 API 密钥: {api_key[:8]}...")
+        logger.info(f"可用的 API 密钥: {[k[:8] for k in available_keys]}")
+        
+        if api_key not in available_keys:
+            logger.warning(f"无效的API密钥: {api_key[:8]}...")
+            raise HTTPException(
+                status_code=401,
+                detail="Invalid API key",
+                headers={"WWW-Authenticate": "Bearer"},
+            )
+        return api_key
+    except json.JSONDecodeError as e:
+        logger.error(f"解析 API 密钥 JSON 时出错: {e}")
         raise HTTPException(
-            status_code=401,
-            detail="Invalid API key"
+            status_code=500,
+            detail="Internal server error: Invalid API key format",
         )
-    
-    logger.info("API密钥验证通过")
+    except Exception as e:
+        logger.error(f"验证 API 密钥时发生未知错误: {e}")
+        raise HTTPException(
+            status_code=500,
+            detail="Internal server error",
+        )

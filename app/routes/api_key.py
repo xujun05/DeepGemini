@@ -4,6 +4,7 @@ import os
 from typing import List, Optional
 from dotenv import load_dotenv
 import json
+from app.utils.logger import logger
 
 router = APIRouter()
 
@@ -38,8 +39,11 @@ def update_env_api_keys(api_keys_list: List[ApiKeyInDB]):
             else:
                 file.write(line)
 
-    # 重新加载环境变量
+    # 重新加载环境变量并直接更新 os.environ
     load_dotenv(override=True)
+    # 直接修改环境变量
+    os.environ['ALLOW_API_KEY'] = api_keys_json
+    logger.info(f"已更新 API 密钥环境变量: {api_keys_json}")
 
 # 存储 API 密钥的列表
 api_keys: List[ApiKeyInDB] = []

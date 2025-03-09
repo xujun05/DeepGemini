@@ -101,9 +101,6 @@ For Linux/Mac:
 # Create .env file
 cp .env.example .env
 
-# Create empty database file
-touch deepgemini.db
-chmod 666 deepgemini.db
 ```
 
 For Windows PowerShell:
@@ -111,8 +108,6 @@ For Windows PowerShell:
 # Create .env file
 cp .env.example .env
 
-# Create empty database file
-echo "" > deepgemini.db
 ```
 
 3. Run the container:
@@ -122,8 +117,7 @@ For Linux/Mac:
 docker run -d \
 -p 8000:8000 \
 -v $(pwd)/.env:/app/.env \
--v $(pwd)/deepgemini.db:/app/deepgemini.db \
--e DATABASE_URL=sqlite:///app/deepgemini.db \
+-v $(pwd)/:/app/ \
 --name deepgemini \
 bradleylzh/deepgemini:latest
 ```
@@ -132,8 +126,7 @@ For Windows PowerShell:
 ```powershell
 docker run -d -p 8000:8000 `
 -v ${PWD}\.env:/app/.env `
--v ${PWD}\deepgemini.db:/app/deepgemini.db `
--e DATABASE_URL=sqlite:///app/deepgemini.db `
+-v ${PWD}\:/app/ `
 --name deepgemini `
 bradleylzh/deepgemini:latest
 ```

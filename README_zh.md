@@ -96,9 +96,6 @@ docker pull bradleylzh/deepgemini:latest
 Linux/Mac 用户：
 ```bash
 cp .env.example .env
-
-touch deepgemini.db
-chmod 666 deepgemini.db
 ```
 
 运行容器
@@ -106,8 +103,7 @@ chmod 666 deepgemini.db
 docker run -d \
 -p 8000:8000 \
 -v $(pwd)/.env:/app/.env \
--v $(pwd)/deepgemini.db:/app/deepgemini.db \
--e DATABASE_URL=sqlite:///app/deepgemini.db \
+-v $(pwd)/:/app/ \
 --name deepgemini \
 bradleylzh/deepgemini:latest
 ```
@@ -116,8 +112,6 @@ Windows PowerShell 用户：
 
 ```powershell
 cp .env.example .env
-
-echo "" > deepgemini.db
 ```
 
 运行容器
@@ -125,8 +119,7 @@ echo "" > deepgemini.db
 docker run -d \
 -p 8000:8000 \
 -v $(pwd)/.env:/app/.env \
--v $(pwd)/deepgemini.db:/app/deepgemini.db \
--e DATABASE_URL=sqlite:///app/deepgemini.db \
+-v $(pwd)/:/app/ \
 --name deepgemini \
 bradleylzh/deepgemini:latest
 ```
