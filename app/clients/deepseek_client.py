@@ -99,7 +99,7 @@ class DeepSeekClient(BaseClient):
                                             logger.debug(f"开始提取 think 标签后的推理内容")
                                             yield "reasoning", content
 
-                                    elif "</think>" in content or not in_think_tag:
+                                    elif "</think>" in content and not in_think_tag:
                                         # 推理内容结束
                                         in_think_tag = False
                                         logger.debug(f"检测到推理结束标记：{content}")

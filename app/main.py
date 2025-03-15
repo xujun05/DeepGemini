@@ -274,6 +274,10 @@ async def chat_completions(
     temperature: Optional[float] = Body(0.7),
     max_tokens: Optional[int] = Body(None),
     stream: Optional[bool] = Body(False),
+    tools: Optional[List[Dict[str, Any]]] = Body(None),
+    tool_choice: Optional[Dict[str, Any]] = Body(None),
+    enable_thinking: Optional[bool] = Body(False),
+    thinking_budget_tokens: Optional[int] = Body(2000),
     db: Session = Depends(get_db),
 ):
     """聊天补全API，兼容OpenAI格式"""
@@ -385,6 +389,9 @@ async def chat_completions(
         
         # 处理常规模型请求
         else:
+            # 记录常规模型请求参数
+            logger.info(f"处理常规模型请求: model={model}, enable_thinking={enable_thinking}, thinking_budget_tokens={thinking_budget_tokens}")
+            
             # 查找匹配的活跃配置
             config = db.query(DBConfiguration).filter(
                 DBConfiguration.name == model,

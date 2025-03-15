@@ -147,53 +147,161 @@ class UniClient:
         created_time = int(time.time())
         
         if system_prompt:
-            messages = [{"role": "system", "content": system_prompt}] + messages
+            # 确保系统提示使用正确的格式
+            if not any(msg.get("role") == "system" for msg in messages):
+                messages = [{"role": "system", "content": system_prompt}] + messages
+        
+        # 确保messages格式符合OpenAI标准
+        cleaned_messages = []
+        for msg in messages:
+            if not isinstance(msg, dict):
+                logger.warning(f"跳过非字典格式消息: {msg}")
+                continue
             
+            role = msg.get("role", "user")
+            content = msg.get("content", "")
+            
+            if not content:
+                logger.warning(f"跳过空内容消息: {msg}")
+                continue
+            
+            cleaned_messages.append({"role": role, "content": content})
+        
+        if not cleaned_messages:
+            logger.error("所有消息都无效，无法发送请求")
+            error_data = {
+                "id": chat_id,
+                "object": "chat.completion.chunk",
+                "created": created_time,
+                "model": self.model_name,
+                "choices": [{
+                    "index": 0,
+                    "delta": {"content": "错误: 没有有效的消息可以处理"},
+                    "finish_reason": "stop"
+                }]
+            }
+            yield f"data: {json.dumps(error_data, ensure_ascii=False)}\n\n".encode('utf-8')
+            yield "data: [DONE]\n\n".encode('utf-8')
+            return
+            
+        # 构建请求payload，确保符合API格式要求
         payload = {
             "model": self.model_name,
-            "messages": messages,
-            "stream": True,
-            "temperature": self.temperature,
-            "top_p": self.top_p,
-            "max_tokens": self.max_tokens,
-            "presence_penalty": self.presence_penalty,
-            "frequency_penalty": self.frequency_penalty
+            "messages": cleaned_messages,
+            "stream": True
         }
+        
+        # 添加模型参数（如果不为None或默认值）
+        if self.temperature != 0.7:
+            payload["temperature"] = self.temperature
+        
+        if self.top_p != 1.0:
+            payload["top_p"] = self.top_p
+        
+        if self.max_tokens:
+            payload["max_tokens"] = self.max_tokens
+        
+        if self.presence_penalty:
+            payload["presence_penalty"] = self.presence_penalty
+        
+        if self.frequency_penalty:
+            payload["frequency_penalty"] = self.frequency_penalty
+        
+        # 只添加API实际支持的自定义参数
+        if self.provider == "deepseek" and self.custom_parameters:
+            for key, value in self.custom_parameters.items():
+                # 避免覆盖标准参数
+                if key not in payload and value is not None:
+                    payload[key] = value
+        
+        # 记录请求详情（用于调试）
+        logger.info(f"发送API请求: url={self.api_url}, model={self.model_name}")
+        logger.debug(f"请求载荷: {json.dumps(payload, ensure_ascii=False)}")
         
         try:
             # 设置 timeout 为 30 秒
             timeout = httpx.Timeout(30.0, connect=30.0, read=30.0)
             async with httpx.AsyncClient(timeout=timeout) as client:
                 async with client.stream('POST', self.api_url, json=payload, headers=self.headers) as response:
-                    response.raise_for_status()
+                    # 检查响应状态码
+                    if response.status_code != 200:
+                        error_text = await response.aread()
+                        error_text = error_text.decode('utf-8')
+                        logger.error(f"API请求失败: 状态码={response.status_code}, 响应={error_text}")
+                        
+                        # 返回错误信息
+                        error_data = {
+                            "id": chat_id,
+                            "object": "chat.completion.chunk",
+                            "created": created_time,
+                            "model": self.model_name,
+                            "choices": [{
+                                "index": 0,
+                                "delta": {"content": f"API请求失败: HTTP {response.status_code}\n{error_text}"},
+                                "finish_reason": "stop"
+                            }]
+                        }
+                        yield f"data: {json.dumps(error_data, ensure_ascii=False)}\n\n".encode('utf-8')
+                        yield "data: [DONE]\n\n".encode('utf-8')
+                        return
+                    
+                    # 处理成功的响应
                     async for line in response.aiter_lines():
-                        # logger.debug(f"line: {line}")
                         if line.strip():
                             if line.startswith('data: '):
                                 line = line[6:]  # 移除 "data: " 前缀
-                            if line != '[DONE]':
-                                try:
-                                    chunk = line.strip()
-                                    if chunk:
-                                        # 处理响应块
-                                        delta = self._process_chunk(chunk)
-                                        response_data = {
-                                            "id": chat_id,
-                                            "object": "chat.completion.chunk",
-                                            "created": created_time,
-                                            "model": self.model_name,
-                                            "choices": [{
-                                                "index": 0,
-                                                "delta": delta
-                                            }]
-                                        }
-                                        yield f"data: {json.dumps(response_data)}\n\n".encode('utf-8')
-                                except Exception as e:
-                                    logger.error(f"处理响应块时出错: {str(e)}")
-                                    continue
+                            if line == '[DONE]':
+                                yield "data: [DONE]\n\n".encode('utf-8')
+                                break
+                            
+                            try:
+                                chunk = line.strip()
+                                if chunk:
+                                    # 处理响应块
+                                    delta = self._process_chunk(chunk)
+                                    response_data = {
+                                        "id": chat_id,
+                                        "object": "chat.completion.chunk",
+                                        "created": created_time,
+                                        "model": self.model_name,
+                                        "choices": [{
+                                            "index": 0,
+                                            "delta": delta
+                                        }]
+                                    }
+                                    yield f"data: {json.dumps(response_data, ensure_ascii=False)}\n\n".encode('utf-8')
+                            except Exception as e:
+                                logger.error(f"处理响应块时出错: {str(e)}")
+                                continue
+        except httpx.HTTPStatusError as e:
+            logger.error(f"HTTP状态错误: {e.response.status_code} - {e.response.text}")
+            error_data = self._format_error_data(chat_id, created_time, f"HTTP错误: {e.response.status_code} - {e.response.text}")
+            yield f"data: {json.dumps(error_data, ensure_ascii=False)}\n\n".encode('utf-8')
+            yield "data: [DONE]\n\n".encode('utf-8')
+        except httpx.RequestError as e:
+            logger.error(f"请求错误: {str(e)}")
+            error_data = self._format_error_data(chat_id, created_time, f"请求错误: {str(e)}")
+            yield f"data: {json.dumps(error_data, ensure_ascii=False)}\n\n".encode('utf-8')
+            yield "data: [DONE]\n\n".encode('utf-8')
         except Exception as e:
             logger.error(f"生成响应时出错: {str(e)}")
-            raise
+            error_data = self._format_error_data(chat_id, created_time, f"错误: {str(e)}")
+            yield f"data: {json.dumps(error_data, ensure_ascii=False)}\n\n".encode('utf-8')
+            yield "data: [DONE]\n\n".encode('utf-8')
+
+    def _format_error_data(self, chat_id, created_time, error_message):
+        """格式化错误数据为OpenAI兼容格式"""
+        return {
+            "id": chat_id,
+            "object": "chat.completion.chunk",
+            "created": created_time,
+            "model": self.model_name,
+            "choices": [{
+                "index": 0,
+                "delta": {"content": error_message},
+                "finish_reason": "stop"
+            }]
+        }
 
     async def generate(self, messages: List[Dict], system_prompt: Optional[str] = None) -> Dict:
         """
@@ -210,18 +318,78 @@ class UniClient:
         created_time = int(time.time())
         
         if system_prompt:
-            messages = [{"role": "system", "content": system_prompt}] + messages
+            # 确保系统提示使用正确的格式
+            if not any(msg.get("role") == "system" for msg in messages):
+                messages = [{"role": "system", "content": system_prompt}] + messages
+        
+        # 确保messages格式符合OpenAI标准
+        cleaned_messages = []
+        for msg in messages:
+            if not isinstance(msg, dict):
+                logger.warning(f"跳过非字典格式消息: {msg}")
+                continue
             
+            role = msg.get("role", "user")
+            content = msg.get("content", "")
+            
+            if not content:
+                logger.warning(f"跳过空内容消息: {msg}")
+                continue
+            
+            cleaned_messages.append({"role": role, "content": content})
+        
+        if not cleaned_messages:
+            logger.error("所有消息都无效，无法发送请求")
+            return {
+                "id": chat_id,
+                "object": "chat.completion",
+                "created": created_time,
+                "model": self.model_name,
+                "choices": [{
+                    "index": 0,
+                    "message": {
+                        "role": "assistant",
+                        "content": "错误: 没有有效的消息可以处理",
+                        "reasoning_content": "",
+                        "execution_content": ""
+                    },
+                    "finish_reason": "stop"
+                }]
+            }
+        
+        # 构建请求payload，确保符合API格式要求
         payload = {
             "model": self.model_name,
-            "messages": messages,
-            "stream": False,
-            "temperature": self.temperature,
-            "top_p": self.top_p,
-            "max_tokens": self.max_tokens,
-            "presence_penalty": self.presence_penalty,
-            "frequency_penalty": self.frequency_penalty
+            "messages": cleaned_messages,
+            "stream": False
         }
+        
+        # 添加模型参数（如果不为None或默认值）
+        if self.temperature != 0.7:
+            payload["temperature"] = self.temperature
+        
+        if self.top_p != 1.0:
+            payload["top_p"] = self.top_p
+        
+        if self.max_tokens:
+            payload["max_tokens"] = self.max_tokens
+        
+        if self.presence_penalty:
+            payload["presence_penalty"] = self.presence_penalty
+        
+        if self.frequency_penalty:
+            payload["frequency_penalty"] = self.frequency_penalty
+        
+        # 只添加API实际支持的自定义参数
+        if self.provider == "deepseek" and self.custom_parameters:
+            for key, value in self.custom_parameters.items():
+                # 避免覆盖标准参数
+                if key not in payload and value is not None:
+                    payload[key] = value
+        
+        # 记录请求详情（用于调试）
+        logger.info(f"发送API请求: url={self.api_url}, model={self.model_name}")
+        logger.debug(f"请求载荷: {json.dumps(payload, ensure_ascii=False)}")
         
         try:
             # 设置 timeout 为 30 秒
@@ -232,9 +400,57 @@ class UniClient:
                     json=payload,
                     headers=self.headers
                 )
-                response.raise_for_status()
+                
+                # 记录API响应状态
+                logger.info(f"API响应状态码: {response.status_code}")
+                
+                # 检查响应状态码
+                if response.status_code != 200:
+                    error_text = response.text
+                    logger.error(f"API请求失败: 状态码={response.status_code}, 响应={error_text}")
+                    
+                    # 返回错误信息
+                    return {
+                        "id": chat_id,
+                        "object": "chat.completion",
+                        "created": created_time,
+                        "model": self.model_name,
+                        "choices": [{
+                            "index": 0,
+                            "message": {
+                                "role": "assistant",
+                                "content": f"API请求失败: HTTP {response.status_code}\n{error_text}",
+                                "reasoning_content": "",
+                                "execution_content": ""
+                            },
+                            "finish_reason": "stop"
+                        }]
+                    }
+                
+                # 处理成功的响应
                 result = response.json()
-                # 构建与多步骤模型相同格式的响应
+                
+                # 确保响应格式正确
+                if "choices" not in result or not result["choices"]:
+                    logger.error(f"API响应格式错误: {result}")
+                    return {
+                        "id": chat_id,
+                        "object": "chat.completion",
+                        "created": created_time,
+                        "model": self.model_name,
+                        "choices": [{
+                            "index": 0,
+                            "message": {
+                                "role": "assistant",
+                                "content": f"API响应格式错误: {json.dumps(result)}",
+                                "reasoning_content": "",
+                                "execution_content": ""
+                            },
+                            "finish_reason": "stop"
+                        }]
+                    }
+                
+                # 构建标准格式响应
                 return {
                     "id": chat_id,
                     "object": "chat.completion",
@@ -247,12 +463,28 @@ class UniClient:
                             "content": result["choices"][0]["message"]["content"],
                             "reasoning_content": "",
                             "execution_content": ""
-                        }
+                        },
+                        "finish_reason": result["choices"][0].get("finish_reason", "stop")
                     }]
                 }
         except Exception as e:
             logger.error(f"生成响应时出错: {str(e)}")
-            raise
+            return {
+                "id": chat_id,
+                "object": "chat.completion",
+                "created": created_time,
+                "model": self.model_name,
+                "choices": [{
+                    "index": 0,
+                    "message": {
+                        "role": "assistant",
+                        "content": f"生成响应时出错: {str(e)}",
+                        "reasoning_content": "",
+                        "execution_content": ""
+                    },
+                    "finish_reason": "stop"
+                }]
+            }
 
     @staticmethod
     def create_client(model: Model) -> 'UniClient':
