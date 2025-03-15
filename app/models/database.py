@@ -1,7 +1,8 @@
-from sqlalchemy import create_engine, Column, Integer, String, Boolean, Float, JSON, ForeignKey
+from sqlalchemy import create_engine, Column, Integer, String, Boolean, Float, JSON, ForeignKey, Text, DateTime, Table
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import relationship, sessionmaker
 import os
+from datetime import datetime
 
 # Create the database engine
 DATABASE_URL = "sqlite:///./deepgemini.db"
@@ -9,6 +10,14 @@ engine = create_engine(DATABASE_URL)
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 
 Base = declarative_base()
+
+# 角色与讨论组的多对多关系表
+role_discussion_group = Table(
+    'role_discussion_group', 
+    Base.metadata,
+    Column('role_id', Integer, ForeignKey('roles.id')),
+    Column('discussion_group_id', Integer, ForeignKey('discussion_groups.id'))
+)
 
 class Model(Base):
     __tablename__ = "models"
@@ -42,6 +51,9 @@ class Model(Base):
     
     # 添加与配置步骤的关系
     configuration_steps = relationship("ConfigurationStep", back_populates="model")
+    
+    # 添加关系
+    roles = relationship("Role", back_populates="model")
 
 class Configuration(Base):
     __tablename__ = "configurations"
@@ -72,6 +84,45 @@ class ConfigurationStep(Base):
     # 关系
     configuration = relationship("Configuration", back_populates="steps")
     model = relationship("Model", back_populates="configuration_steps")
+
+class Role(Base):
+    """角色模型"""
+    __tablename__ = 'roles'
+    
+    id = Column(Integer, primary_key=True, index=True)
+    name = Column(String(100), nullable=False)
+    description = Column(Text, nullable=True)
+    model_id = Column(Integer, ForeignKey('models.id'), nullable=False)
+    personality = Column(Text, nullable=True)
+    skills = Column(JSON, nullable=True)  # 存储技能列表
+    parameters = Column(JSON, nullable=True)  # 存储模型参数
+    system_prompt = Column(Text, nullable=True)  # 系统提示词
+    created_at = Column(DateTime, default=datetime.now)
+    updated_at = Column(DateTime, nullable=True)
+    
+    # 关系
+    model = relationship("Model", back_populates="roles")
+    discussion_groups = relationship("DiscussionGroup", 
+                                    secondary=role_discussion_group, 
+                                    back_populates="roles")
+
+class DiscussionGroup(Base):
+    """讨论组模型"""
+    __tablename__ = 'discussion_groups'
+    
+    id = Column(Integer, primary_key=True, index=True)
+    name = Column(String(100), nullable=False)
+    topic = Column(String, nullable=True)
+    description = Column(Text, nullable=True)
+    mode = Column(String(50), nullable=False, default="discussion")  # 会议模式
+    max_rounds = Column(Integer, default=3)  # 最大轮数
+    created_at = Column(DateTime, default=datetime.now)
+    updated_at = Column(DateTime, nullable=True)
+    
+    # 关系
+    roles = relationship("Role", 
+                        secondary=role_discussion_group, 
+                        back_populates="discussion_groups")
 
 # Create all tables
 def init_db():

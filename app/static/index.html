@@ -29,6 +29,14 @@
                 <i class="fas fa-project-diagram"></i>
                 <span data-translate="workflowManagement">Workflow Management</span>
             </li>
+            <li data-page="roles">
+                <i class="fas fa-user-tag"></i>
+                <span data-translate="roleManagement">角色管理</span>
+            </li>
+            <li data-page="groups">
+                <i class="fas fa-users"></i>
+                <span data-translate="groupManagement">讨论组管理</span>
+            </li>
             <li data-page="settings">
                 <i class="fas fa-cog"></i>
                 <span data-translate="systemSettings">System Settings</span>
@@ -163,6 +171,72 @@
                                 </button>
                             </form>
                         </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Roles Page -->
+        <div class="content-page d-none" id="roles-page">
+            <div class="d-flex justify-content-between align-items-center mb-4">
+                <h2 data-translate="roleManagement">角色管理</h2>
+                <div>
+                    <button class="btn btn-primary" onclick="openAddRoleModal()">
+                        <i class="fas fa-plus"></i> <span data-translate="addRole">添加角色</span>
+                    </button>
+                </div>
+            </div>
+            
+            <div class="card">
+                <div class="card-body">
+                    <div class="table-responsive">
+                        <table class="table table-hover align-middle" id="rolesTable">
+                            <thead>
+                                <tr>
+                                    <th data-translate="name">名称</th>
+                                    <th data-translate="description">描述</th>
+                                    <th data-translate="personality">性格</th>
+                                    <th data-translate="model">模型</th>
+                                    <th data-translate="actions">操作</th>
+                                </tr>
+                            </thead>
+                            <tbody id="rolesTableBody">
+                                <!-- 角色将通过JavaScript动态添加 -->
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Groups Page -->
+        <div class="content-page d-none" id="groups-page">
+            <div class="d-flex justify-content-between align-items-center mb-4">
+                <h2 data-translate="groupManagement">讨论组管理</h2>
+                <div>
+                    <button class="btn btn-primary" onclick="openAddGroupModal()">
+                        <i class="fas fa-plus"></i> <span data-translate="addGroup">添加讨论组</span>
+                    </button>
+                </div>
+            </div>
+            
+            <div class="card">
+                <div class="card-body">
+                    <div class="table-responsive">
+                        <table class="table table-hover align-middle" id="groupsTable">
+                            <thead>
+                                <tr>
+                                    <th data-translate="name">名称</th>
+                                    <th data-translate="topic">主题</th>
+                                    <th data-translate="mode">模式</th>
+                                    <th data-translate="roles">角色</th>
+                                    <th data-translate="actions">操作</th>
+                                </tr>
+                            </thead>
+                            <tbody id="groupsTableBody">
+                                <!-- 讨论组将通过JavaScript动态添加 -->
+                            </tbody>
+                        </table>
                     </div>
                 </div>
             </div>
@@ -454,6 +528,106 @@
                 </div>
             </div>
         </div>
+    </div>
+
+    <!-- 添加角色模态框 -->
+    <div class="modal fade" id="addRoleModal" tabindex="-1">
+        <div class="modal-dialog modal-lg">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title" data-translate="addNewRole">添加新角色</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body">
+                    <form id="addRoleForm">
+                        <div class="mb-3">
+                            <label class="form-label" data-translate="roleName">角色名称</label>
+                            <input type="text" class="form-control" name="name" required>
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label" data-translate="roleDescription">角色描述</label>
+                            <textarea class="form-control" name="description" rows="2"></textarea>
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label" data-translate="personality">性格特点</label>
+                            <textarea class="form-control" name="personality" rows="2"></textarea>
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label" data-translate="skills">专业技能</label>
+                            <input type="text" class="form-control" name="skills" placeholder="用逗号分隔多个技能">
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label" data-translate="systemPrompt">系统提示</label>
+                            <textarea class="form-control" name="system_prompt" rows="3"></textarea>
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label" data-translate="model">使用模型</label>
+                            <select class="form-select" name="model_id" required>
+                                <!-- 模型选项将通过JavaScript动态添加 -->
+                            </select>
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label" data-translate="parameters">模型参数</label>
+                            <textarea class="form-control" name="parameters" rows="3" placeholder='{"temperature": 0.7, "max_tokens": 1000}'></textarea>
+                        </div>
+                    </form>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal" data-translate="close">关闭</button>
+                    <button type="button" class="btn btn-primary" onclick="saveRole()" data-translate="save">保存</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- 添加讨论组模态框 -->
+    <div class="modal fade" id="addGroupModal" tabindex="-1">
+        <div class="modal-dialog modal-lg">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title" data-translate="addNewGroup">添加新讨论组</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body">
+                    <form id="addGroupForm">
+                        <div class="mb-3">
+                            <label class="form-label" data-translate="groupName">讨论组名称</label>
+                            <input type="text" class="form-control" name="name" required>
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label" data-translate="topic">讨论主题</label>
+                            <input type="text" class="form-control" name="topic" required>
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label" data-translate="meetingMode">会议模式</label>
+                            <select class="form-select" name="mode" required>
+                                <option value="discussion" data-translate="discussion">普通讨论</option>
+                                <option value="brainstorming" data-translate="brainstorming">头脑风暴</option>
+                                <option value="debate" data-translate="debate">辩论</option>
+                                <option value="role_playing" data-translate="rolePlaying">角色扮演</option>
+                                <option value="swot_analysis" data-translate="swotAnalysis">SWOT分析</option>
+                                <option value="six_thinking_hats" data-translate="sixThinkingHats">六顶思考帽</option>
+                            </select>
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label" data-translate="selectRoles">选择角色</label>
+                            <div id="roleCheckboxes" class="d-flex flex-wrap">
+                                <!-- 角色选项将通过JavaScript动态添加 -->
+                            </div>
+                        </div>
+                    </form>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal" data-translate="close">关闭</button>
+                    <button type="button" class="btn btn-primary" onclick="saveGroup()" data-translate="save">保存</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- 在body标签的结尾前添加toast容器 -->
+    <div class="position-fixed bottom-0 end-0 p-3" style="z-index: 11" id="toastContainer">
+        <!-- Toast将在这里动态添加 -->
     </div>
 
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>

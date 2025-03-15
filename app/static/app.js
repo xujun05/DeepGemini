@@ -229,6 +229,10 @@ document.addEventListener('DOMContentLoaded', function() {
     document.getElementById('enableThinking').addEventListener('change', function() {
         document.getElementById('thinkingConfig').style.display = this.checked ? 'block' : 'none';
     });
+
+    // 添加角色和讨论组初始化
+    loadRoles();
+    loadGroups();
 });
 
 // API calls
@@ -1790,4 +1794,472 @@ function updateValueInput(paramId) {
                               placeholder="${t.parameterValue}">`;
     }
     valueContainer.innerHTML = newInput;
+}
+
+// 角色管理功能
+function loadRoles() {
+    // 使用现有的fetchAPI函数，保持认证一致
+    fetchAPI('roles', 'GET')  // 这会被转换为/v1/roles
+        .then(data => {
+            // 添加数据格式检查
+            if (!Array.isArray(data)) {
+                console.log('角色数据格式不正确:', data);
+                data = []; // 提供默认空数组
+            }
+            
+            const tableBody = document.getElementById('rolesTableBody');
+            tableBody.innerHTML = '';
+            
+            if (data.length === 0) {
+                // 显示空提示
+                const row = document.createElement('tr');
+                row.innerHTML = `
+                    <td colspan="5" class="text-center">暂无角色数据</td>
+                `;
+                tableBody.appendChild(row);
+                return;
+            }
+            
+            data.forEach(role => {
+                const row = document.createElement('tr');
+                row.innerHTML = `
+                    <td>${role.name}</td>
+                    <td>${role.description || '-'}</td>
+                    <td>${role.personality || '-'}</td>
+                    <td>${role.model_name || '-'}</td>
+                    <td>
+                        <button class="btn btn-sm btn-outline-primary me-1" onclick="editRole(${role.id})">
+                            <i class="fas fa-edit"></i>
+                        </button>
+                        <button class="btn btn-sm btn-outline-danger" onclick="deleteRole(${role.id})">
+                            <i class="fas fa-trash-alt"></i>
+                        </button>
+                    </td>
+                `;
+                tableBody.appendChild(row);
+            });
+        })
+        .catch(error => {
+            console.error('获取角色失败:', error);
+            // 显示空数据状态
+            const tableBody = document.getElementById('rolesTableBody');
+            tableBody.innerHTML = `
+                <tr>
+                    <td colspan="5" class="text-center text-danger">
+                        获取角色数据失败，请稍后重试
+                    </td>
+                </tr>
+            `;
+        });
+}
+
+function loadModelsForRoles() {
+    return fetchAPI('model_configs', 'GET')  // 使用model_configs端点
+        .then(data => {
+            // 添加数据格式检查
+            if (!Array.isArray(data)) {
+                console.log('模型配置数据格式不正确:', data);
+                data = []; // 提供默认空数组
+            }
+            
+            console.log('获取到的模型配置数据:', data);
+            
+            const select = document.querySelector('#addRoleForm select[name="model_id"]');
+            select.innerHTML = '<option value="" disabled selected>请选择模型</option>';
+            
+            // 填充下拉列表
+            data.forEach(model => {
+                const option = document.createElement('option');
+                option.value = model.id;  // 使用模型配置ID
+                option.textContent = model.name;  // 使用模型配置名称
+                select.appendChild(option);
+            });
+            
+            return data;
+        })
+        .catch(error => {
+            console.error('获取模型配置失败:', error);
+            
+            // 添加一个默认选项
+            const select = document.querySelector('#addRoleForm select[name="model_id"]');
+            select.innerHTML = '<option value="" disabled selected>无法获取模型配置</option>';
+            
+            return [];
+        });
+}
+
+function openAddRoleModal() {
+    // 清空表单
+    document.getElementById('addRoleForm').reset();
+    
+    // 加载模型选项
+    loadModelsForRoles();
+    
+    // 显示模态框
+    new bootstrap.Modal(document.getElementById('addRoleModal')).show();
+}
+
+function saveRole() {
+    const form = document.getElementById('addRoleForm');
+    const formData = new FormData(form);
+    
+    // 构建JSON数据
+    const data = {};
+    formData.forEach((value, key) => {
+        if (key === 'skills') {
+            data[key] = value.split(',').map(s => s.trim()).filter(s => s !== '');
+        } else if (key === 'parameters') {
+            try {
+                data[key] = value ? JSON.parse(value) : {};
+            } catch (e) {
+                showToast('error', '参数格式无效，请使用有效的JSON格式');
+                return;
+            }
+        } else {
+            data[key] = value;
+        }
+    });
+    
+    // 获取角色ID(如果存在)
+    const roleId = form.querySelector('input[name="id"]')?.value;
+    
+    // 确定是创建还是更新
+    const method = roleId ? 'PUT' : 'POST';
+    const endpoint = roleId ? `roles/${roleId}` : 'roles';
+    
+    // 发送请求
+    fetchAPI(endpoint, method, data)
+        .then(response => {
+            // 关闭模态框
+            bootstrap.Modal.getInstance(document.getElementById('addRoleModal')).hide();
+            
+            // 重新加载角色
+            loadRoles();
+            
+            showToast('success', roleId ? '角色更新成功' : '角色添加成功');
+        })
+        .catch(error => {
+            console.error(roleId ? '更新角色失败:' : '添加角色失败:', error);
+            showToast('error', roleId ? '更新角色失败' : '添加角色失败');
+        });
+}
+
+function editRole(roleId) {
+    // 获取角色详情
+    fetchAPI(`roles/${roleId}`, 'GET')
+        .then(role => {
+            // 填充表单
+            const form = document.getElementById('addRoleForm');
+            form.elements['name'].value = role.name;
+            form.elements['description'].value = role.description || '';
+            form.elements['personality'].value = role.personality || '';
+            form.elements['skills'].value = (role.skills || []).join(', ');
+            form.elements['system_prompt'].value = role.system_prompt || '';
+            
+            // 加载模型选项
+            loadModelsForRoles().then(() => {
+                form.elements['model_id'].value = role.model_id;
+            });
+            
+            form.elements['parameters'].value = JSON.stringify(role.parameters || {}, null, 2);
+            
+            // 添加角色ID到表单
+            const hiddenInput = document.createElement('input');
+            hiddenInput.type = 'hidden';
+            hiddenInput.name = 'id';
+            hiddenInput.value = roleId;
+            form.appendChild(hiddenInput);
+            
+            // 显示模态框
+            new bootstrap.Modal(document.getElementById('addRoleModal')).show();
+        })
+        .catch(error => {
+            console.error('获取角色详情失败:', error);
+            showToast('error', '获取角色详情失败');
+        });
+}
+
+function deleteRole(roleId) {
+    if (confirm('确定要删除这个角色吗？')) {
+        fetchAPI(`roles/${roleId}`, 'DELETE')
+        .then(response => {
+                loadRoles();
+                showToast('success', '角色删除成功');
+        })
+        .catch(error => {
+            console.error('删除角色失败:', error);
+            showToast('error', '删除角色失败');
+        });
+    }
+}
+
+// 讨论组管理功能
+function loadGroups() {
+    fetchAPI('discussion_groups', 'GET')  // 这会被转换为/v1/discussion_groups
+        .then(data => {
+            // 添加数据格式检查
+            if (!Array.isArray(data)) {
+                console.log('讨论组数据格式不正确:', data);
+                data = []; // 提供默认空数组
+            }
+            
+            const tableBody = document.getElementById('groupsTableBody');
+            tableBody.innerHTML = '';
+            
+            if (data.length === 0) {
+                // 显示空提示
+                const row = document.createElement('tr');
+                row.innerHTML = `
+                    <td colspan="5" class="text-center">暂无讨论组数据</td>
+                `;
+                tableBody.appendChild(row);
+                return;
+            }
+            
+            data.forEach(group => {
+                const row = document.createElement('tr');
+                row.innerHTML = `
+                    <td>${group.name}</td>
+                    <td>${group.topic || '-'}</td>
+                    <td>${getModeDisplayName(group.mode || 'discussion')}</td>
+                    <td>${Array.isArray(group.roles) ? group.roles.length : 0}</td>
+                    <td>
+                        <button class="btn btn-sm btn-outline-success me-1" onclick="startDiscussion(${group.id})">
+                            <i class="fas fa-play"></i>
+                        </button>
+                        <button class="btn btn-sm btn-outline-primary me-1" onclick="editGroup(${group.id})">
+                            <i class="fas fa-edit"></i>
+                        </button>
+                        <button class="btn btn-sm btn-outline-danger" onclick="deleteGroup(${group.id})">
+                            <i class="fas fa-trash-alt"></i>
+                        </button>
+                    </td>
+                `;
+                tableBody.appendChild(row);
+            });
+        })
+        .catch(error => {
+            console.error('获取讨论组失败:', error);
+            // 显示空数据状态
+            const tableBody = document.getElementById('groupsTableBody');
+            tableBody.innerHTML = `
+                <tr>
+                    <td colspan="5" class="text-center text-danger">
+                        获取讨论组数据失败，请稍后重试
+                    </td>
+                </tr>
+            `;
+        });
+}
+
+function loadRolesForGroups() {
+    return fetchAPI('roles', 'GET')
+        .then(data => {
+            // 添加数据格式检查
+            if (!Array.isArray(data)) {
+                console.log('角色数据格式不正确:', data);
+                data = []; // 提供默认空数组
+            }
+            
+            const container = document.getElementById('roleCheckboxes');
+            container.innerHTML = '';
+            
+            if (data.length === 0) {
+                container.innerHTML = '<div class="alert alert-warning">没有可选角色，请先创建角色</div>';
+                return data;
+            }
+            
+            data.forEach(role => {
+                const div = document.createElement('div');
+                div.className = 'form-check me-3 mb-2';
+                div.innerHTML = `
+                    <input class="form-check-input" type="checkbox" name="role_ids" value="${role.id}" id="role-${role.id}">
+                    <label class="form-check-label" for="role-${role.id}">${role.name}</label>
+                `;
+                container.appendChild(div);
+            });
+            
+            return data;
+        })
+        .catch(error => {
+            console.error('获取角色失败:', error);
+            const container = document.getElementById('roleCheckboxes');
+            container.innerHTML = '<div class="alert alert-danger">获取角色失败，请稍后重试</div>';
+            return [];
+        });
+}
+
+function getModeDisplayName(mode) {
+    const modeMap = {
+        'discussion': '普通讨论',
+        'brainstorming': '头脑风暴',
+        'debate': '辩论',
+        'role_playing': '角色扮演',
+        'swot_analysis': 'SWOT分析',
+        'six_thinking_hats': '六顶思考帽'
+    };
+    return modeMap[mode] || mode;
+}
+
+function openAddGroupModal() {
+    // 清空表单
+    document.getElementById('addGroupForm').reset();
+    
+    // 加载角色选项
+    loadRolesForGroups();
+    
+    // 显示模态框
+    new bootstrap.Modal(document.getElementById('addGroupModal')).show();
+}
+
+function saveGroup() {
+    const form = document.getElementById('addGroupForm');
+    const formData = new FormData(form);
+    
+    // 构建JSON数据
+    const data = {
+        role_ids: []
+    };
+    
+    formData.forEach((value, key) => {
+        if (key === 'role_ids') {
+            if (!data.role_ids.includes(parseInt(value))) {
+                data.role_ids.push(parseInt(value));
+            }
+        } else {
+            data[key] = value;
+        }
+    });
+    
+    // 检查是否选择了角色
+    if (data.role_ids.length === 0) {
+        showToast('error', '请至少选择一个角色');
+        return;
+    }
+    
+    // 获取讨论组ID(如果存在)
+    const groupId = form.querySelector('input[name="id"]')?.value;
+    
+    // 确定是创建还是更新
+    const method = groupId ? 'PUT' : 'POST';
+    const endpoint = groupId ? `discussion_groups/${groupId}` : 'discussion_groups';
+    
+    // 发送请求
+    fetchAPI(endpoint, method, data)
+        .then(response => {
+            // 关闭模态框
+            bootstrap.Modal.getInstance(document.getElementById('addGroupModal')).hide();
+            
+            // 重新加载讨论组
+            loadGroups();
+            
+            showToast('success', groupId ? '讨论组更新成功' : '讨论组添加成功');
+        })
+        .catch(error => {
+            console.error(groupId ? '更新讨论组失败:' : '添加讨论组失败:', error);
+            showToast('error', groupId ? '更新讨论组失败' : '添加讨论组失败');
+        });
+}
+
+function editGroup(groupId) {
+    // 获取讨论组详情
+    fetchAPI(`discussion_groups/${groupId}`, 'GET')
+        .then(group => {
+            // 填充表单
+            const form = document.getElementById('addGroupForm');
+            form.elements['name'].value = group.name;
+            form.elements['topic'].value = group.topic || '';
+            form.elements['mode'].value = group.mode;
+            
+            // 加载角色选项
+            loadRolesForGroups().then(() => {
+                // 选中讨论组包含的角色
+                group.role_ids.forEach(roleId => {
+                    const checkbox = form.querySelector(`input[name="role_ids"][value="${roleId}"]`);
+                    if (checkbox) {
+                        checkbox.checked = true;
+                    }
+                });
+            });
+            
+            // 添加讨论组ID到表单
+            const hiddenInput = document.createElement('input');
+            hiddenInput.type = 'hidden';
+            hiddenInput.name = 'id';
+            hiddenInput.value = groupId;
+            form.appendChild(hiddenInput);
+            
+            // 显示模态框
+            new bootstrap.Modal(document.getElementById('addGroupModal')).show();
+        })
+        .catch(error => {
+            console.error('获取讨论组详情失败:', error);
+            showToast('error', '获取讨论组详情失败');
+        });
+}
+
+function deleteGroup(groupId) {
+    if (confirm('确定要删除这个讨论组吗？')) {
+        fetchAPI(`discussion_groups/${groupId}`, 'DELETE')
+        .then(response => {
+                loadGroups();
+                showToast('success', '讨论组删除成功');
+        })
+        .catch(error => {
+            console.error('删除讨论组失败:', error);
+            showToast('error', '删除讨论组失败');
+        });
+    }
+}
+
+function startDiscussion(groupId) {
+    const topic = prompt('请输入讨论主题:');
+    if (topic) {
+        fetch(`/v1/discussions/${groupId}/start`, {  // 更新路径
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({ topic })
+        })
+        .then(response => response.json())
+        .then(data => {
+            // 打开讨论详情页面
+            window.open(`/discussion.html?id=${data.meeting_id}`, '_blank');
+        })
+        .catch(error => {
+            // 处理错误
+        });
+    }
+}
+
+// 通用的提示消息函数
+function showToast(type, message) {
+    // 假设页面中有一个toast容器
+    const toastContainer = document.getElementById('toastContainer');
+    
+    const toast = document.createElement('div');
+    toast.className = `toast align-items-center text-white bg-${type === 'success' ? 'success' : 'danger'} border-0`;
+    toast.setAttribute('role', 'alert');
+    toast.setAttribute('aria-live', 'assertive');
+    toast.setAttribute('aria-atomic', 'true');
+    
+    toast.innerHTML = `
+        <div class="d-flex">
+            <div class="toast-body">
+                ${message}
+            </div>
+            <button type="button" class="btn-close btn-close-white me-2 m-auto" data-bs-dismiss="toast" aria-label="Close"></button>
+        </div>
+    `;
+    
+    toastContainer.appendChild(toast);
+    
+    const bsToast = new bootstrap.Toast(toast);
+    bsToast.show();
+    
+    // 自动删除toast
+    toast.addEventListener('hidden.bs.toast', function() {
+        toast.remove();
+    });
 }
