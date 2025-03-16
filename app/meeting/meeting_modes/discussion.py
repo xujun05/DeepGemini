@@ -23,12 +23,17 @@ class DiscussionMode(BaseMeetingMode):
 这是第一轮讨论，请分享你对这个主题的初步看法和观点。
 请考虑你的专业背景和角色，提供有价值的见解。
 """
+        elif current_round != 1 and current_round != self.max_rounds:
+            return f"""你是{agent_name}，{agent_role}。
+你正在参加一个关于"{meeting_topic}"的讨论。
+这是第{current_round}轮讨论，请根据之前的讨论内容，进一步发展你的观点，或回应其他参与者的意见。
+你可以提出新的见解，也可以对之前的观点进行补充或质疑。
+"""
         else:
             return f"""你是{agent_name}，{agent_role}。
 你正在参加一个关于"{meeting_topic}"的讨论。
-这是第{current_round}轮讨论。
-请根据之前的讨论内容，进一步发展你的观点，或回应其他参与者的意见。
-你可以提出新的见解，也可以对之前的观点进行补充或质疑。
+这是讨论的最后一轮。
+请根据之前的讨论内容，进一步总结你的观点，或回应其他参与者的意见。
 """
     
     def determine_speaking_order(self, agents: List[Dict[str, Any]], 
@@ -68,22 +73,25 @@ class DiscussionMode(BaseMeetingMode):
         
         # 构建摘要提示模板
         prompt_template = f"""
-请对以下关于"{{topic}}"的讨论进行总结。
-讨论内容如下:
-
+请参考以下关于"{{topic}}"的讨论内容:
 {{history}}
 
-请提供一个全面的总结，包括:
-1. 讨论的主要观点
-2. 各方达成的共识（如果有）
-3. 存在的分歧（如果有）
-4. 讨论得出的结论或行动步骤（如果有）
+作为一名会议总结专家，请提供以下内容:
+1. 讨论的主要主题和观点概述（不超过3点）
+2. 讨论中达成的主要共识（如果有）
+3. 存在的主要分歧或不同视角（如果有）
+4. 提出的解决方案或行动建议
+5. 可能需要进一步讨论或研究的问题
 
-这个总结是基于{len(meeting_history)}条消息生成的，涵盖了{estimated_rounds}轮讨论。
+请以清晰、结构化的方式呈现总结，重点突出最重要的内容。
 """
         
-        # 使用LLM生成总结 - 直接传递正确的参数
-        return self.summary_generator.generate_summary(meeting_topic=topic, meeting_history=meeting_history, prompt_template=prompt_template)
+        # 使用统一的总结生成方法
+        return SummaryGenerator.generate_summary(
+            meeting_topic=topic, 
+            meeting_history=meeting_history, 
+            prompt_template=prompt_template
+        )
 
     def _format_history_for_summary(self, meeting_history: List[Dict[str, str]]) -> str:
         """

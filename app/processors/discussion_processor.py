@@ -36,7 +36,11 @@ class DiscussionProcessor:
         group = DiscussionGroup(
             name=group_data.get('name'),
             topic=group_data.get('topic', ''),
-            mode=group_data.get('mode', 'discussion')
+            description=group_data.get('description', ''),
+            mode=group_data.get('mode', 'discussion'),
+            max_rounds=group_data.get('max_rounds', 3),
+            summary_model_id=group_data.get('summary_model_id'),
+            summary_prompt=group_data.get('summary_prompt')
         )
         
         self.db.add(group)
@@ -65,8 +69,16 @@ class DiscussionProcessor:
             group.name = group_data['name']
         if 'topic' in group_data:
             group.topic = group_data['topic']
+        if 'description' in group_data:
+            group.description = group_data['description']
         if 'mode' in group_data:
             group.mode = group_data['mode']
+        if 'max_rounds' in group_data:
+            group.max_rounds = group_data['max_rounds']
+        if 'summary_model_id' in group_data:
+            group.summary_model_id = group_data['summary_model_id']
+        if 'summary_prompt' in group_data:
+            group.summary_prompt = group_data['summary_prompt']
         
         # 更新角色关联
         if 'role_ids' in group_data:
@@ -103,9 +115,21 @@ class DiscussionProcessor:
         return {
             "id": group.id,
             "name": group.name,
-            "topic": group.topic,
+            "topic": group.topic or "",
+            "description": group.description or "",
             "mode": group.mode,
-            "roles": [{"id": role.id, "name": role.name} for role in group.roles],
+            "max_rounds": group.max_rounds,
+            "summary_model_id": group.summary_model_id,
+            "summary_prompt": group.summary_prompt or "",
+            "created_at": group.created_at.isoformat() if group.created_at else None,
+            "updated_at": group.updated_at.isoformat() if group.updated_at else None,
+            "roles": [
+                {
+                    "id": role.id,
+                    "name": role.name
+                }
+                for role in group.roles
+            ],
             "role_ids": [role.id for role in group.roles]
         }
     
@@ -197,7 +221,7 @@ class DiscussionProcessor:
         
         # 结束讨论并获取结果
         logger.info(f"获取讨论结果: meeting_id={meeting_id}")
-        result = self.adapter.end_discussion(meeting_id)
+        result = await self.adapter.end_meeting(meeting_id)
         
         # 打印完整的讨论历史和总结
         self._print_full_discussion(result)
@@ -325,10 +349,19 @@ class DiscussionProcessor:
         
         # 获取总结
         logger.info(f"流式模式: 获取讨论总结")
-        result = self.adapter.end_discussion(meeting_id)
-        summary = str(result.get("summary", "讨论已完成，但未生成总结。"))
+        result = await self.adapter.end_meeting(meeting_id)
         
-        # 发送总结信息
+        # 确保总结正确提取和转换为字符串
+        if isinstance(result, dict):
+            # 从字典中提取总结内容
+            summary = str(result.get("summary", "讨论已完成，但未生成总结。"))
+            logger.info(f"获取到总结，长度为 {len(summary)} 字符")
+        else:
+            # 如果结果不是字典，尝试将整个结果作为总结
+            summary = str(result) if result else "讨论已完成，但未生成总结。"
+            logger.info(f"获取到非字典格式的总结，长度为 {len(summary)} 字符")
+        
+        # 发送总结信息标题
         summary_info = {
             "id": f"{conversation_id}-summary",
             "object": "chat.completion.chunk",
@@ -340,11 +373,15 @@ class DiscussionProcessor:
                 "finish_reason": None
             }]
         }
-        yield f"data: {json.dumps(summary_info, ensure_ascii=False)}\n\n"
+        logger.info("发送总结标题")
+        yield f"data: {json.dumps(summary_info, ensure_ascii=False)}\n\n".encode('utf-8')
         await asyncio.sleep(0.3)
         
         # 流式发送总结内容
-        chunk_size = 10  # 总结的块大小可以大一些
+        # 使用更小的块大小以确保流式传输效果
+        chunk_size = 5  
+        logger.info(f"开始流式发送总结内容，总大小 {len(summary)} 字符，分 {len(summary)//chunk_size + 1} 块")
+        
         for j in range(0, len(summary), chunk_size):
             chunk = summary[j:j+chunk_size]
             summary_chunk = {
@@ -358,23 +395,42 @@ class DiscussionProcessor:
                     "finish_reason": None
                 }]
             }
-            yield f"data: {json.dumps(summary_chunk, ensure_ascii=False)}\n\n"
-            await asyncio.sleep(0.05)
+            yield f"data: {json.dumps(summary_chunk, ensure_ascii=False)}\n\n".encode('utf-8')
+            # 减少延迟以加快传输
+            await asyncio.sleep(0.02)
+        
+        logger.info("总结内容发送完成")
+        
+        # 确保发送最终的换行
+        final_newline = {
+            "id": f"{conversation_id}-summary-end",
+            "object": "chat.completion.chunk",
+            "created": int(time.time()),
+            "model": "discussion-group",
+            "choices": [{
+                "index": 0,
+                "delta": {"content": "\n\n"},
+                "finish_reason": None
+            }]
+        }
+        yield f"data: {json.dumps(final_newline, ensure_ascii=False)}\n\n".encode('utf-8')
         
         # 发送会话结束事件
         end_event = {
             "id": f"{conversation_id}-end",
             "object": "chat.completion.chunk",
             "created": int(time.time()),
-            "model": "discussion-group",
+            "model": "discussion-group", 
             "choices": [{
                 "index": 0,
                 "delta": {},
                 "finish_reason": "stop"
             }]
         }
-        yield f"data: {json.dumps(end_event, ensure_ascii=False)}\n\n"
-        yield "data: [DONE]\n\n"
+        logger.info("发送结束标记")
+        yield f"data: {json.dumps(end_event, ensure_ascii=False)}\n\n".encode('utf-8')
+        yield "data: [DONE]\n\n".encode('utf-8')
+        logger.info("流式处理完成")
     
     def _print_latest_round_content(self, meeting_id: str):
         """打印最新一轮的对话内容"""

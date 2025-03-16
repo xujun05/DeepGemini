@@ -610,10 +610,37 @@
                             </select>
                         </div>
                         <div class="mb-3">
+                            <label class="form-label" data-translate="summaryModel">总结模型</label>
+                            <select class="form-select" name="summary_model_id">
+                                <option value="" data-translate="useDefaultModel">使用默认模型</option>
+                                <!-- 模型选项将通过JavaScript动态添加 -->
+                            </select>
+                            <small class="form-text text-muted" data-translate="summaryModelHint">
+                                选择用于生成会议总结的模型，留空则使用系统默认模型
+                            </small>
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label" data-translate="customSummaryPrompt">自定义总结提示(可选)</label>
+                            <div class="mb-2">
+                                <button type="button" class="btn btn-sm btn-outline-secondary insert-template-btn" data-translate="insertTemplate">插入模板</button>
+                            </div>
+                            <textarea class="form-control" name="summary_prompt" rows="5" placeholder="留空则使用默认模板"></textarea>
+                            <small class="form-text text-muted" data-translate="summaryPromptTip">
+                                可以使用 {topic}, {history_text}, {meeting_topic} 等占位符引用会议内容
+                            </small>
+                        </div>
+                        <div class="mb-3">
                             <label class="form-label" data-translate="selectRoles">选择角色</label>
                             <div id="roleCheckboxes" class="d-flex flex-wrap">
                                 <!-- 角色选项将通过JavaScript动态添加 -->
                             </div>
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label" data-translate="maxRounds">最大讨论轮数</label>
+                            <input type="number" class="form-control" name="max_rounds" min="1" max="20" value="3">
+                            <small class="form-text text-muted" data-translate="maxRoundsHint">
+                                设置AI智能体之间的最大讨论轮数，每轮每个智能体会发言一次
+                            </small>
                         </div>
                     </form>
                 </div>

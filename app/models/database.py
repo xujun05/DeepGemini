@@ -116,6 +116,8 @@ class DiscussionGroup(Base):
     description = Column(Text, nullable=True)
     mode = Column(String(50), nullable=False, default="discussion")  # 会议模式
     max_rounds = Column(Integer, default=3)  # 最大轮数
+    summary_model_id = Column(Integer, ForeignKey('models.id'), nullable=True)  # 总结使用的模型
+    summary_prompt = Column(Text, nullable=True)  # 自定义总结提示模板
     created_at = Column(DateTime, default=datetime.now)
     updated_at = Column(DateTime, nullable=True)
     
@@ -123,6 +125,7 @@ class DiscussionGroup(Base):
     roles = relationship("Role", 
                         secondary=role_discussion_group, 
                         back_populates="discussion_groups")
+    summary_model = relationship("Model", foreign_keys=[summary_model_id])
 
 # Create all tables
 def init_db():

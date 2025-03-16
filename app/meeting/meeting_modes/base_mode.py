@@ -5,10 +5,17 @@ from app.meeting.utils.summary_generator import SummaryGenerator
 class BaseMeetingMode(ABC):
     """会议模式基类"""
     
-    def __init__(self, name: str, description: str):
+    def __init__(self, name: str, description: str, max_rounds: int = 3):
         self.name = name
         self.description = description
-        self.max_rounds = 3  # 默认最大轮数
+        self.max_rounds = max_rounds  # 默认最大轮数，但允许在初始化时设置
+    
+    def set_max_rounds(self, max_rounds: int):
+        """设置最大轮数"""
+        if max_rounds > 0:
+            self.max_rounds = max_rounds
+            return True
+        return False
     
     @abstractmethod
     def get_agent_prompt(self, agent_name: str, agent_role: str, 
@@ -25,8 +32,12 @@ class BaseMeetingMode(ABC):
     @abstractmethod
     def should_end_meeting(self, rounds_completed: int, 
                           meeting_history: List[Dict[str, Any]]) -> bool:
-        """判断会议是否应该结束"""
-        pass
+        """
+        判断会议是否应该结束
+        基类实现始终返回False，让Meeting类负责基于max_rounds终止会议
+        """
+        # 让Meeting类基于self.max_rounds决定会议结束
+        return False
     
     def get_summary_prompt_template(self) -> str:
         """获取总结提示模板"""

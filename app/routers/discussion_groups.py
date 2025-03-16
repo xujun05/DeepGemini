@@ -41,6 +41,12 @@ def get_discussion_group(group_id: int, db: Session = Depends(get_db)):
 @router.post("", response_model=Dict[str, Any])
 def create_discussion_group(group_data: Dict[str, Any], db: Session = Depends(get_db)):
     """创建新讨论组"""
+    # 验证必要字段
+    required_fields = ["name", "mode", "role_ids"]
+    for field in required_fields:
+        if field not in group_data:
+            raise HTTPException(status_code=400, detail=f"缺少必要字段: {field}")
+    
     processor = DiscussionProcessor(db)
     try:
         return processor.create_group(group_data)

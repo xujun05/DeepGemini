@@ -2,6 +2,7 @@ from typing import List, Dict, Any
 import random
 
 from app.meeting.meeting_modes.base_mode import BaseMeetingMode
+from app.meeting.utils.summary_generator import SummaryGenerator
     
 class BrainstormingMode(BaseMeetingMode):
     """头脑风暴模式"""
@@ -27,17 +28,16 @@ class BrainstormingMode(BaseMeetingMode):
 
 请根据你的专业背景和角色，提供至少3个相关的创意或解决方案。
 """
+        elif current_round != 1 and current_round != self.max_rounds:
+            return f"""你是{agent_name}，{agent_role}。
+你正在参加一个关于"{meeting_topic}"的头脑风暴会议。
+这是讨论的中间阶段，请根据之前的讨论内容，进一步发展想法，或提出全新的创意。
+"""
         else:
             return f"""你是{agent_name}，{agent_role}。
 你正在参加一个关于"{meeting_topic}"的头脑风暴会议。
-这是第{current_round}轮讨论。
-请根据之前的讨论内容，进一步发展想法，或提出全新的创意。
-你可以：
-1. 结合或改进其他参与者提出的想法
-2. 提出全新的、可能看起来很疯狂的想法
-3. 思考如何将这些想法付诸实践
-
-请提出至少2个新想法或对现有想法的改进。
+这是最后一轮讨论。
+请根据之前的讨论内容，总结出你认为最有潜力的想法。
 """
     
     def determine_speaking_order(self, agents: List[Dict[str, Any]], 
@@ -57,45 +57,12 @@ class BrainstormingMode(BaseMeetingMode):
     def summarize_meeting(self, meeting_topic: str, 
                          meeting_history: List[Dict[str, Any]]) -> str:
         """汇总会议结果"""
-        # 构建历史文本
-        history_text = ""
-        for entry in meeting_history:
-            if entry["agent"] != "system":  # 排除系统消息
-                history_text += f"[{entry['agent']}]: {entry['content']}\n\n"
-        
-        # 使用模板生成总结提示
-        summary_prompt = self.get_summary_prompt_template().format(
+        # 使用统一的总结生成方法
+        return SummaryGenerator.generate_summary(
             meeting_topic=meeting_topic,
-            history_text=history_text
+            meeting_history=meeting_history,
+            prompt_template=self.get_summary_prompt_template()
         )
-        
-        # 这里应该调用一个模型来生成总结
-        # 但为了简单起见，我们直接返回一个模板总结
-        return f"""
-# 关于"{meeting_topic}"的头脑风暴总结
-
-## 产生的创意和想法
-- 参与者提出了多种创新想法
-- 涵盖了多个不同的解决方向
-
-## 最有潜力的想法
-- 一些想法得到了多位参与者的认同和发展
-- 这些想法具有实施的可能性
-
-## 独特或创新的视角
-- 一些非常规的想法提供了新的思考角度
-- 这些想法可能需要进一步探索
-
-## 可能的下一步行动
-- 对最有潜力的想法进行更详细的评估
-- 考虑如何将这些想法组合或改进
-
-## 需要进一步探索的领域
-- 一些技术或实施细节需要更深入的研究
-- 可能需要进行小规模测试或原型开发
-
-这次头脑风暴产生了大量创意，为"{meeting_topic}"提供了多种可能的解决方案。
-"""
     
     def get_summary_prompt_template(self) -> str:
         """获取总结提示模板"""

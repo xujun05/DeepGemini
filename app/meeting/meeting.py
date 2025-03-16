@@ -4,22 +4,38 @@ import uuid
 import logging
 
 from app.meeting.agents.agent import Agent
+from app.meeting.meeting_modes.base_mode import BaseMeetingMode
 
 logger = logging.getLogger(__name__)
 
 class Meeting:
     """会议类，用于管理多智能体会议"""
     
-    def __init__(self, topic: str, agents: List[Agent], mode: Any):
-        self.id = str(uuid.uuid4())
+    def __init__(self, id: str, topic: str, mode: BaseMeetingMode, max_rounds: int = 3):
+        """
+        初始化会议实例
+        
+        参数:
+            id: 会议ID
+            topic: 会议主题
+            mode: 会议模式
+            max_rounds: 最大讨论轮数
+        """
+        self.id = id
         self.topic = topic
-        self.agents = agents
         self.mode = mode
+        
+        # 确保最大轮数一致 - 优先使用传入的值，但也更新模式的值
+        self.max_rounds = max_rounds
+        self.mode.set_max_rounds(max_rounds)
+        
+        self.agents = []
         self.meeting_history = []
+        self.status = "未开始"
         self.current_round = 1
-        self.status = "进行中"  # 进行中、已结束
         self.start_time = datetime.now()
         self.end_time = None
+        self.group_info = None  # 用于存储讨论组信息
         
     def add_message(self, agent_name: str, content: str):
         """添加消息到会议历史记录"""
@@ -29,8 +45,13 @@ class Meeting:
             "timestamp": datetime.now().isoformat()
         })
         
-    def conduct_round(self) -> Dict[str, Any]:
+    def conduct_round(self) -> List[Dict[str, Any]]:
         """进行一轮讨论"""
+        # 检查讨论是否已经完成
+        if self.current_round > self.max_rounds:  # 使用自定义的最大轮数
+            self.status = "已结束"
+            return []
+        
         if self.status == "已结束":
             return {"status": "已结束", "message": "会议已结束"}
         
@@ -64,8 +85,8 @@ class Meeting:
             # 添加到会议历史
             self.add_message(agent.name, response)
         
-        # 检查是否应该结束会议
-        if self.mode.should_end_meeting(self.current_round, self.meeting_history):
+        # 更新结束检查逻辑 - 同时考虑轮数和模式自定义条件
+        if self.current_round >= self.max_rounds:
             self._end_meeting()
             return {"status": "已结束", "message": "会议已结束"}
         
@@ -112,24 +133,20 @@ class Meeting:
         return context
     
     def to_dict(self) -> Dict[str, Any]:
-        """将会议转换为字典"""
+        """将会议对象转换为字典"""
+        summary = self.get_summary()  # 获取会议总结
+        
         return {
             "id": self.id,
             "topic": self.topic,
-            "agents": [
-                {
-                    "name": agent.name,
-                    "role": agent.role_description,
-                    "personality": agent.personality
-                }
-                for agent in self.agents
-            ],
             "mode": self.mode.name,
-            "meeting_history": self.meeting_history,
-            "current_round": self.current_round,
             "status": self.status,
-            "start_time": self.start_time.isoformat(),
-            "end_time": self.end_time.isoformat() if self.end_time else None
+            "current_round": self.current_round,
+            "max_rounds": self.max_rounds,
+            "start_time": self.start_time.isoformat() if self.start_time else None,
+            "end_time": self.end_time.isoformat() if self.end_time else None,
+            "history": self.meeting_history,
+            "summary": summary  # 确保总结字段被包含
         }
     
     def get_context(self):

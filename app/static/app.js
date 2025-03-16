@@ -99,7 +99,16 @@ const translations = {
         removeParameter: 'Remove',
         string: 'String',
         number: 'Number',
-        boolean: 'Boolean'
+        boolean: 'Boolean',
+        summaryModel: 'Summary Model',
+        useDefaultModel: 'Use Default Model',
+        customSummaryPrompt: 'Custom Summary Prompt (Optional)',
+        summaryPromptTip: 'You can use placeholders like {topic}, {history_text}, {meeting_topic}',
+        summaryModelHint: 'Select a model for generating meeting summaries, leave empty to use system default',
+        insertTemplate: 'Insert Template',
+        promptTemplateCopied: 'Template inserted in the textarea',
+        maxRounds: 'Maximum Discussion Rounds',
+        maxRoundsHint: 'Set the maximum number of discussion rounds between AI agents, each agent speaks once per round'
     },
     zh: {
         modelManagement: '模型管理',
@@ -191,7 +200,16 @@ const translations = {
         removeParameter: '删除',
         string: '字符串',
         number: '数字',
-        boolean: '布尔值'
+        boolean: '布尔值',
+        summaryModel: '总结模型',
+        useDefaultModel: '使用默认模型',
+        customSummaryPrompt: '自定义总结提示(可选)',
+        summaryPromptTip: '可以使用 {topic}, {history_text}, {meeting_topic} 等占位符引用会议内容',
+        summaryModelHint: '选择用于生成会议总结的模型，留空则使用系统默认模型',
+        insertTemplate: '插入模板',
+        promptTemplateCopied: '模板已插入文本框',
+        maxRounds: '最大讨论轮数',
+        maxRoundsHint: '设置AI智能体之间的最大讨论轮数，每轮每个智能体会发言一次'
     }
 };
 
@@ -233,6 +251,20 @@ document.addEventListener('DOMContentLoaded', function() {
     // 添加角色和讨论组初始化
     loadRoles();
     loadGroups();
+    
+    // 添加讨论组按钮点击事件
+    document.querySelector('[data-action="addGroup"]')?.addEventListener('click', showAddGroupModal);
+    
+    // 初始化语言 - 使用正确的方法
+    applyLanguage(getCurrentLanguage());
+    
+    // 为模态框中的插入模板按钮添加事件处理
+    document.addEventListener('click', function(event) {
+        if (event.target.matches('button[onclick="insertTemplatePrompt()"]')) {
+            event.preventDefault();
+            insertTemplatePrompt();
+        }
+    });
 });
 
 // API calls
@@ -2116,70 +2148,82 @@ function saveGroup() {
     const form = document.getElementById('addGroupForm');
     const formData = new FormData(form);
     
-    // 构建JSON数据
+    // 获取选中的角色ID
+    const roleIds = Array.from(formData.getAll('role_ids')).map(id => parseInt(id));
+    
+    // 构建请求数据
     const data = {
-        role_ids: []
+        name: formData.get('name'),
+        topic: formData.get('topic'),
+        mode: formData.get('mode'),
+        role_ids: roleIds,
+        max_rounds: parseInt(formData.get('max_rounds')) || 3, // 确保max_rounds是数字
+        summary_model_id: formData.get('summary_model_id') ? parseInt(formData.get('summary_model_id')) : null,
+        summary_prompt: formData.get('summary_prompt')
     };
     
-    formData.forEach((value, key) => {
-        if (key === 'role_ids') {
-            if (!data.role_ids.includes(parseInt(value))) {
-                data.role_ids.push(parseInt(value));
-            }
-        } else {
-            data[key] = value;
-        }
-    });
+    // 确保max_rounds在有效范围内
+    if (data.max_rounds < 1) data.max_rounds = 1;
+    if (data.max_rounds > 20) data.max_rounds = 20;
     
-    // 检查是否选择了角色
-    if (data.role_ids.length === 0) {
-        showToast('error', '请至少选择一个角色');
-        return;
-    }
-    
-    // 获取讨论组ID(如果存在)
+    // 获取组ID（如果是编辑）
     const groupId = form.querySelector('input[name="id"]')?.value;
     
-    // 确定是创建还是更新
-    const method = groupId ? 'PUT' : 'POST';
-    const endpoint = groupId ? `discussion_groups/${groupId}` : 'discussion_groups';
-    
     // 发送请求
-    fetchAPI(endpoint, method, data)
-        .then(response => {
-            // 关闭模态框
-            bootstrap.Modal.getInstance(document.getElementById('addGroupModal')).hide();
-            
-            // 重新加载讨论组
-            loadGroups();
-            
-            showToast('success', groupId ? '讨论组更新成功' : '讨论组添加成功');
-        })
-        .catch(error => {
-            console.error(groupId ? '更新讨论组失败:' : '添加讨论组失败:', error);
-            showToast('error', groupId ? '更新讨论组失败' : '添加讨论组失败');
-        });
+    const url = groupId ? `discussion_groups/${groupId}` : 'discussion_groups';
+    const method = groupId ? 'PUT' : 'POST';
+    
+    fetchAPI(url, method, data)
+    .then(response => {
+        // 关闭模态框
+        bootstrap.Modal.getInstance(document.getElementById('addGroupModal')).hide();
+        
+        // 重新加载讨论组列表
+        loadGroups();
+        
+        // 显示成功消息
+        showToast('success', groupId ? '讨论组更新成功' : '讨论组创建成功');
+    })
+    .catch(error => {
+        console.error('保存讨论组失败:', error);
+        showToast('error', '保存讨论组失败');
+    });
 }
 
 function editGroup(groupId) {
-    // 获取讨论组详情
-    fetchAPI(`discussion_groups/${groupId}`, 'GET')
-        .then(group => {
-            // 填充表单
-            const form = document.getElementById('addGroupForm');
+    fetchAPI(`discussion_groups/${groupId}`)
+    .then(group => {
+        // 重置表单
+        const form = document.getElementById('addGroupForm');
+        form.reset();
+        
+        // 加载角色和模型
+        loadRolesForGroupModal();
+        loadModelsForGroupModal();
+        
+        // 设置表单值
+        setTimeout(() => {
             form.elements['name'].value = group.name;
             form.elements['topic'].value = group.topic || '';
             form.elements['mode'].value = group.mode;
+            form.elements['max_rounds'].value = group.max_rounds || 3; // 设置讨论轮数
             
-            // 加载角色选项
-            loadRolesForGroups().then(() => {
-                // 选中讨论组包含的角色
-                group.role_ids.forEach(roleId => {
-                    const checkbox = form.querySelector(`input[name="role_ids"][value="${roleId}"]`);
-                    if (checkbox) {
-                        checkbox.checked = true;
-                    }
-                });
+            // 设置总结模型
+            if (group.summary_model_id) {
+                form.elements['summary_model_id'].value = group.summary_model_id;
+            }
+            
+            // 设置自定义总结提示
+            if (group.summary_prompt) {
+                form.elements['summary_prompt'].value = group.summary_prompt;
+            }
+            
+            // 选中讨论组包含的角色
+            group.role_ids.forEach(roleId => {
+                const checkbox = form.querySelector(`input[name="role_ids"][value="${roleId}"]`);
+                if (checkbox) {
+                    checkbox.checked = true;
+                }
             });
             
             // 添加讨论组ID到表单
@@ -2191,11 +2235,12 @@ function editGroup(groupId) {
             
             // 显示模态框
             new bootstrap.Modal(document.getElementById('addGroupModal')).show();
-        })
-        .catch(error => {
-            console.error('获取讨论组详情失败:', error);
-            showToast('error', '获取讨论组详情失败');
-        });
+        }, 100); // 给一点时间让下拉框和复选框加载完成
+    })
+    .catch(error => {
+        console.error('获取讨论组详情失败:', error);
+        showToast('error', '获取讨论组详情失败');
+    });
 }
 
 function deleteGroup(groupId) {
@@ -2261,5 +2306,167 @@ function showToast(type, message) {
     // 自动删除toast
     toast.addEventListener('hidden.bs.toast', function() {
         toast.remove();
+    });
+}
+
+// 初始化讨论组模态框
+function showAddGroupModal() {
+    const form = document.getElementById('addGroupForm');
+    form.reset();
+    
+    // 清空隐藏的ID字段（如果有）
+    const hiddenInput = form.querySelector('input[name="id"]');
+    if (hiddenInput) {
+        hiddenInput.remove();
+    }
+    
+    // 加载角色和模型
+    loadRolesForGroupModal();
+    loadModelsForGroupModal();
+    
+    // 显示模态框
+    new bootstrap.Modal(document.getElementById('addGroupModal')).show();
+}
+
+// 加载角色复选框
+function loadRolesForGroupModal() {
+    fetchAPI('roles')
+    .then(roles => {
+        const container = document.getElementById('roleCheckboxes');
+        container.innerHTML = '';
+        
+        roles.forEach(role => {
+            const checkboxDiv = document.createElement('div');
+            checkboxDiv.className = 'form-check me-3 mb-2';
+            
+            const checkbox = document.createElement('input');
+            checkbox.type = 'checkbox';
+            checkbox.className = 'form-check-input';
+            checkbox.name = 'role_ids';
+            checkbox.value = role.id;
+            checkbox.id = `role_${role.id}`;
+            
+            const label = document.createElement('label');
+            label.className = 'form-check-label';
+            label.htmlFor = `role_${role.id}`;
+            label.textContent = role.name;
+            
+            checkboxDiv.appendChild(checkbox);
+            checkboxDiv.appendChild(label);
+            container.appendChild(checkboxDiv);
+        });
+    })
+    .catch(error => {
+        console.error('获取角色失败:', error);
+        showToast('error', '获取角色失败');
+    });
+}
+
+// 加载模型下拉框 - 参考现有代码方式加载模型
+function loadModelsForGroupModal() {
+    fetchAPI('model_configs', 'GET')
+    .then(data => {
+        // 添加数据格式检查
+        if (!Array.isArray(data)) {
+            console.log('模型配置数据格式不正确:', data);
+            data = []; // 提供默认空数组
+        }
+        
+        console.log('获取到的模型配置数据:', data);
+        
+        const select = document.querySelector('#addGroupForm select[name="summary_model_id"]');
+        
+        // 清空现有选项并添加默认选项
+        select.innerHTML = '<option value="" data-translate="useDefaultModel">使用默认模型</option>';
+        
+        // 检查是否有可用模型
+        if (data.length === 0) {
+            const option = document.createElement('option');
+            option.value = "";
+            option.textContent = "请先添加模型";
+            option.disabled = true;
+            select.appendChild(option);
+        } else {
+            // 填充下拉列表，标记第一个为选中状态
+            data.forEach((model, index) => {
+                const option = document.createElement('option');
+                option.value = model.id;
+                option.textContent = model.name;
+                
+                // 将第一个有效模型设为默认选中
+                if (index === 0) {
+                    option.selected = true;
+                }
+                
+                select.appendChild(option);
+            });
+        }
+    })
+    .catch(error => {
+        console.error('获取模型配置失败:', error);
+        showToast('error', '获取模型配置失败');
+        
+        // 添加一个默认选项以防API调用失败
+        const select = document.querySelector('#addGroupForm select[name="summary_model_id"]');
+        select.innerHTML = '<option value="" data-translate="useDefaultModel">使用默认模型</option>';
+    });
+}
+
+// 插入总结提示模板函数定义
+function insertTemplatePrompt() {
+    const textarea = document.querySelector('#addGroupForm textarea[name="summary_prompt"]');
+    const templatePrompt = `# 关于"{meeting_topic}"的会议总结
+
+请根据以下会议记录，生成一个结构化的总结：
+
+{history_text}
+
+请提供以下内容：
+1. 讨论的主要主题和观点（不超过3点）
+2. 讨论中达成的主要共识（如果有）
+3. 存在的主要分歧或不同视角（如果有）
+4. 提出的解决方案或行动建议
+5. 需要进一步讨论或研究的问题
+
+请使用清晰、专业的语言，以结构化的方式呈现总结内容。`;
+    
+    textarea.value = templatePrompt;
+    textarea.focus();
+    
+    // 显示成功提示
+    showToast('success', translations[getCurrentLanguage()].promptTemplateCopied);
+}
+
+// 获取当前语言
+function getCurrentLanguage() {
+    return localStorage.getItem('language') || 'zh';
+}
+
+// 在模态框显示后添加事件监听器
+document.getElementById('addGroupModal').addEventListener('shown.bs.modal', function() {
+    // 为插入模板按钮添加事件监听器
+    document.querySelector('.insert-template-btn').addEventListener('click', insertTemplatePrompt);
+});
+
+// 添加applyLanguage函数定义（如果尚未存在）
+function applyLanguage(lang) {
+    // 更新当前语言
+    currentLanguage = lang;
+    localStorage.setItem('language', lang);
+    
+    // 更新所有带有data-translate属性的元素
+    document.querySelectorAll('[data-translate]').forEach(el => {
+        const key = el.getAttribute('data-translate');
+        if (translations[lang] && translations[lang][key]) {
+            // 对于input和textarea，更新placeholder
+            if (el.tagName === 'INPUT' || el.tagName === 'TEXTAREA') {
+                if (el.hasAttribute('placeholder')) {
+                    el.placeholder = translations[lang][key];
+                }
+            } else {
+                // 对于其他元素，更新内容
+                el.textContent = translations[lang][key];
+            }
+        }
     });
 }

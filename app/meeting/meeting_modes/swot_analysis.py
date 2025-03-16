@@ -1,17 +1,16 @@
 from typing import List, Dict, Any
 from .base_mode import BaseMeetingMode
-from langchain_openai import ChatOpenAI
-from langchain.schema import HumanMessage
+from app.meeting.utils.summary_generator import SummaryGenerator
 
 class SWOTAnalysisMode(BaseMeetingMode):
     """SWOT分析会议模式"""
     
-    def __init__(self):
+    def __init__(self, max_rounds: int = 4):
         super().__init__(
             name="SWOT分析",
-            description="对主题进行优势(Strengths)、劣势(Weaknesses)、机会(Opportunities)和威胁(Threats)的系统性分析。"
+            description="对主题进行优势(Strengths)、劣势(Weaknesses)、机会(Opportunities)和威胁(Threats)的系统性分析。",
+            max_rounds=max_rounds  # 为SWOT分析设置默认4轮
         )
-        self.max_rounds = 4  # 4轮分别对应SWOT四个方面
         self.swot_aspects = ["优势(Strengths)", "劣势(Weaknesses)", 
                            "机会(Opportunities)", "威胁(Threats)"]
     
@@ -51,36 +50,22 @@ class SWOTAnalysisMode(BaseMeetingMode):
     def summarize_meeting(self, meeting_topic: str, 
                          meeting_history: List[Dict[str, Any]]) -> str:
         """汇总SWOT分析会议的结果"""
-        # 使用LLM生成会议总结
-        llm = ChatOpenAI(model_name="gemini-2.0-pro-exp-02-05", temperature=0.3)
-        
-        # 构建会议历史文本，按SWOT四个方面组织
-        history_by_round = {}
-        for entry in meeting_history:
-            round_num = entry.get("round", 0)
-            if round_num not in history_by_round:
-                history_by_round[round_num] = []
-            history_by_round[round_num].append(entry)
-        
-        # 构建SWOT结构化历史
-        swot_history = ""
-        for round_num in range(1, self.max_rounds + 1):
-            if round_num in history_by_round:
-                aspect_index = round_num - 1
-                if aspect_index < len(self.swot_aspects):
-                    swot_history += f"\n## {self.swot_aspects[aspect_index]}\n\n"
-                    for entry in history_by_round[round_num]:
-                        if entry["agent"] != "system":  # 排除系统消息
-                            swot_history += f"[{entry['agent']}]: {entry['content']}\n\n"
-        
-        # 构建总结提示
-        prompt = f"""
+        # 使用统一的总结生成方法
+        return SummaryGenerator.generate_summary(
+            meeting_topic=meeting_topic,
+            meeting_history=meeting_history,
+            prompt_template=self.get_summary_prompt_template()
+        )
+    
+    def get_summary_prompt_template(self) -> str:
+        """获取SWOT分析的总结提示模板"""
+        return """
 你是一个战略分析专家。请对以下关于"{meeting_topic}"的SWOT分析会议进行总结。
 会议按照优势(Strengths)、劣势(Weaknesses)、机会(Opportunities)和威胁(Threats)四个方面进行了讨论。
 
 会议记录如下:
 
-{swot_history}
+{history_text}
 
 请提供以下内容:
 1. 每个SWOT方面的关键点概括（每个方面3-5点）
@@ -89,7 +74,4 @@ class SWOTAnalysisMode(BaseMeetingMode):
 4. 可能需要进一步探讨的领域或问题
 
 请以表格或列表形式呈现SWOT矩阵，然后提供详细的战略分析和建议。
-"""
-        
-        response = llm.invoke([HumanMessage(content=prompt)])
-        return response.content 
+""" 

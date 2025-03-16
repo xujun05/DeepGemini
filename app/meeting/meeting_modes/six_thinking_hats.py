@@ -1,17 +1,17 @@
 from typing import List, Dict, Any
 from .base_mode import BaseMeetingMode
-from langchain_openai import ChatOpenAI
-from langchain.schema import HumanMessage
+from app.meeting.utils.summary_generator import SummaryGenerator
 
 class SixThinkingHatsMode(BaseMeetingMode):
     """六顶思考帽会议模式"""
     
-    def __init__(self):
+    def __init__(self, max_rounds: int = 6):
         super().__init__(
             name="六顶思考帽",
-            description="使用爱德华·德博诺的六顶思考帽方法，从六个不同角度思考问题。"
+            description="使用爱德华·德博诺的六顶思考帽方法，从六个不同角度思考问题。",
+            max_rounds=6  # 为六顶思考帽模式设置默认6轮
         )
-        self.max_rounds = 6  # 六顶帽子对应六轮
+        self.max_rounds = max_rounds  # 六顶帽子对应六轮
         self.hats = [
             {"color": "白色", "focus": "事实和信息", "description": "关注客观事实和数据，不做判断和推测"},
             {"color": "红色", "focus": "感受和直觉", "description": "表达直觉、情感和感受，不需要解释理由"},
@@ -61,37 +61,22 @@ class SixThinkingHatsMode(BaseMeetingMode):
     def summarize_meeting(self, meeting_topic: str, 
                          meeting_history: List[Dict[str, Any]]) -> str:
         """汇总六顶思考帽会议的结果"""
-        # 使用LLM生成会议总结
-        llm = ChatOpenAI(model_name="gemini-2.0-pro-exp-02-05", temperature=0.3)
-        
-        # 构建会议历史文本，按六顶思考帽组织
-        history_by_round = {}
-        for entry in meeting_history:
-            round_num = entry.get("round", 0)
-            if round_num not in history_by_round:
-                history_by_round[round_num] = []
-            history_by_round[round_num].append(entry)
-        
-        # 构建结构化历史
-        hats_history = ""
-        for round_num in range(1, self.max_rounds + 1):
-            if round_num in history_by_round:
-                hat_index = round_num - 1
-                if hat_index < len(self.hats):
-                    current_hat = self.hats[hat_index]
-                    hats_history += f"\n## {current_hat['color']}思考帽 ({current_hat['focus']})\n\n"
-                    for entry in history_by_round[round_num]:
-                        if entry["agent"] != "system":  # 排除系统消息
-                            hats_history += f"[{entry['agent']}]: {entry['content']}\n\n"
-        
-        # 构建总结提示
-        prompt = f"""
+        # 使用统一的总结生成方法
+        return SummaryGenerator.generate_summary(
+            meeting_topic=meeting_topic,
+            meeting_history=meeting_history,
+            prompt_template=self.get_summary_prompt_template()
+        )
+    
+    def get_summary_prompt_template(self) -> str:
+        """获取六顶思考帽的总结提示模板"""
+        return """
 你是一个思维方法专家。请对以下关于"{meeting_topic}"的六顶思考帽会议进行总结。
 会议按照六顶思考帽的方法进行了讨论：白帽(事实)、红帽(情感)、黑帽(风险)、黄帽(积极)、绿帽(创意)和蓝帽(整合)。
 
 会议记录如下:
 
-{hats_history}
+{history_text}
 
 请提供以下内容:
 1. 每个思考帽下的关键见解概括（每个帽子3-5点）
@@ -100,7 +85,4 @@ class SixThinkingHatsMode(BaseMeetingMode):
 4. 思考过程中发现的关键矛盾或需要进一步探讨的问题
 
 请以结构化的方式呈现总结，确保每个思考帽的视角都得到充分体现，并提供整合性的结论。
-"""
-        
-        response = llm.invoke([HumanMessage(content=prompt)])
-        return response.content 
+""" 

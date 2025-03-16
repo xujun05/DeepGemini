@@ -17,6 +17,7 @@ from app.meeting.meeting_modes.role_playing import RolePlayingMode
 from app.meeting.meeting_modes.swot_analysis import SWOTAnalysisMode
 from app.meeting.meeting_modes.six_thinking_hats import SixThinkingHatsMode
 from app.meeting.utils.summary_generator import SummaryGenerator
+from app.meeting.meeting_modes.base_mode import BaseMeetingMode
 
 logger = logging.getLogger(__name__)
 
@@ -425,25 +426,37 @@ class MeetingAdapter:
     # ===== 会议功能 =====
     
     def start_meeting(self, group_id: int, topic: str) -> str:
-        """启动一个会议"""
+        """启动会议"""
         try:
-            logger.info(f"正在启动会议: group_id={group_id}, topic='{topic[:50]}...'")
+            # 查询讨论组
+            group = self._load_discussion_group(group_id)
             
-            # 获取讨论组
-            group = self.db.query(DiscussionGroup).filter(DiscussionGroup.id == group_id).first()
-            if not group:
-                logger.error(f"讨论组不存在: group_id={group_id}")
-                raise ValueError(f"讨论组ID {group_id} 不存在")
+            # 获取讨论组相关信息 
+            mode_name = group.mode
+            max_rounds = group.max_rounds  # 使用数据库中的最大轮数
+
+            # mode_name为six_thinking_hats时，max_rounds为6
+            if mode_name == "six_thinking_hats":
+                max_rounds = 6
+            elif mode_name == "swot_analysis":
+                max_rounds = 4
+                
+            # 创建会议模式
+            mode_class = self.mode_classes.get(mode_name)
+            if not mode_class:
+                raise ValueError(f"不支持的会议模式: {mode_name}")
             
-            logger.info(f"找到讨论组: {group.name}, 角色数量: {len(group.roles)}")
+            meeting_mode = mode_class()
             
-            # 获取角色列表
+            # 创建会议ID
+            meeting_id = str(uuid.uuid4())
+            
+            # 获取角色列表并创建智能体
             if not group.roles:
-                logger.error(f"讨论组没有角色: group_id={group_id}")
                 raise ValueError("讨论组中没有角色")
             
-            # 创建智能体
             agents = []
+            # 为每个角色创建智能体
             for role in group.roles:
                 logger.info(f"处理角色: id={role.id}, name={role.name}")
                 
@@ -491,24 +504,24 @@ class MeetingAdapter:
                 agents.append(agent)
                 logger.info(f"已创建智能体: {role.name} (使用模型: {model.name}, API基础URL: {base_url})")
             
-            # 创建会议模式
-            mode_class = self.mode_classes.get(group.mode)
-            if not mode_class:
-                logger.error(f"不支持的会议模式: {group.mode}")
-                raise ValueError(f"不支持的会议模式: {group.mode}")
+            # 创建会议实例，确保传递所有必要参数
+            meeting = MeetingSession(
+                id=meeting_id,
+                topic=topic,
+                mode=meeting_mode,
+                max_rounds=max_rounds
+            )
             
-            mode = mode_class()
-            logger.info(f"已创建会议模式: {group.mode}")
+            # 设置会议智能体
+            meeting.agents = agents
             
-            # 创建会议
-            meeting = MeetingSession(topic, agents, mode)
-            logger.info(f"已创建会议: id={meeting.id}")
+            # 将会议组信息保存到会议对象
+            meeting.group_info = self._group_to_dict(group)
             
-            # 保存到活跃会议
-            self.active_meetings[meeting.id] = meeting
-            logger.info(f"会议已激活: id={meeting.id}")
+            # 加入会议历史
+            self.active_meetings[meeting_id] = meeting
             
-            return meeting.id
+            return meeting_id
         except Exception as e:
             logger.error(f"启动会议失败: {str(e)}", exc_info=True)
             raise
@@ -567,22 +580,165 @@ class MeetingAdapter:
             logger.error(f"进行讨论轮次失败: {str(e)}", exc_info=True)
             raise
     
-    def end_discussion(self, meeting_id: str) -> Dict[str, Any]:
-        """结束讨论并生成摘要"""
-        try:
-            meeting = self.active_meetings.get(meeting_id)
-            if not meeting:
-                raise ValueError(f"会议ID {meeting_id} 不存在")
+    async def end_meeting(self, meeting_id: str):
+        """结束会议并生成总结"""
+        # 获取会议
+        meeting = self.active_meetings.get(meeting_id)
+        if not meeting:
+            raise ValueError(f"会议ID {meeting_id} 不存在")
+        
+        # 获取讨论组信息
+        group = meeting.group_info
+        
+        # 获取自定义总结模型（如果有）
+        summary_model = None
+        api_key = None
+        api_base_url = None
+        
+        if group and 'summary_model_id' in group and group['summary_model_id']:
+            model_id = group['summary_model_id']
+            summary_model = self.db.query(ModelConfiguration).filter(ModelConfiguration.id == model_id).first()
             
-            # 生成讨论摘要
-            meeting.finish()
-            
-            # 返回结果
-            return {
-                "meeting_id": meeting_id,
-                "summary": meeting.get_summary(),
-                "history": meeting.get_meeting_history()
+            if summary_model:
+                # 获取API密钥和基础URL
+                api_key = getattr(summary_model, 'api_key', None)
+                api_url = getattr(summary_model, 'api_url', None)
+                
+                # 处理URL，从完整URL中提取基础部分
+                if api_url:
+                    if "/v1/chat/completions" in api_url:
+                        api_base_url = api_url.split("/v1/chat/completions")[0]
+                    else:
+                        api_base_url = api_url
+        
+        # 获取自定义提示模板（如果有）
+        custom_prompt = None
+        if group and 'summary_prompt' in group and group['summary_prompt']:
+            custom_prompt = group['summary_prompt']
+        
+        # 生成总结
+        meeting_topic = meeting.topic
+        meeting_history = meeting.meeting_history
+        
+        # 使用自定义模型和提示（如果有），否则使用默认
+        if summary_model:
+            model_name = summary_model.name
+        else:
+            model_name = None  # 使用默认值
+        
+        if custom_prompt:
+            prompt_template = custom_prompt
+        else:
+            # 使用会议模式的默认提示模板
+            prompt_template = meeting.mode.get_summary_prompt_template()
+        
+        # 调用总结生成器，传递API信息
+        summary = SummaryGenerator.generate_summary(
+            meeting_topic=meeting_topic,
+            meeting_history=meeting_history,
+            prompt_template=prompt_template,
+            model_name=model_name,
+            api_key=api_key,
+            api_base_url=api_base_url
+        )
+        
+        # 添加总结到会议历史
+        meeting.add_message("system", summary)
+        
+        # 更新会议状态
+        meeting.status = "已结束"
+        meeting.end_time = datetime.now()
+        
+        # 确保返回的数据包含summary字段
+        result = meeting.to_dict()
+        if "summary" not in result:
+            result["summary"] = summary
+        
+        return result
+
+    def _load_discussion_group(self, group_id: int):
+        """加载讨论组信息"""
+        group = self.db.query(DiscussionGroup).filter(DiscussionGroup.id == group_id).first()
+        if not group:
+            logger.error(f"讨论组不存在: group_id={group_id}")
+            raise ValueError(f"讨论组ID {group_id} 不存在")
+        
+        logger.info(f"找到讨论组: {group.name}, 角色数量: {len(group.roles)}")
+        return group
+
+    def _group_to_dict(self, group) -> Dict[str, Any]:
+        """将讨论组对象转换为字典"""
+        group_data = {
+            "id": group.id,
+            "name": group.name,
+            "description": group.description,
+            "mode": group.mode,
+            "max_rounds": group.max_rounds,
+            "summary_model_id": getattr(group, "summary_model_id", None),
+            "summary_prompt": getattr(group, "summary_prompt", None),
+            "created_at": group.created_at.isoformat() if group.created_at else None,
+            "updated_at": group.updated_at.isoformat() if group.updated_at else None,
+            "roles": []
+        }
+        
+        # 添加角色信息
+        for role in group.roles:
+            role_data = {
+                "id": role.id,
+                "name": role.name,
+                "description": role.description,
+                "model_id": role.model_id
             }
+            group_data["roles"].append(role_data)
+        
+        return group_data
+
+    def create_meeting(self, meeting_id: str, group_id: int, topic: str, mode: str = None) -> Dict[str, Any]:
+        """创建新会议"""
+        try:
+            # 加载讨论组
+            group = self._load_discussion_group(group_id)
+            
+            # 确定会议模式
+            if not mode:
+                mode = group.mode if hasattr(group, 'mode') and group.mode else "discussion"
+            
+            # 获取讨论组的最大轮数
+            group_max_rounds = group.max_rounds if hasattr(group, 'max_rounds') and group.max_rounds else 3
+            
+            # 创建会议模式
+            meeting_mode = self._create_meeting_mode(mode, group_max_rounds)
+            
+            # 创建会议
+            meeting = MeetingSession(
+                id=meeting_id,
+                topic=topic,
+                mode=meeting_mode,
+                max_rounds=group_max_rounds  # 从讨论组获取最大轮数
+            )
+            
+            # 存储讨论组信息
+            meeting.group_info = self._group_to_dict(group)
+            
+            return meeting.to_dict()
         except Exception as e:
-            logger.error(f"结束讨论失败: {str(e)}", exc_info=True)
-            raise 
+            logger.error(f"创建会议失败: {str(e)}", exc_info=True)
+            raise HTTPException(status_code=500, detail=f"创建会议失败: {str(e)}")
+
+    def _create_meeting_mode(self, mode_name: str, max_rounds: int = 3) -> BaseMeetingMode:
+        """创建会议模式"""
+        # 映射模式名称到类
+        mode_classes = {
+            "discussion": DiscussionMode,
+            "brainstorming": BrainstormingMode,
+            "debate": DebateMode,
+            "role_playing": RolePlayingMode,
+            "six_thinking_hats": SixThinkingHatsMode,
+            "swot_analysis": SWOTAnalysisMode
+        }
+        
+        # 获取模式类
+        mode_class = mode_classes.get(mode_name.lower(), DiscussionMode)
+        
+        # 创建模式实例，传入最大轮数
+        return mode_class(max_rounds=max_rounds) 
