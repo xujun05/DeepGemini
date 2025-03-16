@@ -108,7 +108,54 @@ const translations = {
         insertTemplate: 'Insert Template',
         promptTemplateCopied: 'Template inserted in the textarea',
         maxRounds: 'Maximum Discussion Rounds',
-        maxRoundsHint: 'Set the maximum number of discussion rounds between AI agents, each agent speaks once per round'
+        maxRoundsHint: 'Set the maximum number of discussion rounds between AI agents, each agent speaks once per round',
+        
+        // 角色管理相关翻译
+        roleManagement: 'Role Management',
+        roleDescription: 'Create and manage AI roles for intelligent discussion groups',
+        addRole: 'Add Role',
+        roleName: 'Role Name',
+        personality: 'Personality',
+        skills: 'Skills',
+        noDescription: 'No description',
+        noPersonality: 'No personality traits',
+        noSkills: 'No skills',
+        defaultModel: 'Default model',
+        addNewRole: 'Add New Role',
+        editRole: 'Edit Role',
+        deleteRole: 'Delete Role',
+        confirmDeleteRole: 'Are you sure you want to delete this role?',
+        roleDeleted: 'Role successfully deleted',
+        roleDeleteFailed: 'Failed to delete role',
+        roleAdded: 'Role successfully added',
+        roleUpdated: 'Role successfully updated',
+        roleSaveFailed: 'Failed to save role',
+        
+        // 讨论组管理相关翻译
+        groupManagement: 'Discussion Group Management',
+        groupDescription: 'Create and manage AI role discussion groups for multi-agent conversations',
+        addGroup: 'Add Group',
+        groupName: 'Group Name',
+        meetingMode: 'Meeting Mode',
+        roleCount: 'roles',
+        rounds: 'rounds',
+        addNewGroup: 'Add New Discussion Group',
+        editGroup: 'Edit Discussion Group',
+        deleteGroup: 'Delete Discussion Group',
+        confirmDeleteGroup: 'Are you sure you want to delete this discussion group?',
+        groupDeleted: 'Discussion group successfully deleted',
+        groupDeleteFailed: 'Failed to delete discussion group',
+        groupAdded: 'Discussion group successfully added',
+        groupUpdated: 'Discussion group successfully updated',
+        groupSaveFailed: 'Failed to save discussion group',
+        
+        // 会议模式
+        discussion: 'General Discussion',
+        brainstorming: 'Brainstorming',
+        debate: 'Debate',
+        rolePlaying: 'Role Playing',
+        swotAnalysis: 'SWOT Analysis',
+        sixThinkingHats: 'Six Thinking Hats'
     },
     zh: {
         modelManagement: '模型管理',
@@ -209,7 +256,54 @@ const translations = {
         insertTemplate: '插入模板',
         promptTemplateCopied: '模板已插入文本框',
         maxRounds: '最大讨论轮数',
-        maxRoundsHint: '设置AI智能体之间的最大讨论轮数，每轮每个智能体会发言一次'
+        maxRoundsHint: '设置AI智能体之间的最大讨论轮数，每轮每个智能体会发言一次',
+        
+        // 角色管理相关翻译
+        roleManagement: '角色管理',
+        roleDescription: '创建和管理AI角色，用于智能讨论组',
+        addRole: '添加角色',
+        roleName: '角色名称',
+        personality: '性格特点',
+        skills: '专业技能',
+        noDescription: '无描述',
+        noPersonality: '无性格特点',
+        noSkills: '无技能',
+        defaultModel: '默认模型',
+        addNewRole: '添加新角色',
+        editRole: '编辑角色',
+        deleteRole: '删除角色',
+        confirmDeleteRole: '确定要删除这个角色吗？',
+        roleDeleted: '角色删除成功',
+        roleDeleteFailed: '角色删除失败',
+        roleAdded: '角色添加成功',
+        roleUpdated: '角色更新成功',
+        roleSaveFailed: '角色保存失败',
+        
+        // 讨论组管理相关翻译
+        groupManagement: '讨论组管理',
+        groupDescription: '创建和管理AI角色讨论组，开展多智能体对话',
+        addGroup: '添加讨论组',
+        groupName: '讨论组名称',
+        meetingMode: '会议模式',
+        roleCount: '个角色',
+        rounds: '轮讨论',
+        addNewGroup: '添加新讨论组',
+        editGroup: '编辑讨论组',
+        deleteGroup: '删除讨论组',
+        confirmDeleteGroup: '确定要删除这个讨论组吗？',
+        groupDeleted: '讨论组删除成功',
+        groupDeleteFailed: '讨论组删除失败',
+        groupAdded: '讨论组添加成功',
+        groupUpdated: '讨论组更新成功',
+        groupSaveFailed: '讨论组保存失败',
+        
+        // 会议模式
+        discussion: '普通讨论',
+        brainstorming: '头脑风暴',
+        debate: '辩论',
+        rolePlaying: '角色扮演',
+        swotAnalysis: 'SWOT分析',
+        sixThinkingHats: '六顶思考帽'
     }
 };
 
@@ -226,6 +320,9 @@ document.addEventListener('DOMContentLoaded', function() {
     document.getElementById('languageSelectPopup').value = savedLang;
     changeLanguage(savedLang);
     
+    // 初始化语言 - 使用正确的方法
+    applyLanguage(getCurrentLanguage());
+    
     // 初始化主题
     const savedTheme = localStorage.getItem('dark_theme');
     if (savedTheme === 'true') {
@@ -238,25 +335,29 @@ document.addEventListener('DOMContentLoaded', function() {
         darkModeText.textContent = savedLang === 'zh' ? '日间模式' : 'Light Mode';
     }
 
+    // 角色和讨论组初始化
+    loadRoles();
+    loadGroups();
+    
+    // 添加讨论组按钮点击事件 - 确保使用openAddGroupModal
+    document.querySelector('[data-action="addGroup"]')?.addEventListener('click', openAddGroupModal);
+    document.querySelector('[data-page="groups"] button')?.addEventListener('click', openAddGroupModal);
+    
+    // 确保使用的是openAddGroupModal，不是showAddGroupModal
+    // window.showAddGroupModal = function() {
+    //     console.warn('showAddGroupModal被调用，请修改为使用openAddGroupModal');
+    //     return openAddGroupModal();
+    // };
+
     // 工具配置显示控制
-    document.getElementById('enableTools').addEventListener('change', function() {
+    document.getElementById('enableTools')?.addEventListener('change', function() {
         document.getElementById('toolsConfig').style.display = this.checked ? 'block' : 'none';
     });
 
     // 思考配置显示控制
-    document.getElementById('enableThinking').addEventListener('change', function() {
+    document.getElementById('enableThinking')?.addEventListener('change', function() {
         document.getElementById('thinkingConfig').style.display = this.checked ? 'block' : 'none';
     });
-
-    // 添加角色和讨论组初始化
-    loadRoles();
-    loadGroups();
-    
-    // 添加讨论组按钮点击事件
-    document.querySelector('[data-action="addGroup"]')?.addEventListener('click', showAddGroupModal);
-    
-    // 初始化语言 - 使用正确的方法
-    applyLanguage(getCurrentLanguage());
     
     // 为模态框中的插入模板按钮添加事件处理
     document.addEventListener('click', function(event) {
@@ -299,7 +400,7 @@ async function loadModels() {
         // 获取模型配置
         const response = await fetchAPI('model_configs');
         models = response;
-        console.log('Loaded models:', models); // 添加调试日志
+        // console.log('Loaded models:', models); // 添加调试日志
         
         // 更新界面
         updateModelsList();
@@ -1828,7 +1929,7 @@ function updateValueInput(paramId) {
     valueContainer.innerHTML = newInput;
 }
 
-// 角色管理功能
+// 角色管理功能 - 修改卡片布局，将按钮移到卡片底部
 function loadRoles() {
     // 使用现有的fetchAPI函数，保持认证一致
     fetchAPI('roles', 'GET')  // 这会被转换为/v1/roles
@@ -1839,48 +1940,61 @@ function loadRoles() {
                 data = []; // 提供默认空数组
             }
             
-            const tableBody = document.getElementById('rolesTableBody');
-            tableBody.innerHTML = '';
+            const rolesContainer = document.getElementById('rolesList');
+            rolesContainer.innerHTML = '';
             
             if (data.length === 0) {
                 // 显示空提示
-                const row = document.createElement('tr');
-                row.innerHTML = `
-                    <td colspan="5" class="text-center">暂无角色数据</td>
-                `;
-                tableBody.appendChild(row);
+                rolesContainer.innerHTML = '<div class="col-12 text-center py-4">暂无角色数据</div>';
                 return;
             }
             
-            data.forEach(role => {
-                const row = document.createElement('tr');
-                row.innerHTML = `
-                    <td>${role.name}</td>
-                    <td>${role.description || '-'}</td>
-                    <td>${role.personality || '-'}</td>
-                    <td>${role.model_name || '-'}</td>
-                    <td>
-                        <button class="btn btn-sm btn-outline-primary me-1" onclick="editRole(${role.id})">
-                            <i class="fas fa-edit"></i>
-                        </button>
-                        <button class="btn btn-sm btn-outline-danger" onclick="deleteRole(${role.id})">
-                            <i class="fas fa-trash-alt"></i>
-                        </button>
-                    </td>
-                `;
-                tableBody.appendChild(row);
-            });
+            const lang = getCurrentLanguage();
+            const t = translations[lang];
+            
+            // 使用卡片布局显示角色，修改布局结构确保按钮位于底部
+            const rolesHtml = data.map(role => `
+                <div class="col-md-6 col-lg-4 mb-4">
+                    <div class="card h-100">
+                        <div class="card-body d-flex flex-column">
+                            <div class="flex-grow-1">
+                                <h5 class="card-title">${role.name}</h5>
+                                <p class="card-text text-muted small">${role.description || t.noDescription}</p>
+                                <div class="mb-3">
+                                    <span class="badge bg-primary">${role.personality || t.noPersonality}</span>
+                                    ${role.skills && role.skills.length > 0 ? 
+                                        role.skills.map(skill => `<span class="badge bg-info me-1">${skill}</span>`).join('') : 
+                                        `<span class="badge bg-secondary">${t.noSkills}</span>`}
+                                </div>
+                                <div class="mb-2 text-muted small">
+                                    <i class="fas fa-robot me-1"></i> ${role.model_name || t.defaultModel}
+                                </div>
+                            </div>
+                            <div class="mt-auto pt-3">
+                                <div class="btn-group w-100">
+                                    <button class="btn btn-sm btn-outline-primary" onclick="editRole(${role.id})">
+                                        <i class="fas fa-edit"></i> ${t.edit}
+                                    </button>
+                                    <button class="btn btn-sm btn-outline-danger" onclick="deleteRole(${role.id})">
+                                        <i class="fas fa-trash"></i> ${t.delete}
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            `).join('');
+            
+            rolesContainer.innerHTML = rolesHtml;
         })
         .catch(error => {
             console.error('获取角色失败:', error);
-            // 显示空数据状态
-            const tableBody = document.getElementById('rolesTableBody');
-            tableBody.innerHTML = `
-                <tr>
-                    <td colspan="5" class="text-center text-danger">
-                        获取角色数据失败，请稍后重试
-                    </td>
-                </tr>
+            // 显示错误状态
+            const rolesContainer = document.getElementById('rolesList');
+            rolesContainer.innerHTML = `
+                <div class="col-12 text-center text-danger py-4">
+                    获取角色数据失败，请稍后重试
+                </div>
             `;
         });
 }
@@ -1923,6 +2037,12 @@ function loadModelsForRoles() {
 function openAddRoleModal() {
     // 清空表单
     document.getElementById('addRoleForm').reset();
+    
+    // 移除可能存在的隐藏id字段，确保不会覆盖现有角色
+    const existingIdField = document.querySelector('#addRoleForm input[name="id"]');
+    if (existingIdField) {
+        existingIdField.remove();
+    }
     
     // 加载模型选项
     loadModelsForRoles();
@@ -2025,7 +2145,7 @@ function deleteRole(roleId) {
     }
 }
 
-// 讨论组管理功能
+// 讨论组管理功能 - 移除主题和开始讨论按钮
 function loadGroups() {
     fetchAPI('discussion_groups', 'GET')  // 这会被转换为/v1/discussion_groups
         .then(data => {
@@ -2035,51 +2155,60 @@ function loadGroups() {
                 data = []; // 提供默认空数组
             }
             
-            const tableBody = document.getElementById('groupsTableBody');
-            tableBody.innerHTML = '';
+            const groupsContainer = document.getElementById('groupsList');
+            groupsContainer.innerHTML = '';
             
             if (data.length === 0) {
                 // 显示空提示
-                const row = document.createElement('tr');
-                row.innerHTML = `
-                    <td colspan="5" class="text-center">暂无讨论组数据</td>
-                `;
-                tableBody.appendChild(row);
+                groupsContainer.innerHTML = '<div class="col-12 text-center py-4">暂无讨论组数据</div>';
                 return;
             }
             
-            data.forEach(group => {
-                const row = document.createElement('tr');
-                row.innerHTML = `
-                    <td>${group.name}</td>
-                    <td>${group.topic || '-'}</td>
-                    <td>${getModeDisplayName(group.mode || 'discussion')}</td>
-                    <td>${Array.isArray(group.roles) ? group.roles.length : 0}</td>
-                    <td>
-                        <button class="btn btn-sm btn-outline-success me-1" onclick="startDiscussion(${group.id})">
-                            <i class="fas fa-play"></i>
-                        </button>
-                        <button class="btn btn-sm btn-outline-primary me-1" onclick="editGroup(${group.id})">
-                            <i class="fas fa-edit"></i>
-                        </button>
-                        <button class="btn btn-sm btn-outline-danger" onclick="deleteGroup(${group.id})">
-                            <i class="fas fa-trash-alt"></i>
-                        </button>
-                    </td>
-                `;
-                tableBody.appendChild(row);
-            });
+            const lang = getCurrentLanguage();
+            const t = translations[lang];
+            
+            // 使用卡片布局显示讨论组
+            const groupsHtml = data.map(group => `
+                <div class="col-md-6 col-lg-4 mb-4">
+                    <div class="card h-100">
+                        <div class="card-body d-flex flex-column">
+                            <div class="flex-grow-1">
+                                <h5 class="card-title">${group.name}</h5>
+                                <div class="mb-3">
+                                    <span class="badge bg-primary">${getModeDisplayName(group.mode || 'discussion')}</span>
+                                    <span class="badge bg-info">
+                                        <i class="fas fa-users me-1"></i> ${Array.isArray(group.roles) ? group.roles.length : 0} ${t.roleCount}
+                                    </span>
+                                    <span class="badge bg-secondary">
+                                        <i class="fas fa-sync-alt me-1"></i> ${group.max_rounds || 3} ${t.rounds}
+                                    </span>
+                                </div>
+                            </div>
+                            <div class="mt-auto pt-3">
+                                <div class="btn-group w-100">
+                                    <button class="btn btn-sm btn-outline-primary" onclick="editGroup(${group.id})">
+                                        <i class="fas fa-edit"></i> ${t.edit}
+                                    </button>
+                                    <button class="btn btn-sm btn-outline-danger" onclick="deleteGroup(${group.id})">
+                                        <i class="fas fa-trash"></i> ${t.delete}
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            `).join('');
+            
+            groupsContainer.innerHTML = groupsHtml;
         })
         .catch(error => {
             console.error('获取讨论组失败:', error);
-            // 显示空数据状态
-            const tableBody = document.getElementById('groupsTableBody');
-            tableBody.innerHTML = `
-                <tr>
-                    <td colspan="5" class="text-center text-danger">
-                        获取讨论组数据失败，请稍后重试
-                    </td>
-                </tr>
+            // 显示错误状态
+            const groupsContainer = document.getElementById('groupsList');
+            groupsContainer.innerHTML = `
+                <div class="col-12 text-center text-danger py-4">
+                    获取讨论组数据失败，请稍后重试
+                </div>
             `;
         });
 }
@@ -2122,30 +2251,50 @@ function loadRolesForGroups() {
 }
 
 function getModeDisplayName(mode) {
-    const modeMap = {
-        'discussion': '普通讨论',
-        'brainstorming': '头脑风暴',
-        'debate': '辩论',
-        'role_playing': '角色扮演',
-        'swot_analysis': 'SWOT分析',
-        'six_thinking_hats': '六顶思考帽'
+    const lang = getCurrentLanguage();
+    const t = translations[lang];
+    
+    const modeKeys = {
+        'discussion': 'discussion',
+        'brainstorming': 'brainstorming',
+        'debate': 'debate',
+        'role_playing': 'rolePlaying',
+        'swot_analysis': 'swotAnalysis',
+        'six_thinking_hats': 'sixThinkingHats'
     };
-    return modeMap[mode] || mode;
+    
+    return t[modeKeys[mode]] || mode;
 }
 
+// 移除重复的函数，统一使用openAddGroupModal
 function openAddGroupModal() {
-    // 清空表单
-    document.getElementById('addGroupForm').reset();
+    console.log("正在打开添加讨论组模态框");
     
-    // 加载角色选项
-    loadRolesForGroups();
+    const form = document.getElementById('addGroupForm');
+    form.reset();
+    
+    // 一定要删除ID字段，这是关键步骤
+    const hiddenInput = form.querySelector('input[name="id"]');
+    if (hiddenInput) {
+        // console.log("发现并移除了隐藏的ID字段: " + hiddenInput.value);
+        hiddenInput.remove();
+    }
+    
+    // 加载角色和模型
+    loadRolesForGroupModal();
+    loadModelsForGroupModal();
     
     // 显示模态框
-    new bootstrap.Modal(document.getElementById('addGroupModal')).show();
+    const modal = new bootstrap.Modal(document.getElementById('addGroupModal'));
+    modal.show();
 }
 
+// 修改saveGroup函数，确保新增时不会携带ID
 function saveGroup() {
     const form = document.getElementById('addGroupForm');
+    
+    // 显示调试信息，帮助排查问题
+    console.log("表单内容:", form);
     const formData = new FormData(form);
     
     // 获取选中的角色ID
@@ -2154,10 +2303,9 @@ function saveGroup() {
     // 构建请求数据
     const data = {
         name: formData.get('name'),
-        topic: formData.get('topic'),
         mode: formData.get('mode'),
         role_ids: roleIds,
-        max_rounds: parseInt(formData.get('max_rounds')) || 3, // 确保max_rounds是数字
+        max_rounds: parseInt(formData.get('max_rounds')) || 3,
         summary_model_id: formData.get('summary_model_id') ? parseInt(formData.get('summary_model_id')) : null,
         summary_prompt: formData.get('summary_prompt')
     };
@@ -2167,7 +2315,18 @@ function saveGroup() {
     if (data.max_rounds > 20) data.max_rounds = 20;
     
     // 获取组ID（如果是编辑）
-    const groupId = form.querySelector('input[name="id"]')?.value;
+    const hiddenInput = form.querySelector('input[name="id"]');
+    const groupId = hiddenInput ? hiddenInput.value : null;
+    
+    // 打印完整的请求信息，帮助调试
+    // console.log({
+    //    action: groupId ? '更新' : '创建',
+    //    url: groupId ? `discussion_groups/${groupId}` : 'discussion_groups',
+    //    method: groupId ? 'PUT' : 'POST',
+    //    groupId: groupId,
+    //    hiddenInput: hiddenInput,
+    //    data: data
+    // });
     
     // 发送请求
     const url = groupId ? `discussion_groups/${groupId}` : 'discussion_groups';
@@ -2191,11 +2350,17 @@ function saveGroup() {
 }
 
 function editGroup(groupId) {
+    console.log("正在编辑讨论组，ID:", groupId); // 添加调试日志
+    
     fetchAPI(`discussion_groups/${groupId}`)
     .then(group => {
         // 重置表单
         const form = document.getElementById('addGroupForm');
         form.reset();
+        
+        // 清除可能存在的旧ID字段
+        const oldIdField = form.querySelector('input[name="id"]');
+        if (oldIdField) oldIdField.remove();
         
         // 加载角色和模型
         loadRolesForGroupModal();
@@ -2203,10 +2368,11 @@ function editGroup(groupId) {
         
         // 设置表单值
         setTimeout(() => {
+            console.log("为表单设置值，组ID:", groupId, "组数据:", group); // 添加调试日志
+            
             form.elements['name'].value = group.name;
-            form.elements['topic'].value = group.topic || '';
             form.elements['mode'].value = group.mode;
-            form.elements['max_rounds'].value = group.max_rounds || 3; // 设置讨论轮数
+            form.elements['max_rounds'].value = group.max_rounds || 3;
             
             // 设置总结模型
             if (group.summary_model_id) {
@@ -2235,7 +2401,7 @@ function editGroup(groupId) {
             
             // 显示模态框
             new bootstrap.Modal(document.getElementById('addGroupModal')).show();
-        }, 100); // 给一点时间让下拉框和复选框加载完成
+        }, 100);
     })
     .catch(error => {
         console.error('获取讨论组详情失败:', error);
@@ -2310,23 +2476,7 @@ function showToast(type, message) {
 }
 
 // 初始化讨论组模态框
-function showAddGroupModal() {
-    const form = document.getElementById('addGroupForm');
-    form.reset();
-    
-    // 清空隐藏的ID字段（如果有）
-    const hiddenInput = form.querySelector('input[name="id"]');
-    if (hiddenInput) {
-        hiddenInput.remove();
-    }
-    
-    // 加载角色和模型
-    loadRolesForGroupModal();
-    loadModelsForGroupModal();
-    
-    // 显示模态框
-    new bootstrap.Modal(document.getElementById('addGroupModal')).show();
-}
+// /* 此函数已删除，统一使用openAddGroupModal */
 
 // 加载角色复选框
 function loadRolesForGroupModal() {
@@ -2372,7 +2522,7 @@ function loadModelsForGroupModal() {
             data = []; // 提供默认空数组
         }
         
-        console.log('获取到的模型配置数据:', data);
+        // console.log('获取到的模型配置数据:', data);
         
         const select = document.querySelector('#addGroupForm select[name="summary_model_id"]');
         

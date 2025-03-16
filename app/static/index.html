@@ -179,66 +179,34 @@
         <!-- Roles Page -->
         <div class="content-page d-none" id="roles-page">
             <div class="d-flex justify-content-between align-items-center mb-4">
-                <h2 data-translate="roleManagement">角色管理</h2>
                 <div>
-                    <button class="btn btn-primary" onclick="openAddRoleModal()">
-                        <i class="fas fa-plus"></i> <span data-translate="addRole">添加角色</span>
-                    </button>
+                    <h2 class="mb-1" data-translate="roleManagement">角色管理</h2>
+                    <p class="text-muted" data-translate="roleDescription">创建和管理AI角色，用于智能讨论组</p>
                 </div>
+                <button class="btn btn-primary" onclick="openAddRoleModal()">
+                    <i class="fas fa-plus"></i> <span data-translate="addRole">添加角色</span>
+                </button>
             </div>
             
-            <div class="card">
-                <div class="card-body">
-                    <div class="table-responsive">
-                        <table class="table table-hover align-middle" id="rolesTable">
-                            <thead>
-                                <tr>
-                                    <th data-translate="name">名称</th>
-                                    <th data-translate="description">描述</th>
-                                    <th data-translate="personality">性格</th>
-                                    <th data-translate="model">模型</th>
-                                    <th data-translate="actions">操作</th>
-                                </tr>
-                            </thead>
-                            <tbody id="rolesTableBody">
-                                <!-- 角色将通过JavaScript动态添加 -->
-                            </tbody>
-                        </table>
-                    </div>
-                </div>
+            <div class="row" id="rolesList">
+                <!-- 角色将通过JavaScript动态添加为卡片 -->
             </div>
         </div>
 
         <!-- Groups Page -->
         <div class="content-page d-none" id="groups-page">
             <div class="d-flex justify-content-between align-items-center mb-4">
-                <h2 data-translate="groupManagement">讨论组管理</h2>
                 <div>
-                    <button class="btn btn-primary" onclick="openAddGroupModal()">
-                        <i class="fas fa-plus"></i> <span data-translate="addGroup">添加讨论组</span>
-                    </button>
+                    <h2 class="mb-1" data-translate="groupManagement">讨论组管理</h2>
+                    <p class="text-muted" data-translate="groupDescription">创建和管理AI角色讨论组，开展多智能体对话</p>
                 </div>
+                <button class="btn btn-primary" onclick="openAddGroupModal()">
+                    <i class="fas fa-plus"></i> <span data-translate="addGroup">添加讨论组</span>
+                </button>
             </div>
             
-            <div class="card">
-                <div class="card-body">
-                    <div class="table-responsive">
-                        <table class="table table-hover align-middle" id="groupsTable">
-                            <thead>
-                                <tr>
-                                    <th data-translate="name">名称</th>
-                                    <th data-translate="topic">主题</th>
-                                    <th data-translate="mode">模式</th>
-                                    <th data-translate="roles">角色</th>
-                                    <th data-translate="actions">操作</th>
-                                </tr>
-                            </thead>
-                            <tbody id="groupsTableBody">
-                                <!-- 讨论组将通过JavaScript动态添加 -->
-                            </tbody>
-                        </table>
-                    </div>
-                </div>
+            <div class="row" id="groupsList">
+                <!-- 讨论组将通过JavaScript动态添加为卡片 -->
             </div>
         </div>
     </main>
@@ -580,7 +548,7 @@
         </div>
     </div>
 
-    <!-- 添加讨论组模态框 -->
+    <!-- 修改讨论组模态框，移除主题字段 -->
     <div class="modal fade" id="addGroupModal" tabindex="-1">
         <div class="modal-dialog modal-lg">
             <div class="modal-content">
@@ -593,10 +561,6 @@
                         <div class="mb-3">
                             <label class="form-label" data-translate="groupName">讨论组名称</label>
                             <input type="text" class="form-control" name="name" required>
-                        </div>
-                        <div class="mb-3">
-                            <label class="form-label" data-translate="topic">讨论主题</label>
-                            <input type="text" class="form-control" name="topic" required>
                         </div>
                         <div class="mb-3">
                             <label class="form-label" data-translate="meetingMode">会议模式</label>
