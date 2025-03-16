@@ -45,10 +45,10 @@ class Meeting:
             "timestamp": datetime.now().isoformat()
         })
         
-    def conduct_round(self) -> List[Dict[str, Any]]:
-        """进行一轮讨论"""
+    async def conduct_round_stream(self):
+        """进行一轮讨论，支持流式输出"""
         # 检查讨论是否已经完成
-        if self.current_round > self.max_rounds:  # 使用自定义的最大轮数
+        if self.current_round > self.max_rounds:
             self.status = "已结束"
             return []
         
@@ -61,42 +61,11 @@ class Meeting:
             self.current_round
         )
         
-        # 每个智能体依次发言
-        for agent_name in speaking_order:
-            # 获取智能体
-            agent = next((a for a in self.agents if a.name == agent_name), None)
-            if not agent:
-                continue
-                
-            # 获取智能体提示
-            prompt = self.mode.get_agent_prompt(
-                agent_name=agent.name,
-                agent_role=agent.role_description,
-                meeting_topic=self.topic,
-                current_round=self.current_round
-            )
-            
-            # 获取当前上下文
-            context = self._get_current_context()
-            
-            # 生成回应
-            response = agent.generate_response(prompt, context)
-            
-            # 添加到会议历史
-            self.add_message(agent.name, response)
-        
-        # 更新结束检查逻辑 - 同时考虑轮数和模式自定义条件
-        if self.current_round >= self.max_rounds:
-            self._end_meeting()
-            return {"status": "已结束", "message": "会议已结束"}
-        
-        # 更新轮次
-        self.current_round += 1
-        
+        # 返回发言顺序和当前轮次，供外部处理
         return {
             "status": "进行中",
-            "current_round": self.current_round - 1,
-            "messages": self.meeting_history[-len(speaking_order):]
+            "current_round": self.current_round,
+            "speaking_order": speaking_order
         }
     
     def _end_meeting(self):

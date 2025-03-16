@@ -3,6 +3,9 @@ from sqlalchemy.orm import Session
 import logging
 import asyncio
 import json
+import re
+import time
+import random
 
 from app.models.database import DiscussionGroup, Role
 from app.adapters.meeting_adapter import MeetingAdapter
@@ -233,10 +236,18 @@ class DiscussionProcessor:
         """流式讨论过程，实时返回每个角色的回答"""
         import time
         import json
+        import asyncio
+        import random
         
-        conversation_id = f"meeting-{int(time.time())}"
+        conversation_id = f"chatcmpl-{int(time.time())}"
         last_processed_message_index = -1
         round_count = 0
+        
+        # 获取会议对象
+        meeting = self.adapter.active_meetings.get(meeting_id)
+        if not meeting:
+            yield f"data: {{\"error\": \"会议ID {meeting_id} 不存在\"}}\n\n"
+            return
         
         # 发送会话开始事件
         start_event = {
@@ -246,191 +257,355 @@ class DiscussionProcessor:
             "model": "discussion-group",
             "choices": [{
                 "index": 0,
-                "delta": {"role": "system", "content": f"讨论开始: {meeting_id}"},
+                "delta": {"role": "assistant", "content": ""},
                 "finish_reason": None
             }]
         }
         yield f"data: {json.dumps(start_event, ensure_ascii=False)}\n\n"
         
-        # 循环处理每一轮讨论
-        while True:
-            # 执行一轮讨论
-            logger.info(f"流式模式: 开始执行第{round_count+1}轮讨论")
-            round_data = self.adapter.conduct_discussion_round(meeting_id)
-            
-            # 获取会议对象
-            meeting = self.adapter.active_meetings.get(meeting_id)
-            if not meeting:
-                break
-                
-            # 获取新消息
-            all_messages = meeting.meeting_history
-            agent_messages = [msg for msg in all_messages if msg["agent"] != "system"]
-            
-            # 流式发送新消息
-            for i, msg in enumerate(agent_messages):
-                if i > last_processed_message_index:
-                    # 发送轮次信息
-                    round_info = {
-                        "id": f"{conversation_id}-round-{round_count+1}",
-                        "object": "chat.completion.chunk",
-                        "created": int(time.time()),
-                        "model": "discussion-group",
-                        "choices": [{
-                            "index": 0,
-                            "delta": {"role": "system", "content": f"--- 第 {round_count+1} 轮讨论 ---"},
-                            "finish_reason": None
-                        }]
-                    }
-                    yield f"data: {json.dumps(round_info, ensure_ascii=False)}\n\n"
-                    await asyncio.sleep(0.2)
-                    
-                    # 发送发言人信息
-                    speaker_info = {
-                        "id": f"{conversation_id}-{i}",
-                        "object": "chat.completion.chunk",
-                        "created": int(time.time()),
-                        "model": "discussion-group",
-                        "choices": [{
-                            "index": 0,
-                            "delta": {"role": "assistant", "content": f"[{msg['agent']}]: "},
-                            "finish_reason": None
-                        }]
-                    }
-                    yield f"data: {json.dumps(speaker_info, ensure_ascii=False)}\n\n"
-                    await asyncio.sleep(0.2)
-                    
-                    # 确保内容是字符串类型
-                    content = str(msg.get("content", ""))
-                    
-                    # 流式发送内容
-                    chunk_size = 5  # 每个块的字符数
-                    for j in range(0, len(content), chunk_size):
-                        chunk = content[j:j+chunk_size]
-                        content_chunk = {
-                            "id": f"{conversation_id}-{i}-{j}",
-                            "object": "chat.completion.chunk",
-                            "created": int(time.time()),
-                            "model": "discussion-group",
-                            "choices": [{
-                                "index": 0,
-                                "delta": {"content": chunk},
-                                "finish_reason": None
-                            }]
-                        }
-                        yield f"data: {json.dumps(content_chunk, ensure_ascii=False)}\n\n"
-                        await asyncio.sleep(0.05)
-                    
-                    # 发送消息结束标记
-                    end_message = {
-                        "id": f"{conversation_id}-{i}-end",
-                        "object": "chat.completion.chunk",
-                        "created": int(time.time()),
-                        "model": "discussion-group",
-                        "choices": [{
-                            "index": 0,
-                            "delta": {"content": "\n\n"},
-                            "finish_reason": None
-                        }]
-                    }
-                    yield f"data: {json.dumps(end_message, ensure_ascii=False)}\n\n"
-                    await asyncio.sleep(0.2)
-                    
-                    last_processed_message_index = i
-            
-            # 判断讨论是否结束
-            round_count += 1
-            if round_data["status"] == "已结束":
-                logger.info(f"流式模式: 讨论已结束")
-                break
-                
-            # 等待下一轮
-            await asyncio.sleep(0.5)
-        
-        # 获取总结
-        logger.info(f"流式模式: 获取讨论总结")
-        result = await self.adapter.end_meeting(meeting_id)
-        
-        # 确保总结正确提取和转换为字符串
-        if isinstance(result, dict):
-            # 从字典中提取总结内容
-            summary = str(result.get("summary", "讨论已完成，但未生成总结。"))
-            logger.info(f"获取到总结，长度为 {len(summary)} 字符")
-        else:
-            # 如果结果不是字典，尝试将整个结果作为总结
-            summary = str(result) if result else "讨论已完成，但未生成总结。"
-            logger.info(f"获取到非字典格式的总结，长度为 {len(summary)} 字符")
-        
-        # 发送总结信息标题
-        summary_info = {
-            "id": f"{conversation_id}-summary",
+        # 发送会议主题与格式说明
+        intro_event = {
+            "id": f"{conversation_id}-intro",
             "object": "chat.completion.chunk",
             "created": int(time.time()),
             "model": "discussion-group",
             "choices": [{
                 "index": 0,
-                "delta": {"role": "system", "content": "--- 讨论总结 ---\n\n"},
+                "delta": {"content": f"# 讨论主题：{meeting.topic}\n\n"},
                 "finish_reason": None
             }]
         }
-        logger.info("发送总结标题")
-        yield f"data: {json.dumps(summary_info, ensure_ascii=False)}\n\n".encode('utf-8')
+        yield f"data: {json.dumps(intro_event, ensure_ascii=False)}\n\n"
         await asyncio.sleep(0.3)
         
-        # 流式发送总结内容
-        # 使用更小的块大小以确保流式传输效果
-        chunk_size = 5  
-        logger.info(f"开始流式发送总结内容，总大小 {len(summary)} 字符，分 {len(summary)//chunk_size + 1} 块")
-        
-        for j in range(0, len(summary), chunk_size):
-            chunk = summary[j:j+chunk_size]
-            summary_chunk = {
-                "id": f"{conversation_id}-summary-{j}",
+        # 循环处理每一轮讨论
+        while True:
+            # 发送美化的轮次标题
+            round_title = {
+                "id": f"{conversation_id}-round-{round_count+1}-title",
                 "object": "chat.completion.chunk",
                 "created": int(time.time()),
                 "model": "discussion-group",
                 "choices": [{
                     "index": 0,
-                    "delta": {"content": chunk},
+                    "delta": {"content": f"\n## 第 {round_count+1} 轮讨论\n\n"},
                     "finish_reason": None
                 }]
             }
-            yield f"data: {json.dumps(summary_chunk, ensure_ascii=False)}\n\n".encode('utf-8')
-            # 减少延迟以加快传输
-            await asyncio.sleep(0.02)
+            yield f"data: {json.dumps(round_title, ensure_ascii=False)}\n\n"
+            await asyncio.sleep(0.3)
+            
+            logger.info(f"流式模式: 开始执行第{round_count+1}轮讨论")
+            
+            # 确定发言顺序
+            speaking_order = meeting.mode.determine_speaking_order(
+                [{"name": agent.name, "role": agent.role_description} for agent in meeting.agents],
+                meeting.current_round
+            )
+            
+            # 获取当前会议历史的索引位置
+            current_history_index = len(meeting.meeting_history)
+            
+            # 每个智能体依次发言（不等待所有人完成）
+            for agent_name in speaking_order:
+                # 获取智能体
+                agent = next((a for a in meeting.agents if a.name == agent_name), None)
+                if not agent:
+                    continue
+                    
+                # 发送发言人信息 - 使用格式化的标题
+                speaker_info = {
+                    "id": f"{conversation_id}-{agent_name}-start",
+                    "object": "chat.completion.chunk",
+                    "created": int(time.time()),
+                    "model": "discussion-group",
+                    "choices": [{
+                        "index": 0,
+                        "delta": {"content": f"\n### {agent_name} 发言：\n\n"},
+                        "finish_reason": None
+                    }]
+                }
+                yield f"data: {json.dumps(speaker_info, ensure_ascii=False)}\n\n"
+                await asyncio.sleep(0.2)
+                
+                # 获取智能体提示
+                prompt = meeting.mode.get_agent_prompt(
+                    agent_name=agent.name,
+                    agent_role=agent.role_description,
+                    meeting_topic=meeting.topic,
+                    current_round=meeting.current_round
+                )
+                
+                # 获取当前上下文
+                context = meeting._get_current_context()
+                
+                # 实时流式生成并返回回应 - 优化缓冲处理提高流畅性
+                buffer = ""
+                thinking_dots_shown = False
+                last_chunk_time = time.time()
+                
+                # 发送思考中提示
+                thinking_event = {
+                    "id": f"{conversation_id}-{agent_name}-thinking",
+                    "object": "chat.completion.chunk",
+                    "created": int(time.time()),
+                    "model": "discussion-group",
+                    "choices": [{
+                        "index": 0,
+                        "delta": {"content": ""},
+                        "finish_reason": None
+                    }]
+                }
+                yield f"data: {json.dumps(thinking_event, ensure_ascii=False)}\n\n"
+                
+                # 使用累积缓冲区优化流式输出
+                async for chunk in agent.generate_response_stream(prompt, context):
+                    buffer += chunk
+                    current_time = time.time()
+                    
+                    # 使用更小的缓冲区和更短的时间间隔，创造打字效果
+                    # 每1-3个字符输出一次，或每0.1-0.2秒输出一次
+                    if len(buffer) >= random.randint(1, 3) or (current_time - last_chunk_time) > random.uniform(0.1, 0.2):
+                        content_chunk = {
+                            "id": f"{conversation_id}-{agent_name}-chunk-{int(current_time*1000)}",
+                            "object": "chat.completion.chunk",
+                            "created": int(current_time),
+                            "model": "discussion-group",
+                            "choices": [{
+                                "index": 0,
+                                "delta": {"content": buffer},
+                                "finish_reason": None
+                            }]
+                        }
+                        yield f"data: {json.dumps(content_chunk, ensure_ascii=False)}\n\n"
+                        buffer = ""
+                        last_chunk_time = current_time
+                        
+                        # 添加极小的随机暂停以增强打字效果的自然感
+                        # 这个暂停是异步的，不会阻塞其他处理
+                        if random.random() < 0.3:  # 30%概率添加微小停顿
+                            await asyncio.sleep(random.uniform(0.03, 0.08))
+                
+                # 发送剩余的缓冲区内容
+                if buffer:
+                    content_chunk = {
+                        "id": f"{conversation_id}-{agent_name}-final",
+                        "object": "chat.completion.chunk",
+                        "created": int(time.time()),
+                        "model": "discussion-group",
+                        "choices": [{
+                            "index": 0,
+                            "delta": {"content": buffer},
+                            "finish_reason": None
+                        }]
+                    }
+                    yield f"data: {json.dumps(content_chunk, ensure_ascii=False)}\n\n"
+                
+                # 获取生成的完整回应
+                response = agent.last_response
+                
+                # 添加到会议历史
+                meeting.add_message(agent.name, response)
+                
+                # 添加轻微的随机延迟使发言更自然
+                await asyncio.sleep(0.3 + random.uniform(0, 0.3))
+            
+            # 更新轮次
+            round_count += 1
+            meeting.current_round += 1
+            
+            # 检查是否应该结束会议
+            if meeting.current_round > meeting.max_rounds or meeting.mode.should_end_meeting(
+                round_count, meeting.meeting_history):
+                # 发送会议结束信息 - 美化格式
+                end_meeting_info = {
+                    "id": f"{conversation_id}-meeting-end",
+                    "object": "chat.completion.chunk",
+                    "created": int(time.time()),
+                    "model": "discussion-group",
+                    "choices": [{
+                        "index": 0,
+                        "delta": {"content": "\n\n## 会议结束\n\n*正在生成会议总结...*\n\n"},
+                        "finish_reason": None
+                    }]
+                }
+                yield f"data: {json.dumps(end_meeting_info, ensure_ascii=False)}\n\n"
+                meeting.status = "已结束"
+                
+                # 修改会议总结为实时流式返回
+                try:
+                    logger.info(f"开始流式生成会议总结: meeting_id={meeting_id}")
+                    
+                    # 获取会议数据
+                    meeting = self.adapter.active_meetings.get(meeting_id)
+                    
+                    # 获取讨论组信息
+                    group_info = meeting.group_info
+                    
+                    # 获取自定义总结模型（如果有）
+                    summary_model = None
+                    api_key = None
+                    api_base_url = None
+                    extracted_model_params = {}  # 使用不同的变量名避免冲突
+                    
+                    if group_info and 'summary_model_id' in group_info and group_info['summary_model_id']:
+                        model_id = group_info['summary_model_id']
+                        logger.info(f"使用自定义总结模型: model_id={model_id}")
+                        
+                        # 从数据库获取模型配置
+                        from app.models.database import Model as ModelConfiguration
+                        summary_model = self.db.query(ModelConfiguration).filter(ModelConfiguration.id == model_id).first()
+                        
+                        if summary_model:
+                            logger.info(f"找到总结模型: name={summary_model.name}")
+                            # 获取API密钥和基础URL
+                            api_key = getattr(summary_model, 'api_key', None)
+                            api_url = getattr(summary_model, 'api_url', None)
+                            
+                            # 处理URL，从完整URL中提取基础部分
+                            if api_url:
+                                if "/v1/chat/completions" in api_url:
+                                    api_base_url = api_url.split("/v1/chat/completions")[0]
+                                else:
+                                    api_base_url = api_url
+                        
+                            # 直接从模型对象中提取所有相关参数到字典
+                            model_attributes = ['max_tokens', 'temperature', 'top_p', 'presence_penalty', 'frequency_penalty']
+                            for attr in model_attributes:
+                                if hasattr(summary_model, attr) and getattr(summary_model, attr) is not None:
+                                    extracted_model_params[attr] = getattr(summary_model, attr)
+                        
+                            # 还要检查custom_parameters字段
+                            if hasattr(summary_model, 'custom_parameters') and summary_model.custom_parameters:
+                                # 如果是字符串，尝试解析为字典
+                                custom_params = summary_model.custom_parameters
+                                if isinstance(custom_params, str):
+                                    try:
+                                        custom_params_dict = json.loads(custom_params)
+                                        extracted_model_params.update(custom_params_dict)
+                                    except json.JSONDecodeError:
+                                        logger.warning(f"无法解析模型custom_parameters: {custom_params}")
+                                elif isinstance(custom_params, dict):
+                                    extracted_model_params.update(custom_params)
+                        
+                            # 确保model_name参数正确传递
+                            if hasattr(summary_model, 'model_name') and summary_model.model_name:
+                                model_name = summary_model.model_name
+                            
+                            logger.info(f"提取到的模型参数: {extracted_model_params}")
+                    
+                    # 使用会议模式的默认提示模板或自定义提示
+                    custom_prompt = None
+                    if group_info and 'summary_prompt' in group_info and group_info['summary_prompt']:
+                        custom_prompt = group_info['summary_prompt']
+                        logger.info(f"使用自定义总结提示模板: length={len(custom_prompt)}")
+                    
+                    # 使用自定义模型和提示（如果有），否则使用默认
+                    model_name = model_name if model_name else None
+                    
+                    # 使用会议模式的默认提示模板或自定义提示
+                    prompt_template = custom_prompt if custom_prompt else meeting.mode.get_summary_prompt_template()
+                    
+                    logger.info(f"准备调用总结生成器，传递参数: {extracted_model_params}")
+                    
+                    # 使用提取的参数调用总结生成器
+                    from app.meeting.utils.summary_generator import SummaryGenerator
+                    
+                    accumulated_text = ""
+                    buffer = ""
+                    last_chunk_time = time.time()
+                    
+                    async for chunk in SummaryGenerator.generate_summary_stream(
+                        meeting_topic=meeting.topic,
+                        meeting_history=meeting.meeting_history,
+                        prompt_template=prompt_template,
+                        model_name=model_name,
+                        api_key=api_key, 
+                        api_base_url=api_base_url,
+                        model_params=extracted_model_params  # 使用提取的参数
+                    ):
+                        # 累积总结文本
+                        accumulated_text += chunk
+                        buffer += chunk
+                        current_time = time.time()
+                        
+                        # 使用更小的缓冲区和更短的时间间隔，创造打字效果
+                        if len(buffer) >= random.randint(1, 4) or (current_time - last_chunk_time) > random.uniform(0.08, 0.15):
+                            summary_chunk = {
+                                "id": f"{conversation_id}-summary-chunk-{int(current_time*1000)}",
+                                "object": "chat.completion.chunk",
+                                "created": int(current_time),
+                                "model": "discussion-group",
+                                "choices": [{
+                                    "index": 0,
+                                    "delta": {"content": buffer},
+                                    "finish_reason": None
+                                }]
+                            }
+                            yield f"data: {json.dumps(summary_chunk, ensure_ascii=False)}\n\n"
+                            buffer = ""  # 清空缓冲区
+                            last_chunk_time = current_time
+                            
+                            # 添加极小的随机暂停增强自然感
+                            if random.random() < 0.2:  # 20%概率添加微小停顿
+                                await asyncio.sleep(random.uniform(0.02, 0.05))
+                    
+                    # 将完整总结添加到会议记录
+                    meeting.add_message("system", accumulated_text)
+                    
+                    # 发送总结完成标记 - 美化格式
+                    summary_footer = {
+                        "id": f"{conversation_id}-summary-footer",
+                        "object": "chat.completion.chunk",
+                        "created": int(time.time()),
+                        "model": "discussion-group",
+                        "choices": [{
+                            "index": 0,
+                            "delta": {"content": "\n\n---\n\n*会议已完成*"},
+                            "finish_reason": "stop"
+                        }]
+                    }
+                    yield f"data: {json.dumps(summary_footer, ensure_ascii=False)}\n\n"
+                    
+                except Exception as e:
+                    # 处理总结生成错误 - 美化错误显示格式
+                    error_msg = f"生成会议总结时出错: {str(e)}"
+                    logger.error(error_msg, exc_info=True)
+                    error_chunk = {
+                        "id": f"{conversation_id}-summary-error",
+                        "object": "chat.completion.chunk",
+                        "created": int(time.time()),
+                        "model": "discussion-group",
+                        "choices": [{
+                            "index": 0,
+                            "delta": {"content": f"\n\n> **错误**: {error_msg}"},
+                            "finish_reason": "stop"
+                        }]
+                    }
+                    yield f"data: {json.dumps(error_chunk, ensure_ascii=False)}\n\n"
+                
+                # 会议总结完成，跳出循环
+                break
+            
+            # 添加分隔符使轮次之间更清晰
+            round_separator = {
+                "id": f"{conversation_id}-round-{round_count}-separator",
+                "object": "chat.completion.chunk",
+                "created": int(time.time()),
+                "model": "discussion-group",
+                "choices": [{
+                    "index": 0,
+                    "delta": {"content": "\n\n---\n\n"},
+                    "finish_reason": None
+                }]
+            }
+            yield f"data: {json.dumps(round_separator, ensure_ascii=False)}\n\n"
+            
+            # 暂停一下再进行下一轮 - 适当的延迟使整体流程更自然
+            await asyncio.sleep(0.7 + random.uniform(0, 0.5))
         
-        logger.info("总结内容发送完成")
-        
-        # 确保发送最终的换行
-        final_newline = {
-            "id": f"{conversation_id}-summary-end",
-            "object": "chat.completion.chunk",
-            "created": int(time.time()),
-            "model": "discussion-group",
-            "choices": [{
-                "index": 0,
-                "delta": {"content": "\n\n"},
-                "finish_reason": None
-            }]
-        }
-        yield f"data: {json.dumps(final_newline, ensure_ascii=False)}\n\n".encode('utf-8')
-        
-        # 发送会话结束事件
-        end_event = {
-            "id": f"{conversation_id}-end",
-            "object": "chat.completion.chunk",
-            "created": int(time.time()),
-            "model": "discussion-group", 
-            "choices": [{
-                "index": 0,
-                "delta": {},
-                "finish_reason": "stop"
-            }]
-        }
-        logger.info("发送结束标记")
-        yield f"data: {json.dumps(end_event, ensure_ascii=False)}\n\n".encode('utf-8')
-        yield "data: [DONE]\n\n".encode('utf-8')
-        logger.info("流式处理完成")
+        # 发送完成标记
+        yield "data: [DONE]\n\n"
     
     def _print_latest_round_content(self, meeting_id: str):
         """打印最新一轮的对话内容"""

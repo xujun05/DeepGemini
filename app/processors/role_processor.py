@@ -1,6 +1,8 @@
 from typing import Dict, Any, List, Optional
 from sqlalchemy.orm import Session
 import logging
+import json
+import time
 
 from app.models.database import Role, Model
 from app.meeting.agents.agent import Agent
@@ -169,12 +171,12 @@ class RoleProcessor:
             logger.error(f"处理角色请求失败: {str(e)}", exc_info=True)
             raise
     
-    def _create_system_prompt(self) -> str:
+    def _create_system_prompt(self, role: Role) -> str:
         """创建系统提示"""
-        return f"""你是名为{self._load_role(prompt).name}的智能体。
-角色描述: {self._load_role(prompt).description or ''}
-性格特点: {self._load_role(prompt).personality or ''}
-专业技能: {', '.join(self._load_role(prompt).skills or [])}
+        return f"""你是名为{role.name}的智能体。
+角色描述: {role.description or ''}
+性格特点: {role.personality or ''}
+专业技能: {', '.join(role.skills or [])}
 
 请根据你的角色特点和专业知识回答用户的问题。
 """
@@ -273,7 +275,7 @@ class RoleProcessor:
         # 处理请求
         if stream:
             logger.info("使用流式响应模式")
-            return self._get_stream_chat_response(agent, chat_messages)
+            return self._get_stream_chat_response(agent, chat_messages)  # 直接返回异步生成器，不使用await
         else:
             logger.info("使用非流式响应模式")
             return await self._get_normal_chat_response(agent, chat_messages)
@@ -294,36 +296,73 @@ class RoleProcessor:
         response = agent.generate_chat_response(messages)
         return response
 
-    def _get_stream_chat_response(self, agent: Agent, messages: List[Dict[str, Any]]):
+    async def _get_stream_chat_response(self, agent: Agent, messages: List[Dict[str, Any]]):
         """获取流式聊天响应"""
-        # 创建类似于生成器的对象，以便正确处理流式响应
-        class AsyncIteratorWrapper:
-            def __init__(self, agent, messages):
-                self.agent = agent
-                self.messages = messages
-                self._iterator = None
-            
-            def __aiter__(self):
-                return self
-            
-            async def __anext__(self):
-                if self._iterator is None:
-                    # 调用generate_chat_response_stream并获取其迭代器
-                    try:
-                        logger.info("初始化聊天响应流")
-                        self._iterator = self.agent.generate_chat_response_stream(self.messages).__aiter__()
-                    except Exception as e:
-                        logger.error(f"获取流迭代器时出错: {str(e)}")
-                        raise StopAsyncIteration
-                
-                try:
-                    # 获取下一个值
-                    return await self._iterator.__anext__()
-                except StopAsyncIteration:
-                    # 传递迭代结束信号
-                    logger.info("流式响应完成")
-                    raise
+        logger.info(f"开始流式响应生成，消息数量: {len(messages)}")
         
-        # 返回一个可迭代对象
-        logger.info(f"创建流式响应包装器，消息数量: {len(messages)}")
-        return AsyncIteratorWrapper(agent, messages) 
+        # 生成一个唯一的响应ID
+        chat_id = f"chatcmpl-{hex(int(time.time() * 1000))[2:]}"
+        created_time = int(time.time())
+        model_name = agent.model_params.get("model_name", "unknown-model")
+        
+        # 发送角色信息
+        first_chunk = True
+        
+        try:
+            # 发送角色部分（仅一次）
+            if first_chunk:
+                role_data = {
+                    "id": chat_id,
+                    "object": "chat.completion.chunk",
+                    "created": created_time,
+                    "model": model_name,
+                    "choices": [{
+                        "index": 0,
+                        "delta": {
+                            "role": "assistant"
+                        },
+                        "finish_reason": None
+                    }]
+                }
+                yield f"data: {json.dumps(role_data)}\n\n".encode('utf-8')
+                first_chunk = False
+            
+            # 流式发送内容
+            async for chunk in agent.generate_chat_response_stream(messages):
+                if chunk:
+                    content_data = {
+                        "id": chat_id,
+                        "object": "chat.completion.chunk",
+                        "created": created_time,
+                        "model": model_name,
+                        "choices": [{
+                            "index": 0,
+                            "delta": {
+                                "content": chunk
+                            },
+                            "finish_reason": None
+                        }]
+                    }
+                    yield f"data: {json.dumps(content_data)}\n\n".encode('utf-8')
+            
+            # 发送完成信息
+            finish_data = {
+                "id": chat_id,
+                "object": "chat.completion.chunk",
+                "created": created_time,
+                "model": model_name,
+                "choices": [{
+                    "index": 0,
+                    "delta": {},
+                    "finish_reason": "stop"
+                }]
+            }
+            yield f"data: {json.dumps(finish_data)}\n\n".encode('utf-8')
+            
+            # 发送结束标记
+            yield b"data: [DONE]\n\n"
+            
+            logger.info("流式响应完成")
+        except Exception as e:
+            logger.error(f"流式响应生成错误: {str(e)}", exc_info=True)
+            raise 

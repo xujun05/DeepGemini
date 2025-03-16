@@ -580,81 +580,99 @@ class MeetingAdapter:
             logger.error(f"进行讨论轮次失败: {str(e)}", exc_info=True)
             raise
     
-    async def end_meeting(self, meeting_id: str):
-        """结束会议并生成总结"""
-        # 获取会议
-        meeting = self.active_meetings.get(meeting_id)
-        if not meeting:
-            raise ValueError(f"会议ID {meeting_id} 不存在")
-        
-        # 获取讨论组信息
-        group = meeting.group_info
-        
-        # 获取自定义总结模型（如果有）
-        summary_model = None
-        api_key = None
-        api_base_url = None
-        
-        if group and 'summary_model_id' in group and group['summary_model_id']:
-            model_id = group['summary_model_id']
-            summary_model = self.db.query(ModelConfiguration).filter(ModelConfiguration.id == model_id).first()
+    async def end_meeting(self, meeting_id: str) -> Dict[str, Any]:
+        """结束会议并获取总结"""
+        try:
+            # 获取会议对象
+            meeting = self.active_meetings.get(meeting_id)
+            if not meeting:
+                logger.error(f"结束会议失败: 会议ID {meeting_id} 不存在")
+                return {"error": f"会议ID {meeting_id} 不存在"}
             
-            if summary_model:
-                # 获取API密钥和基础URL
-                api_key = getattr(summary_model, 'api_key', None)
-                api_url = getattr(summary_model, 'api_url', None)
+            # 获取讨论组信息
+            group_info = meeting.group_info
+            
+            # 获取自定义总结模型（如果有）
+            summary_model = None
+            api_key = None
+            api_base_url = None
+            
+            if group_info and 'summary_model_id' in group_info and group_info['summary_model_id']:
+                model_id = group_info['summary_model_id']
+                logger.info(f"使用自定义总结模型: model_id={model_id}")
                 
-                # 处理URL，从完整URL中提取基础部分
-                if api_url:
-                    if "/v1/chat/completions" in api_url:
-                        api_base_url = api_url.split("/v1/chat/completions")[0]
-                    else:
-                        api_base_url = api_url
-        
-        # 获取自定义提示模板（如果有）
-        custom_prompt = None
-        if group and 'summary_prompt' in group and group['summary_prompt']:
-            custom_prompt = group['summary_prompt']
-        
-        # 生成总结
-        meeting_topic = meeting.topic
-        meeting_history = meeting.meeting_history
-        
-        # 使用自定义模型和提示（如果有），否则使用默认
-        if summary_model:
-            model_name = summary_model.name
-        else:
-            model_name = None  # 使用默认值
-        
-        if custom_prompt:
-            prompt_template = custom_prompt
-        else:
-            # 使用会议模式的默认提示模板
-            prompt_template = meeting.mode.get_summary_prompt_template()
-        
-        # 调用总结生成器，传递API信息
-        summary = SummaryGenerator.generate_summary(
-            meeting_topic=meeting_topic,
-            meeting_history=meeting_history,
-            prompt_template=prompt_template,
-            model_name=model_name,
-            api_key=api_key,
-            api_base_url=api_base_url
-        )
-        
-        # 添加总结到会议历史
-        meeting.add_message("system", summary)
-        
-        # 更新会议状态
-        meeting.status = "已结束"
-        meeting.end_time = datetime.now()
-        
-        # 确保返回的数据包含summary字段
-        result = meeting.to_dict()
-        if "summary" not in result:
-            result["summary"] = summary
-        
-        return result
+                # 从数据库获取模型配置
+                summary_model = self.db.query(ModelConfiguration).filter(ModelConfiguration.id == model_id).first()
+                
+                if summary_model:
+                    logger.info(f"找到总结模型: name={summary_model.name}")
+                    # 获取API密钥和基础URL
+                    api_key = getattr(summary_model, 'api_key', None)
+                    api_url = getattr(summary_model, 'api_url', None)
+                    
+                    # 处理URL，从完整URL中提取基础部分
+                    if api_url:
+                        if "/v1/chat/completions" in api_url:
+                            api_base_url = api_url.split("/v1/chat/completions")[0]
+                        else:
+                            api_base_url = api_url
+            
+            # 获取自定义提示模板（如果有）
+            custom_prompt = None
+            if group_info and 'summary_prompt' in group_info and group_info['summary_prompt']:
+                custom_prompt = group_info['summary_prompt']
+                logger.info(f"使用自定义总结提示模板: length={len(custom_prompt)}")
+            
+            # 生成总结
+            meeting_topic = meeting.topic
+            meeting_history = meeting.meeting_history
+            
+            # 使用自定义模型和提示（如果有），否则使用默认
+            model_name = summary_model.name if summary_model else None  # 使用默认值
+            
+            # 使用会议模式的默认提示模板或自定义提示
+            prompt_template = custom_prompt if custom_prompt else meeting.mode.get_summary_prompt_template()
+            
+            logger.info(f"生成总结: model_name={model_name or '默认'}, 提示模板长度={len(prompt_template)}")
+            
+            # 调用总结生成器，传递API信息
+            summary = SummaryGenerator.generate_summary(
+                meeting_topic=meeting_topic,
+                meeting_history=meeting_history,
+                prompt_template=prompt_template,
+                model_name=model_name,
+                api_key=api_key,
+                api_base_url=api_base_url
+            )
+            
+            # 添加总结到会议历史
+            meeting.add_message("system", summary)
+            
+            # 更新会议状态
+            meeting.status = "已结束"
+            meeting.end_time = datetime.now()
+            
+            # 构建返回结果
+            result = meeting.to_dict()
+            
+            # 确保返回的数据包含summary字段
+            if "summary" not in result:
+                result["summary"] = summary
+            
+            # 记录会议结束
+            logger.info(f"会议已结束: meeting_id={meeting_id}, 总结长度={len(result.get('summary', ''))}")
+            
+            return result
+        except Exception as e:
+            logger.error(f"结束会议时出错: {str(e)}", exc_info=True)
+            # 尝试创建一个基本的错误返回
+            return {
+                "error": f"结束会议时出错: {str(e)}",
+                "id": meeting_id,
+                "topic": meeting.topic if meeting else "未知主题",
+                "history": meeting.meeting_history if meeting else [],
+                "summary": "由于技术问题，无法生成会议总结。"
+            }
 
     def _load_discussion_group(self, group_id: int):
         """加载讨论组信息"""

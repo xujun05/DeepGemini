@@ -43,8 +43,8 @@ class DiscussionMode(BaseMeetingMode):
         agent_names = [agent["name"] for agent in agents]
         
         # 第一轮按顺序，后续轮次随机打乱顺序
-        if current_round > 1:
-            random.shuffle(agent_names)
+        # if current_round > 1:
+        #     random.shuffle(agent_names)
             
         return agent_names
     

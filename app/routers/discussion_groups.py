@@ -1,7 +1,10 @@
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Request
 from sqlalchemy.orm import Session
 from typing import List, Dict, Any
 import logging
+import json
+import traceback
+from fastapi.responses import StreamingResponse
 
 from app.models.database import get_db
 from app.processors.discussion_processor import DiscussionProcessor
@@ -84,4 +87,33 @@ def delete_discussion_group(group_id: int, db: Session = Depends(get_db)):
         raise
     except Exception as e:
         logger.error(f"删除讨论组 {group_id} 失败: {str(e)}")
-        raise HTTPException(status_code=500, detail=f"删除讨论组失败: {str(e)}") 
+        raise HTTPException(status_code=500, detail=f"删除讨论组失败: {str(e)}")
+
+@router.post("/stream/{group_id}")
+async def stream_discussion_process(group_id: int, request: Request, db: Session = Depends(get_db)):
+    """开始流式讨论过程"""
+    processor = DiscussionProcessor(db)
+    
+    try:
+        # 开始会议
+        meeting_id = processor.start_meeting(group_id)
+        
+        # 返回流式响应
+        return StreamingResponse(
+            processor._stream_discussion_process(meeting_id),
+            media_type="text/event-stream"
+        )
+        
+    except Exception as e:
+        logger.error(f"启动流式讨论过程时出错: {str(e)}", exc_info=True)
+        
+        # 创建错误流
+        async def error_stream():
+            error_data = {
+                "error": str(e),
+                "detail": traceback.format_exc()
+            }
+            yield f"data: {json.dumps(error_data, ensure_ascii=False)}\n\n"
+            yield "data: [DONE]\n\n"
+            
+        return StreamingResponse(error_stream(), media_type="text/event-stream") 
