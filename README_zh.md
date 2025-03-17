@@ -108,6 +108,7 @@ docker pull bradleylzh/deepgemini:latest
 Linux/Mac 用户：
 ```bash
 cp .env.example .env
+touch deepgemini.db
 ```
 
 运行容器
@@ -115,7 +116,7 @@ cp .env.example .env
 docker run -d \
 -p 8000:8000 \
 -v $(pwd)/.env:/app/.env \
--v $(pwd)/:/app/ \
+-v $(pwd)/deepgemini.db:/app/deepgemini.db \
 --name deepgemini \
 bradleylzh/deepgemini:latest
 ```
@@ -124,6 +125,7 @@ Windows PowerShell 用户：
 
 ```powershell
 cp .env.example .env
+echo "" > deepgemini.db
 ```
 
 运行容器
@@ -131,7 +133,7 @@ cp .env.example .env
 docker run -d \
 -p 8000:8000 \
 -v $(pwd)/.env:/app/.env \
--v $(pwd)/:/app/ \
+-v $(pwd)/deepgemini.db:/app/deepgemini.db \
 --name deepgemini \
 bradleylzh/deepgemini:latest
 ```

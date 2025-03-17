@@ -7,5 +7,5 @@ services:
       - "8000:8000"
     volumes:
       - ./.env:/app/.env
-      - ./:/app/
+      - ./deepgemini.db:/app/deepgemini.db
     restart: unless-stopped 

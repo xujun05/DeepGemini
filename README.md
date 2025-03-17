@@ -91,6 +91,8 @@ Visit `http://localhost:8000/dashboard` to access the web management interface.
 
 ```bash
 cp .env.example .env
+touch deepgemini.db
+echo "" > deepgemini.db
 ```
 
 2. Build and start the container:
@@ -114,14 +116,14 @@ For Linux/Mac:
 ```bash
 # Create .env file
 cp .env.example .env
-
+touch deepgemini.db
 ```
 
 For Windows PowerShell:
 ```powershell
 # Create .env file
 cp .env.example .env
-
+echo "" > deepgemini.db
 ```
 
 3. Run the container:
@@ -131,7 +133,7 @@ For Linux/Mac:
 docker run -d \
 -p 8000:8000 \
 -v $(pwd)/.env:/app/.env \
--v $(pwd)/:/app/ \
+-v $(pwd)/deepgemini.db:/app/deepgemini.db \
 --name deepgemini \
 bradleylzh/deepgemini:latest
 ```
@@ -140,7 +142,7 @@ For Windows PowerShell:
 ```powershell
 docker run -d -p 8000:8000 `
 -v ${PWD}\.env:/app/.env `
--v ${PWD}\:/app/ `
+-v ${PWD}\deepgemini.db:/app/deepgemini.db `
 --name deepgemini `
 bradleylzh/deepgemini:latest
 ```

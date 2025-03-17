@@ -11,10 +11,10 @@ RUN pip install uv
 COPY . .
 
 # 使用 uv 安装依赖
-RUN uv sync
+RUN uv sync 
 
 # 暴露端口
 EXPOSE 8000
 
 # 启动命令
-CMD ["uv", "run", "uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000"] 
+CMD ["uv", "run", "-m", "app.main"]
