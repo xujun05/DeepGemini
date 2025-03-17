@@ -454,7 +454,15 @@ class Agent:
                 base_url = "http://localhost:8000"
                 logger.warning(f"未设置API基础URL，使用默认值: {base_url}")
         
-        logger.info(f"流式API调用: url={base_url}/v1/chat/completions, model={self.model_params.get('model_name', 'unknown')}")
+        # 修复：确保base_url不包含重复的路径
+        # 如果base_url已经包含了/v1/chat/completions，则不再添加
+        api_endpoint = "/v1/chat/completions"
+        if base_url.endswith(api_endpoint):
+            full_url = base_url
+        else:
+            full_url = f"{base_url}{api_endpoint}"
+        
+        logger.info(f"流式API调用: url={full_url}, model={self.model_params.get('model_name', 'unknown')}")
         
         headers = {
             "Content-Type": "application/json"
@@ -478,7 +486,7 @@ class Agent:
         
         try:
             async with aiohttp.ClientSession() as session:
-                async with session.post(f"{base_url}/v1/chat/completions", 
+                async with session.post(full_url, 
                                         headers=headers, 
                                         json=payload) as response:
                     # 检查响应
