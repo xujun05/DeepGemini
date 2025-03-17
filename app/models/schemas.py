@@ -85,7 +85,7 @@ class ConfigurationStep(ConfigurationStepBase):
     configuration_id: int
 
     class Config:
-        orm_mode = True
+        from_attributes = True
 
 class ConfigurationBase(BaseModel):
     name: str

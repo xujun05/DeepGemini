@@ -165,7 +165,6 @@ class RoleProcessor:
                 # 后续处理单角色对话的逻辑...
                 return await self._process_single_role_chat(role, messages, stream)
             else:
-                # 原有的处理逻辑...
                 pass
         except Exception as e:
             logger.error(f"处理角色请求失败: {str(e)}", exc_info=True)

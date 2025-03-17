@@ -89,26 +89,30 @@ class DeepSeekClient(BaseClient):
                                     content = delta["content"]
                                     think_content_buffer += content
                                     
-                                    if "<think>" in content or in_think_tag:
+                                    if "<think>" in content and not in_think_tag:
                                         # 开始收集推理内容
                                         logger.debug(f"检测到推理开始标记：{content}")
                                         in_think_tag = True
                                         # 提取 <think> 标签后的内容
-                                        after_think = content.split("<think>")[-1]
-                                        if in_think_tag:
-                                            logger.debug(f"开始提取 think 标签后的推理内容")
-                                            yield "reasoning", content
-
-                                    elif "</think>" in content and not in_think_tag:
+                                        after_start_think = content.split("<think>")[1]
+                                        if after_start_think.strip():
+                                            logger.debug(f"提取 think 标签后的推理内容")
+                                            yield "reasoning", after_start_think
+                                    
+                                    elif in_think_tag and "</think>" not in content:
+                                        # 在 think 标签内的内容
+                                        logger.debug(f"提取 think 标签内的推理内容")
+                                        yield "reasoning", content
+                                        
+                                    elif in_think_tag and "</think>" in content:
                                         # 推理内容结束
-                                        in_think_tag = False
                                         logger.debug(f"检测到推理结束标记：{content}")
                                         # 提取 </think> 标签前的内容
                                         before_end_think = content.split("</think>")[0]
                                         if before_end_think.strip():
-                                            logger.debug(f"开始提取 think 结束标签前的推理内容")
-                                            yield "reasoning", content
-                                        reasoning_completed = True
+                                            logger.debug(f"提取 think 结束标签前的推理内容")
+                                            yield "reasoning", before_end_think
+                                        in_think_tag = False
                                         think_content_buffer = ""
                                         
                                     elif not kwargs.get("is_last_step"):

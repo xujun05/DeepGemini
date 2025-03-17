@@ -260,7 +260,7 @@ const translations = {
         
         // 角色管理相关翻译
         roleManagement: '角色管理',
-        roleDescription: '创建和管理AI角色，用于智能讨论组',
+        roleDescription: '创建和管理AI角色，用于组建讨论组',
         addRole: '添加角色',
         roleName: '角色名称',
         personality: '性格特点',
@@ -281,7 +281,7 @@ const translations = {
         
         // 讨论组管理相关翻译
         groupManagement: '讨论组管理',
-        groupDescription: '创建和管理AI角色讨论组，开展多智能体对话',
+        groupDescription: '创建和管理AI角色讨论组，开展多角色对话',
         addGroup: '添加讨论组',
         groupName: '讨论组名称',
         meetingMode: '会议模式',

@@ -14,6 +14,15 @@
 ## ✨ Features
 
 - **Multi-Model Orchestration**: Seamlessly combine multiple AI models in customizable workflows
+- **Role Management**: Create AI roles with different personalities and skills
+- **Discussion Groups**: Combine multiple roles to form discussion groups
+- **Multiple Discussion Modes**:
+  - General Discussion
+  - Brainstorming
+  - Debate
+  - Role-playing
+  - SWOT Analysis
+  - Six Thinking Hats
 - **Provider Flexibility**: Support for multiple AI providers:
   - DeepSeek
   - Claude
@@ -22,7 +31,7 @@
   - OpenAI
   - OneAPI
   - OpenRouter
-  - Tencent Cloud
+  - Siliconflow
 - **OpenAI Compatible**: Drop-in replacement for OpenAI's API in existing applications
 - **Stream Support**: Real-time streaming responses for better user experience
 - **Advanced Configuration**: Fine-grained control over model parameters and system prompts
@@ -36,7 +45,12 @@
 
 ![image](https://img.pub/p/1ffdc3728b7944caf807.png)
 
+![image](https://img.pub/p/9051bfc02883dbceaf90.png)
+
+![image](https://img.pub/p/058205dff608609b7d58.png)
+
 ![image](https://img.pub/p/439520386b4927c91688.png)
+
 
 
 ## 🚀 Quick Start
@@ -156,23 +170,17 @@ Create custom Relay Chain by combining models:
 2. **Execution Step**: Final response generation
 3. **Custom Steps**: Add multiple steps as needed
 
-```json
-{
-"name": "advanced_workflow",
-"steps": [
-{
-"model_id": 1,
-"step_type": "reasoning",
-"step_order": 1
-},
-{
-"model_id": 2,
-"step_type": "execution",
-"step_order": 2
-}
-]
-}
-```
+## 👥 Multi-Role Discussion
+**Role Management**: Create AI roles with different personalities and skills
+- **Discussion Groups**: Combine multiple roles to form discussion groups
+- **Multiple Discussion Modes**:
+  - General Discussion
+  - Brainstorming
+  - Debate
+  - Role-playing
+  - SWOT Analysis
+  - Six Thinking Hats
+
 ## 🛠 Tech Stack
 
 - [FastAPI](https://fastapi.tiangolo.com/): Modern web framework

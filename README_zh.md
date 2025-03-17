@@ -13,7 +13,16 @@
 
 ## ✨ 特性
 
-- **多模型编排**：无缝组合多个 AI 模型，实现自定义工作流
+- **多模型编排**：无缝组合多个 AI 模型，实现自定义接力链
+- **角色管理**：创建具有不同性格和技能的 AI 角色
+- **讨论组**：组合多个角色形成讨论组
+- **多种讨论模式**：
+  - 一般讨论
+  - 头脑风暴
+  - 辩论
+  - 角色扮演
+  - SWOT 分析
+  - 六顶思考帽  
 - **灵活的提供商支持**：支持多个 AI 提供商：
   - DeepSeek
   - Claude
@@ -22,11 +31,10 @@
   - OpenAI
   - OneAPI
   - OpenRouter
-  - 腾讯云
+  - Siliconflow
 - **OpenAI 兼容**：可作为 OpenAI API 的直接替代品
 - **流式响应**：支持实时流式响应，提供更好的用户体验
 - **高级配置**：精细控制模型参数和系统提示词
-- **数据库集成**：基于 SQLite 的配置存储，使用 Alembic 进行迁移
 - **Web 管理界面**：内置模型和配置管理界面
 - **多语言支持**：支持中文和英文界面
 
@@ -35,6 +43,10 @@
 ![image](https://img.pub/p/02f96adb71b92d9e8009.png)
 
 ![image](https://img.pub/p/1ffdc3728b7944caf807.png)
+
+![image](https://img.pub/p/9051bfc02883dbceaf90.png)
+
+![image](https://img.pub/p/058205dff608609b7d58.png)
 
 ![image](https://img.pub/p/439520386b4927c91688.png)
 
@@ -148,23 +160,16 @@ DeepGemini 支持多种 AI 提供商：
 2. **执行步骤**：最终响应生成
 3. **自定义步骤**：根据需要添加多个步骤
 
-```json
-{
-"name": "advanced_workflow",
-"steps": [
-{
-"model_id": 1,
-"step_type": "reasoning",
-"step_order": 1
-},
-{
-"model_id": 2,
-"step_type": "execution",
-"step_order": 2
-}
-]
-}
-```
+## 👥 多角色讨论
+- **角色管理**：创建具有不同性格和技能的 AI 角色
+- **讨论组**：组合多个角色形成讨论组
+- **多种讨论模式**：
+  - 一般讨论
+  - 头脑风暴
+  - 辩论
+  - 角色扮演
+  - SWOT 分析
+  - 六顶思考帽
 
 ## 🛠 技术栈
 
