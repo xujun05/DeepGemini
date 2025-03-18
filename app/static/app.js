@@ -2036,10 +2036,11 @@ function loadModelsForRoles() {
 
 function openAddRoleModal() {
     // 清空表单
-    document.getElementById('addRoleForm').reset();
+    const form = document.getElementById('addRoleForm');
+    form.reset();
     
     // 移除可能存在的隐藏id字段，确保不会覆盖现有角色
-    const existingIdField = document.querySelector('#addRoleForm input[name="id"]');
+    const existingIdField = form.querySelector('input[name="id"]');
     if (existingIdField) {
         existingIdField.remove();
     }
@@ -2102,6 +2103,17 @@ function editRole(roleId) {
         .then(role => {
             // 填充表单
             const form = document.getElementById('addRoleForm');
+            
+            // 重置表单，确保清除所有旧值
+            form.reset();
+            
+            // 移除可能存在的旧ID字段
+            const existingIdField = form.querySelector('input[name="id"]');
+            if (existingIdField) {
+                existingIdField.remove();
+            }
+            
+            // 填充表单字段
             form.elements['name'].value = role.name;
             form.elements['description'].value = role.description || '';
             form.elements['personality'].value = role.personality || '';
