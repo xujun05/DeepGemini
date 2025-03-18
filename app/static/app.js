@@ -251,7 +251,7 @@ const translations = {
         summaryModel: '总结模型',
         useDefaultModel: '使用默认模型',
         customSummaryPrompt: '自定义总结提示(可选)',
-        summaryPromptTip: '可以使用 {topic}, {history_text}, {meeting_topic} 等占位符引用会议内容',
+        summaryPromptTip: '可以使用 {history_text}, {meeting_topic} 等占位符引用会议内容',
         summaryModelHint: '选择用于生成会议总结的模型，留空则使用系统默认模型',
         insertTemplate: '插入模板',
         promptTemplateCopied: '模板已插入文本框',
@@ -260,7 +260,7 @@ const translations = {
         
         // 角色管理相关翻译
         roleManagement: '角色管理',
-        roleDescription: '创建和管理AI角色，用于组建讨论组',
+        roleDescription: '角色描述',
         addRole: '添加角色',
         roleName: '角色名称',
         personality: '性格特点',
