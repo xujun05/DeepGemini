@@ -39,6 +39,11 @@ class MultiStepModelCollaboration:
             self.clients.append({
                 'client': client,
                 'model_name': model.model_name,
+                'temperature': model.temperature,
+                'max_tokens': model.max_tokens,
+                'top_p': model.top_p,
+                'frequency_penalty': model.frequency_penalty,
+                'presence_penalty': model.presence_penalty,
                 'step_type': step['step_type'],
                 'system_prompt': step['system_prompt'],
                 'tools': model.tools,
@@ -124,6 +129,11 @@ class MultiStepModelCollaboration:
             async for content_type, content in client.stream_chat(
                 messages=current_messages,
                 model=client_info['model_name'],
+                temperature=client_info['temperature'],
+                max_tokens=client_info['max_tokens'],
+                top_p=client_info['top_p'],
+                frequency_penalty=client_info['frequency_penalty'],
+                presence_penalty=client_info['presence_penalty'],
                 is_last_step=is_last_step,
                 is_first_step=is_first_step,
                 tools=client_info.get('tools'),
