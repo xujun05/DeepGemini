@@ -40,6 +40,12 @@ class Agent:
         if not self.api_key and "api_key" in self.model_params:
             self.api_key = self.model_params["api_key"]
         
+        # 根据模型名称确定提供商
+        self.provider = "openai"  # 默认为OpenAI兼容接口
+        model_name = self.model_params.get("model_name", "").lower()
+        if "gemini" in model_name:
+            self.provider = "google"
+        
         self.system_prompt = self._create_system_prompt()
         self.last_response = ""  # 添加存储最后响应的属性
     
@@ -444,6 +450,52 @@ class Agent:
     
     async def _call_api_with_messages_stream(self, messages: List[Dict[str, str]]):
         """调用API并获取流式响应"""
+        model_name = self.model_params.get("model_name", "gpt-3.5-turbo")
+        
+        # 对于Gemini模型，使用GeminiClient处理
+        if self.provider == "google":
+            try:
+                from app.clients.gemini_client import GeminiClient
+                
+                # 获取API密钥
+                api_key = self.api_key
+                if not api_key and "api_key" in self.model_params:
+                    api_key = self.model_params["api_key"]
+                
+                if not api_key:
+                    raise ValueError("使用Gemini API需要有效的API密钥")
+                
+                # 创建GeminiClient实例
+                gemini_client = GeminiClient(api_key=api_key)
+                
+                # 转换消息格式为Gemini格式
+                gemini_messages = []
+                for msg in messages:
+                    role = msg.get("role", "user")
+                    content = msg.get("content", "")
+                    gemini_messages.append({"role": role, "content": content})
+                
+                logger.info(f"使用GeminiClient处理请求: model={model_name}")
+                
+                # 调用GeminiClient的stream_chat方法
+                async for content_type, content in gemini_client.stream_chat(
+                    gemini_messages, 
+                    model=model_name,
+                    temperature=self.model_params.get("temperature", 0.7),
+                    max_tokens=self.model_params.get("max_tokens", 10000)
+                ):
+                    if content_type == "answer":
+                        yield content
+                
+                return
+            except ImportError:
+                logger.error("无法导入GeminiClient，尝试使用OpenAI兼容接口")
+            except Exception as e:
+                logger.error(f"使用GeminiClient时出错: {str(e)}", exc_info=True)
+                yield f"\n\n[Gemini API错误: {str(e)}]"
+                return
+        
+        # 对于非Gemini模型，使用OpenAI兼容接口（原有代码）
         # 确保API基本URL存在并有效
         base_url = self.base_url
         if not base_url:
@@ -462,7 +514,7 @@ class Agent:
         else:
             full_url = f"{base_url}{api_endpoint}"
         
-        logger.info(f"流式API调用: url={full_url}, model={self.model_params.get('model_name', 'unknown')}")
+        logger.info(f"流式API调用: url={full_url}, model={model_name}")
         
         headers = {
             "Content-Type": "application/json"
@@ -477,7 +529,7 @@ class Agent:
         
         # 构建请求体
         payload = {
-            "model": self.model_params.get("model_name", "gpt-3.5-turbo"),
+            "model": model_name,
             "messages": messages,
             "stream": True,
             "temperature": self.model_params.get("temperature", 0.7),

@@ -59,7 +59,11 @@ class MultiStepModelCollaboration:
             if provider == "deepseek":
                 return DeepSeekClient(api_key, api_url, is_origin_reasoning=is_reasoning)
             elif provider == "google":
-                return GeminiClient(api_key, api_url)
+                # 对于多步骤处理使用专用客户端
+                if not self.is_single_model:
+                    return GeminiClient(api_key, api_url)
+                # 对于单模型处理，UniClient会处理
+                return None
             elif provider == "anthropic":
                 return ClaudeClient(api_key, api_url, is_origin_reasoning=is_reasoning)
             elif provider == "grok3":
@@ -249,7 +253,7 @@ class MultiStepModelCollaboration:
         """添加系统提示词到消息列表"""
         new_messages = messages.copy()
         if new_messages and new_messages[0].get("role") == "system":
-            new_messages[0]["content"] = f"{system_prompt}\n\n{new_messages[0]['content']}"
+            new_messages[0]["content"] = f"{system_prompt}"
         else:
             new_messages.insert(0, {
                 "role": "system",

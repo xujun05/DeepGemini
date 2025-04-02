@@ -3,6 +3,7 @@ import colorlog
 import sys
 import os
 from dotenv import load_dotenv
+from datetime import datetime
 
 # 确保环境变量被加载
 load_dotenv()
@@ -33,10 +34,13 @@ def setup_logger(name: str = "DeepGemini") -> logging.Logger:
     Returns:
         logging.Logger: 配置好的logger实例
     """
+    # 获取logger实例
     logger = colorlog.getLogger(name)
     
+    # 清除现有处理器，避免重复
     if logger.handlers:
-        return logger
+        for handler in logger.handlers:
+            logger.removeHandler(handler)
     
     # 从环境变量获取日志级别
     log_level = get_log_level()
@@ -63,6 +67,9 @@ def setup_logger(name: str = "DeepGemini") -> logging.Logger:
     
     console_handler.setFormatter(formatter)
     logger.addHandler(console_handler)
+    
+    # 防止日志传播到父logger，这可以减少重复日志
+    logger.propagate = False
     
     return logger
 

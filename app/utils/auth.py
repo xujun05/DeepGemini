@@ -107,6 +107,7 @@ def get_api_key_header(api_key_header: str = Depends(api_key_header)):
     if api_key_header.startswith("Bearer "):
         api_key_header = api_key_header[7:]
     
+    # 需要返回处理后的API密钥
     return api_key_header
 
 def verify_api_key(api_key: str = Depends(get_api_key_header)):
@@ -117,8 +118,8 @@ def verify_api_key(api_key: str = Depends(get_api_key_header)):
         api_keys_data = json.loads(api_keys_json)
         available_keys = [key_data["key"] for key_data in api_keys_data]
         
-        logger.info(f"正在验证 API 密钥: {api_key[:8]}...")
-        logger.info(f"可用的 API 密钥: {[k[:8] for k in available_keys]}")
+        logger.debug(f"正在验证 API 密钥: {api_key[:8]}...")
+        logger.debug(f"可用的 API 密钥: {[k[:8] for k in available_keys]}")
         
         if api_key not in available_keys:
             logger.warning(f"无效的API密钥: {api_key[:8]}...")

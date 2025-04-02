@@ -45,19 +45,25 @@ class BaseClient(ABC):
             
         return data
         
-    async def _make_request(self, headers: dict, data: dict) -> AsyncGenerator[bytes, None]:
+    async def _make_request(self, headers: dict, data: dict, url: str = None) -> AsyncGenerator[bytes, None]:
         """发送请求并处理响应
         
         Args:
             headers: 请求头
             data: 请求数据
+            url: 自定义请求URL，如不提供则使用self.api_url
             
         Yields:
             bytes: 原始响应数据
         """
         try:
-            async with aiohttp.ClientSession() as session:
-                async with session.post(self.api_url, headers=headers, json=data) as response:
+            request_url = url if url else self.api_url
+            async with aiohttp.ClientSession() as session:        
+                async with session.post(
+                    request_url,
+                    headers=headers,
+                    json=data
+                ) as response:
                     if response.status != 200:
                         error_text = await response.text()
                         logger.error(f"API 请求失败: {error_text}")

@@ -26,6 +26,19 @@ class UniClient:
             "Authorization": f"Bearer {self.api_key}"
         }
         
+        # 为Google Gemini模型特殊处理
+        if self.provider == "google":
+            # 如果API URL只是基础域名，需要构建完整URL
+            if self.api_url == "https://generativelanguage.googleapis.com" or not "/models/" in self.api_url:
+                # 确保没有尾部斜杠
+                self.api_url = self.api_url.rstrip('/')
+                # 为流式和非流式请求准备不同的基础URL
+                self.base_api_url = self.api_url
+                # 请求时会根据stream参数决定使用哪个端点
+                self.api_url = f"{self.api_url}/v1beta/models/{self.model_name}:generateContent"
+                # 移除Authorization头，Gemini使用URL参数传递API密钥
+                self.headers.pop("Authorization", None)
+        
         # 模型参数
         self.temperature = model.temperature
         self.top_p = model.top_p
@@ -100,7 +113,28 @@ class UniClient:
                             "execution_content": ""
                         }
                         
-            elif self.provider in ["deepseek", "腾讯云","oneapi","opanai-completion"]:
+            elif self.provider == "google":
+                # Gemini 格式处理
+                if "candidates" in chunk_data:
+                    content_text = ""
+                    if chunk_data.get("candidates"):
+                        content = chunk_data["candidates"][0].get("content", {})
+                        parts = content.get("parts", [])
+                        
+                        for part in parts:
+                            text = part.get("text", "")
+                            if text:
+                                content_text += text
+                    
+                    delta = {
+                        "role": "assistant",
+                        "content": content_text,
+                        "reasoning_content": "",
+                        "execution_content": ""
+                    }
+                    logger.debug(f"处理了Gemini响应: {content_text[:50]}...")
+                
+            elif self.provider in ["deepseek", "腾讯云", "oneapi", "openai-completion"]:
                 # DeepSeek 格式
                 if "choices" in chunk_data and chunk_data["choices"]:
                     original_delta = chunk_data["choices"][0].get("delta", {})
@@ -191,38 +225,83 @@ class UniClient:
             "stream": True
         }
         
-        # 添加模型参数（如果不为None或默认值）
-        if self.temperature != 0.7:
-            payload["temperature"] = self.temperature
+        # 处理请求URL（默认使用配置的API URL）
+        request_url = self.api_url
         
-        if self.top_p != 1.0:
-            payload["top_p"] = self.top_p
-        
-        if self.max_tokens:
-            payload["max_tokens"] = self.max_tokens
-        
-        if self.presence_penalty:
-            payload["presence_penalty"] = self.presence_penalty
-        
-        if self.frequency_penalty:
-            payload["frequency_penalty"] = self.frequency_penalty
-        
-        # 只添加API实际支持的自定义参数
-        if self.provider == "deepseek" and self.custom_parameters:
-            for key, value in self.custom_parameters.items():
-                # 避免覆盖标准参数
-                if key not in payload and value is not None:
-                    payload[key] = value
+        # 根据不同的提供商处理请求格式
+        if self.provider == "google":
+            # 为Gemini构建特殊的请求格式
+            gemini_payload = {
+                "contents": [
+                    {
+                        "role": "user" if msg["role"] == "user" else "model",
+                        "parts": [{"text": msg["content"]}]
+                    }
+                    for msg in cleaned_messages
+                ],
+                "generationConfig": {
+                    "temperature": self.temperature,
+                    "topP": self.top_p,
+                    "maxOutputTokens": self.max_tokens
+                }
+            }
+            
+            # 添加自定义参数
+            if self.custom_parameters:
+                if "generationConfig" in self.custom_parameters:
+                    gemini_payload["generationConfig"].update(self.custom_parameters["generationConfig"])
+                if "safetySettings" in self.custom_parameters:
+                    gemini_payload["safetySettings"] = self.custom_parameters["safetySettings"]
+            
+            payload = gemini_payload
+            
+            # 构建正确的流式请求URL
+            if hasattr(self, 'base_api_url'):
+                # 使用基础URL构建流式端点
+                stream_url = f"{self.base_api_url}/v1beta/models/{self.model_name}:streamGenerateContent"
+                request_url = f"{stream_url}?key={self.api_key}&alt=sse"
+                logger.debug(f"使用构建的Gemini流式URL: {request_url}")
+            else:
+                # 或者将现有URL从generateContent转换为streamGenerateContent
+                if ":generateContent" in request_url:
+                    request_url = request_url.replace(":generateContent", ":streamGenerateContent")
+                # 添加API密钥和SSE参数
+                request_url = f"{request_url}?key={self.api_key}&alt=sse"
+                logger.debug(f"转换后的Gemini流式URL: {request_url}")
+        else:
+            # 针对其他提供商的标准处理
+            # 添加模型参数（如果不为None或默认值）
+            if self.temperature != 0.7:
+                payload["temperature"] = self.temperature
+            
+            if self.top_p != 1.0:
+                payload["top_p"] = self.top_p
+            
+            if self.max_tokens:
+                payload["max_tokens"] = self.max_tokens
+            
+            if self.presence_penalty:
+                payload["presence_penalty"] = self.presence_penalty
+            
+            if self.frequency_penalty:
+                payload["frequency_penalty"] = self.frequency_penalty
+            
+            # 只添加API实际支持的自定义参数
+            if self.provider == "deepseek" and self.custom_parameters:
+                for key, value in self.custom_parameters.items():
+                    # 避免覆盖标准参数
+                    if key not in payload and value is not None:
+                        payload[key] = value
         
         # 记录请求详情（用于调试）
-        logger.info(f"发送API请求: url={self.api_url}, model={self.model_name}")
+        logger.info(f"发送API请求: url={request_url}, model={self.model_name}")
         logger.debug(f"请求载荷: {json.dumps(payload, ensure_ascii=False)}")
         
         try:
             # 设置 timeout 为 30 秒
             timeout = httpx.Timeout(30.0, connect=30.0, read=30.0)
             async with httpx.AsyncClient(timeout=timeout) as client:
-                async with client.stream('POST', self.api_url, json=payload, headers=self.headers) as response:
+                async with client.stream('POST', request_url, json=payload, headers=self.headers) as response:
                     # 检查响应状态码
                     if response.status_code != 200:
                         error_text = await response.aread()
@@ -364,31 +443,66 @@ class UniClient:
             "stream": False
         }
         
-        # 添加模型参数（如果不为None或默认值）
-        if self.temperature != 0.7:
-            payload["temperature"] = self.temperature
+        # 处理请求URL（默认使用配置的API URL）
+        request_url = self.api_url
         
-        if self.top_p != 1.0:
-            payload["top_p"] = self.top_p
+        # 根据不同的提供商处理请求格式
+        if self.provider == "google":
+            # 为Gemini构建特殊的请求格式
+            gemini_payload = {
+                "contents": [
+                    {
+                        "role": "user" if msg["role"] == "user" else "model",
+                        "parts": [{"text": msg["content"]}]
+                    }
+                    for msg in cleaned_messages
+                ],
+                "generationConfig": {
+                    "temperature": self.temperature,
+                    "topP": self.top_p,
+                    "maxOutputTokens": self.max_tokens
+                }
+            }
+            
+            # 添加自定义参数
+            if self.custom_parameters:
+                if "generationConfig" in self.custom_parameters:
+                    gemini_payload["generationConfig"].update(self.custom_parameters["generationConfig"])
+                if "safetySettings" in self.custom_parameters:
+                    gemini_payload["safetySettings"] = self.custom_parameters["safetySettings"]
+            
+            payload = gemini_payload
+            
+            # 添加API密钥
+            request_url = f"{request_url}?key={self.api_key}"
+            logger.debug(f"Gemini非流式URL: {request_url}")
+        else:
+            # 针对其他提供商的标准处理
+            # 添加模型参数（如果不为None或默认值）
+            if self.temperature != 0.7:
+                payload["temperature"] = self.temperature
+            
+            if self.top_p != 1.0:
+                payload["top_p"] = self.top_p
+            
+            if self.max_tokens:
+                payload["max_tokens"] = self.max_tokens
+            
+            if self.presence_penalty:
+                payload["presence_penalty"] = self.presence_penalty
+            
+            if self.frequency_penalty:
+                payload["frequency_penalty"] = self.frequency_penalty
+            
+            # 只添加API实际支持的自定义参数
+            if self.provider == "deepseek" and self.custom_parameters:
+                for key, value in self.custom_parameters.items():
+                    # 避免覆盖标准参数
+                    if key not in payload and value is not None:
+                        payload[key] = value
         
-        if self.max_tokens:
-            payload["max_tokens"] = self.max_tokens
-        
-        if self.presence_penalty:
-            payload["presence_penalty"] = self.presence_penalty
-        
-        if self.frequency_penalty:
-            payload["frequency_penalty"] = self.frequency_penalty
-        
-        # 只添加API实际支持的自定义参数
-        if self.provider == "deepseek" and self.custom_parameters:
-            for key, value in self.custom_parameters.items():
-                # 避免覆盖标准参数
-                if key not in payload and value is not None:
-                    payload[key] = value
-        
-        # 记录请求详情（用于调试）
-        logger.info(f"发送API请求: url={self.api_url}, model={self.model_name}")
+        # 记录请求详情
+        logger.info(f"发送API请求: url={request_url}, model={self.model_name}")
         logger.debug(f"请求载荷: {json.dumps(payload, ensure_ascii=False)}")
         
         try:
@@ -396,7 +510,7 @@ class UniClient:
             timeout = httpx.Timeout(30.0, connect=30.0, read=30.0)
             async with httpx.AsyncClient(timeout=timeout) as client:
                 response = await client.post(
-                    self.api_url,
+                    request_url,
                     json=payload,
                     headers=self.headers
                 )

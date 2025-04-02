@@ -279,6 +279,7 @@ async def chat_completions(
     enable_thinking: Optional[bool] = Body(False),
     thinking_budget_tokens: Optional[int] = Body(2000),
     db: Session = Depends(get_db),
+    api_key: str = Depends(verify_api_key),
 ):
     """聊天补全API，兼容OpenAI格式"""
     try:
