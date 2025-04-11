@@ -48,6 +48,33 @@ app.add_middleware(
 # Initialize database
 init_db()
 
+# 添加获取默认API密钥的端点
+@app.get("/v1/system/default_api_key")
+async def get_default_api_key():
+    """
+    获取默认API密钥，取自.env文件中配置的第一个密钥
+    """
+    try:
+        # 从环境变量中获取API密钥配置
+        api_keys_json = os.getenv('ALLOW_API_KEY', '[]')
+        api_keys_data = json.loads(api_keys_json)
+        
+        # 确保数据是正确的格式并且有至少一个密钥
+        if isinstance(api_keys_data, list) and len(api_keys_data) > 0 and isinstance(api_keys_data[0], dict) and "key" in api_keys_data[0]:
+            # 返回第一个API密钥
+            return {"api_key": api_keys_data[0]["key"]}
+        else:
+            # 如果没有找到有效的API密钥，返回错误
+            return JSONResponse(
+                status_code=404,
+                content={"error": "No valid API key found in configuration"}
+            )
+    except Exception as e:
+        logger.error(f"获取默认API密钥时发生错误: {e}")
+        return JSONResponse(
+            status_code=500,
+            content={"error": str(e)}
+        )
 
 # Model routes
 @app.get("/v1/models")
@@ -265,6 +292,25 @@ async def delete_configuration(config_id: int, db: Session = Depends(get_db)):
     db.commit()
     return {"status": "success"}
 
+@app.get("/v1/configurations/{config_id}", response_model=Configuration)
+async def get_configuration(config_id: int, db: Session = Depends(get_db)):
+    """获取单个配置的详细信息"""
+    try:
+        # 获取配置
+        db_config = db.query(DBConfiguration).filter(DBConfiguration.id == config_id).first()
+        if not db_config:
+            raise HTTPException(status_code=404, detail="Configuration not found")
+        
+        # 获取配置步骤
+        db_config.steps = db.query(ConfigurationStep).filter(
+            ConfigurationStep.configuration_id == config_id
+        ).order_by(ConfigurationStep.step_order).all()
+        
+        return db_config
+    except Exception as e:
+        logger.error(f"获取配置时发生错误: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
 # Chat completion endpoint with configuration support
 @app.post("/v1/chat/completions")
 async def chat_completions(
@@ -393,12 +439,57 @@ async def chat_completions(
             # 记录常规模型请求参数
             logger.info(f"处理常规模型请求: model={model}, enable_thinking={enable_thinking}, thinking_budget_tokens={thinking_budget_tokens}")
             
-            # 查找匹配的活跃配置
-            config = db.query(DBConfiguration).filter(
-                DBConfiguration.name == model,
-                DBConfiguration.is_active == True
-            ).first()
+            # 尝试判断是否是模型ID
+            try:
+                model_id = int(model)
+                # 如果是数字，先通过ID查找模型
+                db_model = db.query(DBModel).filter(DBModel.id == model_id).first()
+                if db_model:
+                    # 使用模型名称查找配置
+                    config = db.query(DBConfiguration).filter(
+                        DBConfiguration.name == db_model.name,
+                        DBConfiguration.is_active == True
+                    ).first()
+                    
+                    if not config:
+                        # 如果没有找到配置，尝试创建一个临时配置使用该模型
+                        logger.info(f"未找到模型ID {model_id} 的配置，使用单一模型直接调用")
+                        # 创建临时步骤
+                        steps = [{
+                            'model': db_model,
+                            'step_type': "both",  # 同时处理思考和执行
+                            'system_prompt': "",
+                            'tools': tools,
+                            'tool_choice': tool_choice,
+                            'enable_thinking': enable_thinking,
+                            'thinking_budget_tokens': thinking_budget_tokens
+                        }]
+                        
+                        processor = MultiStepModelCollaboration(steps=steps)
+                        
+                        # 处理请求
+                        if stream:
+                            return StreamingResponse(
+                                processor.process_with_stream(messages),
+                                media_type="text/event-stream"
+                            )
+                        else:
+                            response = await processor.process_without_stream(messages)
+                            return response
+                else:
+                    # 如果未找到对应ID的模型，尝试按名称查找配置
+                    config = db.query(DBConfiguration).filter(
+                        DBConfiguration.name == model,
+                        DBConfiguration.is_active == True
+                    ).first()
+            except ValueError:
+                # 如果不是数字，尝试按名称查找配置
+                config = db.query(DBConfiguration).filter(
+                    DBConfiguration.name == model,
+                    DBConfiguration.is_active == True
+                ).first()
             
+            # 如果仍未找到配置，返回错误
             if not config:
                 raise HTTPException(status_code=404, detail=f"No active configuration found for model {model}")
             
@@ -448,6 +539,7 @@ async def chat_completions(
 async def root():
     return {"message": "Welcome to DeepGemini API"}
 
+
 # 添加路由
 app.include_router(model_router, prefix="/v1")
 app.include_router(configuration_router, prefix="/v1")
@@ -461,6 +553,10 @@ app.include_router(discussions.router)
 @app.get("/dashboard")
 async def dashboard():
     return RedirectResponse(url="/static/index.html", status_code=301)
+
+@app.get("/chat")
+async def chat():
+    return RedirectResponse(url="/static/chatllm.html", status_code=301)
 
 # 在app/main.py文件中添加一个转换函数
 async def convert_coroutine_to_stream(result_or_coroutine):

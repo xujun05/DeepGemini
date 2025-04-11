@@ -43,10 +43,25 @@ class RoleProcessor:
     
     def create_role(self, role_data: Dict[str, Any]) -> Dict[str, Any]:
         """创建新角色"""
+        # 检查是否为人类角色
+        is_human = role_data.get('is_human', False)
+        
         # 查找对应的模型
-        model = self.db.query(Model).filter(Model.id == role_data.get('model_id')).first()
-        if not model:
-            raise ValueError(f"Model with ID {role_data.get('model_id')} not found")
+        if not is_human:
+            # 非人类角色需要检查model_id
+            model = self.db.query(Model).filter(Model.id == role_data.get('model_id')).first()
+            if not model:
+                raise ValueError(f"Model with ID {role_data.get('model_id')} not found")
+        else:
+            # 对于人类角色，如果没有指定model_id，使用默认值1
+            if not role_data.get('model_id'):
+                # 获取第一个可用模型作为默认值
+                default_model = self.db.query(Model).first()
+                if default_model:
+                    role_data['model_id'] = default_model.id
+                else:
+                    # 如果没有任何模型，创建一个虚拟ID
+                    role_data['model_id'] = 1
         
         # 创建角色
         role = Role(
@@ -56,7 +71,9 @@ class RoleProcessor:
             skills=role_data.get('skills', []),
             system_prompt=role_data.get('system_prompt', ''),
             model_id=role_data.get('model_id'),
-            parameters=role_data.get('parameters', {})
+            parameters=role_data.get('parameters', {}),
+            is_human=role_data.get('is_human', False),
+            host_role_id=role_data.get('host_role_id')
         )
         
         self.db.add(role)
@@ -86,6 +103,10 @@ class RoleProcessor:
             role.model_id = role_data['model_id']
         if 'parameters' in role_data:
             role.parameters = role_data['parameters']
+        if 'is_human' in role_data:
+            role.is_human = role_data['is_human']
+        if 'host_role_id' in role_data:
+            role.host_role_id = role_data['host_role_id']
         
         self.db.commit()
         self.db.refresh(role)
@@ -107,6 +128,11 @@ class RoleProcessor:
         """将角色对象转换为字典"""
         model = self.db.query(Model).filter(Model.id == role.model_id).first()
         
+        # 获取寄生的角色信息（如果有）
+        host_role = None
+        if role.host_role_id:
+            host_role = self.db.query(Role).filter(Role.id == role.host_role_id).first()
+        
         return {
             "id": role.id,
             "name": role.name,
@@ -116,7 +142,10 @@ class RoleProcessor:
             "system_prompt": role.system_prompt,
             "model_id": role.model_id,
             "model_name": model.name if model else None,
-            "parameters": role.parameters
+            "parameters": role.parameters,
+            "is_human": role.is_human,
+            "host_role_id": role.host_role_id,
+            "host_role_name": host_role.name if host_role else None
         }
     
     def _load_role(self, role_id: int) -> Role:

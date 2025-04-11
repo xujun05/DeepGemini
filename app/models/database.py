@@ -99,12 +99,15 @@ class Role(Base):
     system_prompt = Column(Text, nullable=True)  # 系统提示词
     created_at = Column(DateTime, default=datetime.now)
     updated_at = Column(DateTime, nullable=True)
+    is_human = Column(Boolean, default=False)  # 是否为人类角色
+    host_role_id = Column(Integer, ForeignKey('roles.id'), nullable=True)  # 人类角色寄生的agent角色ID
     
     # 关系
     model = relationship("Model", back_populates="roles")
     discussion_groups = relationship("DiscussionGroup", 
                                     secondary=role_discussion_group, 
                                     back_populates="roles")
+    host_role = relationship("Role", remote_side=[id], foreign_keys=[host_role_id])
 
 class DiscussionGroup(Base):
     """讨论组模型"""

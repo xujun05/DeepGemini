@@ -525,16 +525,31 @@
                             <input type="text" class="form-control" name="skills" placeholder="用逗号分隔多个技能">
                         </div>
                         <div class="mb-3">
+                            <div class="form-check">
+                                <input class="form-check-input" type="checkbox" id="isHuman" name="is_human">
+                                <label class="form-check-label" for="isHuman" data-translate="isHuman">人类角色</label>
+                            </div>
+                            <div class="form-text" data-translate="isHumanHint">勾选表示这是人类用户控制的角色，讨论中需要人类输入</div>
+                        </div>
+                        <div class="mb-3" id="hostRoleSection" style="display: none;">
+                            <label class="form-label" data-translate="hostRole">寄生角色</label>
+                            <select class="form-select" name="host_role_id">
+                                <option value="" data-translate="noHostRole">无（独立角色）</option>
+                                <!-- 角色选项将通过JavaScript动态添加 -->
+                            </select>
+                            <div class="form-text" data-translate="hostRoleHint">选择此人类角色寄生的AI角色，人类将替代该AI角色发言</div>
+                        </div>
+                        <div class="mb-3" id="systemPromptSection">
                             <label class="form-label" data-translate="systemPrompt">系统提示</label>
                             <textarea class="form-control" name="system_prompt" rows="3"></textarea>
                         </div>
-                        <div class="mb-3">
+                        <div class="mb-3" id="modelSection">
                             <label class="form-label" data-translate="model">使用模型</label>
                             <select class="form-select" name="model_id" required>
                                 <!-- 模型选项将通过JavaScript动态添加 -->
                             </select>
                         </div>
-                        <div class="mb-3">
+                        <div class="mb-3" id="parametersSection">
                             <label class="form-label" data-translate="parameters">模型参数</label>
                             <textarea class="form-control" name="parameters" rows="3" placeholder='{"temperature": 0.7, "max_tokens": 1000}'></textarea>
                         </div>

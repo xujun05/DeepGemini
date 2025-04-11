@@ -155,7 +155,35 @@ const translations = {
         debate: 'Debate',
         rolePlaying: 'Role Playing',
         swotAnalysis: 'SWOT Analysis',
-        sixThinkingHats: 'Six Thinking Hats'
+        sixThinkingHats: 'Six Thinking Hats',
+        isHuman: "Human Role",
+        isHumanHint: "Check if this is a human-controlled role that requires user input during discussions",
+        hostRole: "Host Role",
+        noHostRole: "None (Independent role)",
+        hostRoleHint: "Select the AI role this human will parasitize, human will speak instead of this AI",
+        humanInput: "Human Input",
+        submitMessage: "Submit Message",
+        waitingForInput: "Waiting for your input...",
+        interruptMeeting: "Interrupt Meeting",
+        yourMessage: "Your message",
+        
+        // 聊天界面相关翻译
+        chatInterface: 'Chat Interface',
+        singleModel: 'Single Model',
+        relayChain: 'Relay Chain',
+        roleChat: 'Role Chat',
+        discussionGroup: 'Discussion Group',
+        selectModel: 'Select Model',
+        selectRelayChain: 'Select Relay Chain',
+        selectRole: 'Select Role',
+        selectDiscussionGroup: 'Select Discussion Group',
+        discussionTopic: 'Discussion Topic',
+        send: 'Send',
+        welcomeToChat: 'Welcome to DeepGemini Chat Interface',
+        chatInstructions: 'Select a chat mode and start the conversation',
+        speakingAs: 'Speaking as ',
+        identity: '',
+        submitMessage: 'Submit Message'
     },
     zh: {
         modelManagement: '模型管理',
@@ -190,30 +218,30 @@ const translations = {
         modelName: '模型名称',
         modelNamePlaceholder: '请先输入 API 凭证',
         type: '类型',
-        provider: '提供商[推理模型请选择模型归属商]',
+        provider: '提供者[推理模型，选择所有者]',
         temperature: '温度',
-        topP: 'Top P 值',
+        topP: 'Top P',
         presencePenalty: '存在惩罚',
         frequencyPenalty: '频率惩罚',
         maxTokens: '最大令牌数',
         optionalSystemPrompt: '系统提示词（可选）',
-        systemPromptPlaceholder: '输入系统提示词以指导模型行为',
+        systemPromptPlaceholder: '输入系统提示词以指导模型的行为',
         addStep: '添加步骤',
         removeStep: '删除步骤',
         step: '步骤',
         visualizeWorkflow: '接力链可视化',
         apiKeyManagement: 'API 密钥管理',
-        generalSettings: '常规设置',
+        generalSettings: '通用设置',
         advancedSettings: '高级设置',
-        addNewApiKey: '添加新密钥',
+        addNewApiKey: '添加新 API 密钥',
         description: '描述',
         generate: '生成',
         apiKeyFormat: '格式：sk-api-xxxxxxxxxx',
         apiKeyGenerated: 'API 密钥已生成',
-        apiKeyInvalid: '无效的 API 密钥格式。应以 "sk-api-" 开头',
+        apiKeyInvalid: 'API 密钥格式无效。应以"sk-api-"开头',
         copy: '复制',
-        noApiKeys: '暂无 API 密钥',
-        workflowName: '接力链名称',
+        noApiKeys: '没有可用的 API 密钥',
+        workflowName: '工作流名称',
         workflowStatus: '状态',
         saved: '已保存',
         saving: '保存中...',
@@ -221,24 +249,24 @@ const translations = {
         deleted: '已删除',
         confirmDelete: '确认删除？',
         passwordUpdated: '密码已更新',
-        passwordMismatch: '两次输入的密码不一致',
+        passwordMismatch: '密码不匹配',
         operationSuccess: '操作成功',
         operationFailed: '操作失败',
-        accountSettings: '账号设置',
-        changePassword: '修改密码',
+        accountSettings: '账户设置',
+        changePassword: '更改密码',
         currentPassword: '当前密码',
         newPassword: '新密码',
         confirmPassword: '确认密码',
         updatePassword: '更新密码',
-        transferContent: '传递内容',
-        editWorkflow: '编辑接力链',
-        deleteWorkflow: '删除接力链',
+        transferContent: '传输内容',
+        editWorkflow: '编辑工作流',
+        deleteWorkflow: '删除工作流',
         selectModel: '选择模型',
-        adminCredentials: '管理员凭据',
+        adminCredentials: '管理员凭证',
         newUsername: '新用户名',
-        updateCredentials: '更新凭据',
+        updateCredentials: '更新凭证',
         logout: '退出登录',
-        logoutConfirm: '确定要退出登录吗？',
+        logoutConfirm: '您确定要退出登录吗？',
         customParameters: '自定义参数',
         addParameter: '添加参数',
         parameterName: '参数名称',
@@ -248,23 +276,23 @@ const translations = {
         string: '字符串',
         number: '数字',
         boolean: '布尔值',
-        summaryModel: '总结模型',
+        summaryModel: '摘要模型',
         useDefaultModel: '使用默认模型',
-        customSummaryPrompt: '自定义总结提示(可选)',
-        summaryPromptTip: '可以使用 {history_text}, {meeting_topic} 等占位符引用会议内容',
-        summaryModelHint: '选择用于生成会议总结的模型，留空则使用系统默认模型',
+        customSummaryPrompt: '自定义摘要提示（可选）',
+        summaryPromptTip: '您可以使用占位符如 {topic}, {history_text}, {meeting_topic}',
+        summaryModelHint: '选择用于生成会议摘要的模型，留空则使用系统默认模型',
         insertTemplate: '插入模板',
         promptTemplateCopied: '模板已插入文本框',
         maxRounds: '最大讨论轮数',
-        maxRoundsHint: '设置AI智能体之间的最大讨论轮数，每轮每个智能体会发言一次',
+        maxRoundsHint: '设置AI代理之间的最大讨论轮数，每个代理在每轮中发言一次',
         
         // 角色管理相关翻译
         roleManagement: '角色管理',
-        roleDescription: '角色描述',
+        roleDescription: '创建和管理AI角色，用于智能讨论组',
         addRole: '添加角色',
         roleName: '角色名称',
         personality: '性格特点',
-        skills: '专业技能',
+        skills: '技能',
         noDescription: '无描述',
         noPersonality: '无性格特点',
         noSkills: '无技能',
@@ -272,38 +300,66 @@ const translations = {
         addNewRole: '添加新角色',
         editRole: '编辑角色',
         deleteRole: '删除角色',
-        confirmDeleteRole: '确定要删除这个角色吗？',
-        roleDeleted: '角色删除成功',
-        roleDeleteFailed: '角色删除失败',
-        roleAdded: '角色添加成功',
-        roleUpdated: '角色更新成功',
-        roleSaveFailed: '角色保存失败',
+        confirmDeleteRole: '您确定要删除此角色吗？',
+        roleDeleted: '角色已成功删除',
+        roleDeleteFailed: '删除角色失败',
+        roleAdded: '角色已成功添加',
+        roleUpdated: '角色已成功更新',
+        roleSaveFailed: '保存角色失败',
         
         // 讨论组管理相关翻译
         groupManagement: '讨论组管理',
-        groupDescription: '创建和管理AI角色讨论组，开展多角色对话',
+        groupDescription: '创建和管理AI角色讨论组，用于多智能体对话',
         addGroup: '添加讨论组',
         groupName: '讨论组名称',
         meetingMode: '会议模式',
         roleCount: '个角色',
-        rounds: '轮讨论',
+        rounds: '轮',
         addNewGroup: '添加新讨论组',
         editGroup: '编辑讨论组',
         deleteGroup: '删除讨论组',
-        confirmDeleteGroup: '确定要删除这个讨论组吗？',
-        groupDeleted: '讨论组删除成功',
-        groupDeleteFailed: '讨论组删除失败',
-        groupAdded: '讨论组添加成功',
-        groupUpdated: '讨论组更新成功',
-        groupSaveFailed: '讨论组保存失败',
+        confirmDeleteGroup: '您确定要删除此讨论组吗？',
+        groupDeleted: '讨论组已成功删除',
+        groupDeleteFailed: '删除讨论组失败',
+        groupAdded: '讨论组已成功添加',
+        groupUpdated: '讨论组已成功更新',
+        groupSaveFailed: '保存讨论组失败',
         
         // 会议模式
-        discussion: '普通讨论',
+        discussion: '一般讨论',
         brainstorming: '头脑风暴',
         debate: '辩论',
         rolePlaying: '角色扮演',
         swotAnalysis: 'SWOT分析',
-        sixThinkingHats: '六顶思考帽'
+        sixThinkingHats: '六顶思考帽',
+        isHuman: "人类角色",
+        isHumanHint: "勾选此项表示这是一个由人类控制的角色，在讨论过程中需要用户输入",
+        hostRole: "宿主角色",
+        noHostRole: "无（独立角色）",
+        hostRoleHint: "选择此人类将寄生的AI角色，人类将替代该AI发言",
+        humanInput: "人类输入",
+        submitMessage: "提交消息",
+        waitingForInput: "等待您的输入...",
+        interruptMeeting: "中断会议",
+        yourMessage: "您的消息",
+        
+        // 聊天界面相关翻译
+        chatInterface: '对话界面',
+        singleModel: '单个模型',
+        relayChain: '接力链',
+        roleChat: '角色对话',
+        discussionGroup: '讨论组',
+        selectModel: '选择模型',
+        selectRelayChain: '选择接力链',
+        selectRole: '选择角色',
+        selectDiscussionGroup: '选择讨论组',
+        discussionTopic: '讨论主题',
+        send: '发送',
+        welcomeToChat: '欢迎使用 DeepGemini 对话界面',
+        chatInstructions: '选择聊天模式并开始对话',
+        speakingAs: '正在以',
+        identity: '身份发言',
+        submitMessage: '提交发言'
     }
 };
 
@@ -366,6 +422,18 @@ document.addEventListener('DOMContentLoaded', function() {
             insertTemplatePrompt();
         }
     });
+    
+    // 设置人类角色切换事件
+    setupHumanRoleToggle();
+    
+    // 检查当前页面是否是会议页面
+    if (window.location.pathname.includes('discussion.html')) {
+        console.log('检测到会议页面，初始化人类参与功能');
+        // 延迟一下以确保页面元素都已加载
+        setTimeout(() => {
+            setupHumanParticipation();
+        }, 1000);
+    }
 });
 
 // API calls
@@ -417,6 +485,9 @@ function updateModelsList() {
     const lang = localStorage.getItem('preferred_language') || 'en';
     const t = translations[lang];
     const modelsList = document.getElementById('modelsList');
+    
+    if (!modelsList) return; // 如果元素不存在则直接返回
+    
     modelsList.innerHTML = models.map(model => `
         <div class="col-md-6 col-lg-4 mb-4">
             <div class="card">
@@ -688,6 +759,9 @@ function updateConfigurationsList() {
     const lang = localStorage.getItem('preferred_language') || 'en';
     const t = translations[lang];
     const configsList = document.getElementById('configurationsList');
+    
+    if (!configsList) return; // 如果元素不存在则直接返回
+    
     configsList.innerHTML = configurations.map(config => `
         <div class="col-lg-6 mb-4">
             <div class="workflow-card">
@@ -1644,6 +1718,8 @@ function updateApiKeysList() {
     const lang = localStorage.getItem('preferred_language') || 'en';
     const t = translations[lang];
     
+    if (!apiKeysList) return; // 如果元素不存在则直接返回
+    
     if (!apiKeys || apiKeys.length === 0) {
         apiKeysList.innerHTML = `
             <div class="alert alert-info">
@@ -1941,6 +2017,11 @@ function loadRoles() {
             }
             
             const rolesContainer = document.getElementById('rolesList');
+            if (!rolesContainer) {
+                console.log('未找到rolesList元素，可能在当前页面不存在');
+                return; // 提前返回，避免null引用
+            }
+            
             rolesContainer.innerHTML = '';
             
             if (data.length === 0) {
@@ -1991,11 +2072,13 @@ function loadRoles() {
             console.error('获取角色失败:', error);
             // 显示错误状态
             const rolesContainer = document.getElementById('rolesList');
-            rolesContainer.innerHTML = `
-                <div class="col-12 text-center text-danger py-4">
-                    获取角色数据失败，请稍后重试
-                </div>
-            `;
+            if (rolesContainer) {
+                rolesContainer.innerHTML = `
+                    <div class="col-12 text-center text-danger py-4">
+                        获取角色数据失败，请稍后重试
+                    </div>
+                `;
+            }
         });
 }
 
@@ -2011,6 +2094,11 @@ function loadModelsForRoles() {
             console.log('获取到的模型配置数据:', data);
             
             const select = document.querySelector('#addRoleForm select[name="model_id"]');
+            if (!select) {
+                console.log('未找到model_id选择器，可能在当前页面不存在');
+                return data; // 提前返回，避免null引用
+            }
+            
             select.innerHTML = '<option value="" disabled selected>请选择模型</option>';
             
             // 填充下拉列表
@@ -2028,50 +2116,87 @@ function loadModelsForRoles() {
             
             // 添加一个默认选项
             const select = document.querySelector('#addRoleForm select[name="model_id"]');
-            select.innerHTML = '<option value="" disabled selected>无法获取模型配置</option>';
+            if (select) {
+                select.innerHTML = '<option value="" disabled selected>无法获取模型配置</option>';
+            }
             
             return [];
         });
 }
 
 function openAddRoleModal() {
-    // 清空表单
+    // 重置表单
     const form = document.getElementById('addRoleForm');
     form.reset();
     
-    // 移除可能存在的隐藏id字段，确保不会覆盖现有角色
-    const existingIdField = form.querySelector('input[name="id"]');
-    if (existingIdField) {
-        existingIdField.remove();
+    // 清除之前可能添加的ID字段
+    const oldIdField = form.querySelector('input[name="id"]');
+    if (oldIdField) oldIdField.remove();
+    
+    // 重置人类角色相关UI状态
+    const isHumanCheckbox = document.getElementById('isHuman');
+    if (isHumanCheckbox) {
+        isHumanCheckbox.checked = false;
+        
+        // 触发一次change事件，确保UI状态正确
+        const event = new Event('change');
+        isHumanCheckbox.dispatchEvent(event);
     }
     
-    // 加载模型选项
-    loadModelsForRoles();
+    // 加载模型列表
+    loadModelsForRoleModal();
+    
+    // 添加模态框标题
+    const modalTitle = document.querySelector('#addRoleModal .modal-title');
+    modalTitle.textContent = getCurrentTranslation('addNewRole');
     
     // 显示模态框
-    new bootstrap.Modal(document.getElementById('addRoleModal')).show();
+    const modal = new bootstrap.Modal(document.getElementById('addRoleModal'));
+    modal.show();
 }
 
+// 修复saveRole函数，恢复被删除的代码
 function saveRole() {
     const form = document.getElementById('addRoleForm');
     const formData = new FormData(form);
+    const roleData = {};
     
-    // 构建JSON数据
-    const data = {};
+    // 转换表单数据为JSON对象
     formData.forEach((value, key) => {
-        if (key === 'skills') {
-            data[key] = value.split(',').map(s => s.trim()).filter(s => s !== '');
+        if (key === 'is_human') {
+            // 复选框需要特殊处理
+            roleData[key] = true;
+        } else if (key === 'skills') {
+            // 技能列表需要转换为数组
+            roleData[key] = value ? value.split(',').map(s => s.trim()) : [];
         } else if (key === 'parameters') {
+            // 参数需要解析为JSON对象
             try {
-                data[key] = value ? JSON.parse(value) : {};
+                roleData[key] = value ? JSON.parse(value) : {};
             } catch (e) {
-                showToast('error', '参数格式无效，请使用有效的JSON格式');
-                return;
+                console.error('解析参数失败:', e);
+                roleData[key] = {};
             }
         } else {
-            data[key] = value;
+            roleData[key] = value;
         }
     });
+    
+    // 处理人类角色的特殊情况
+    const isHuman = formData.has('is_human');
+    
+    // 如果没有勾选人类角色，确保移除相关字段
+    if (!isHuman) {
+        roleData.is_human = false;
+        roleData.host_role_id = null;
+    } else {
+        // 人类角色不需要model_id，但是后端仍需要一个默认值
+        // 如果用户未选择模型，设置一个占位符值
+        if (!roleData.model_id) {
+            console.log('人类角色，设置默认model_id为1');
+            roleData.model_id = 1; // 后端会处理此值
+        }
+    }
     
     // 获取角色ID(如果存在)
     const roleId = form.querySelector('input[name="id"]')?.value;
@@ -2081,7 +2206,7 @@ function saveRole() {
     const endpoint = roleId ? `roles/${roleId}` : 'roles';
     
     // 发送请求
-    fetchAPI(endpoint, method, data)
+    fetchAPI(endpoint, method, roleData)
         .then(response => {
             // 关闭模态框
             bootstrap.Modal.getInstance(document.getElementById('addRoleModal')).hide();
@@ -2089,11 +2214,11 @@ function saveRole() {
             // 重新加载角色
             loadRoles();
             
-            showToast('success', roleId ? '角色更新成功' : '角色添加成功');
+            showToast(roleId ? '角色更新成功' : '角色添加成功', 'success');
         })
         .catch(error => {
             console.error(roleId ? '更新角色失败:' : '添加角色失败:', error);
-            showToast('error', roleId ? '更新角色失败' : '添加角色失败');
+            showToast(roleId ? '更新角色失败' : '添加角色失败', 'error');
         });
 }
 
@@ -2134,12 +2259,33 @@ function editRole(roleId) {
             hiddenInput.value = roleId;
             form.appendChild(hiddenInput);
             
+            // 设置人类角色相关字段
+            const isHumanCheckbox = document.getElementById('isHuman');
+            if (isHumanCheckbox) {
+                isHumanCheckbox.checked = role.is_human || false;
+                
+                // 触发change事件以更新UI
+                const event = new Event('change');
+                isHumanCheckbox.dispatchEvent(event);
+                
+                // 如果是人类角色并有寄生目标，设置寄生角色
+                if (role.is_human && role.host_role_id) {
+                    // 需要先加载寄生角色列表，然后设置选中值
+                    loadHostRoles().then(() => {
+                        const hostRoleSelect = form.querySelector('select[name="host_role_id"]');
+                        if (hostRoleSelect) {
+                            hostRoleSelect.value = role.host_role_id;
+                        }
+                    });
+                }
+            }
+            
             // 显示模态框
             new bootstrap.Modal(document.getElementById('addRoleModal')).show();
         })
         .catch(error => {
             console.error('获取角色详情失败:', error);
-            showToast('error', '获取角色详情失败');
+            showToast('获取角色详情失败', 'error');
         });
 }
 
@@ -2168,6 +2314,11 @@ function loadGroups() {
             }
             
             const groupsContainer = document.getElementById('groupsList');
+            if (!groupsContainer) {
+                console.log('未找到groupsList元素，可能在当前页面不存在');
+                return; // 提前返回，避免null引用
+            }
+            
             groupsContainer.innerHTML = '';
             
             if (data.length === 0) {
@@ -2217,11 +2368,13 @@ function loadGroups() {
             console.error('获取讨论组失败:', error);
             // 显示错误状态
             const groupsContainer = document.getElementById('groupsList');
-            groupsContainer.innerHTML = `
-                <div class="col-12 text-center text-danger py-4">
-                    获取讨论组数据失败，请稍后重试
-                </div>
-            `;
+            if (groupsContainer) {
+                groupsContainer.innerHTML = `
+                    <div class="col-12 text-center text-danger py-4">
+                        获取讨论组数据失败，请稍后重试
+                    </div>
+                `;
+            }
         });
 }
 
@@ -2235,6 +2388,11 @@ function loadRolesForGroups() {
             }
             
             const container = document.getElementById('roleCheckboxes');
+            if (!container) {
+                console.log('未找到roleCheckboxes元素，可能在当前页面不存在');
+                return data; // 提前返回，避免null引用
+            }
+            
             container.innerHTML = '';
             
             if (data.length === 0) {
@@ -2257,7 +2415,9 @@ function loadRolesForGroups() {
         .catch(error => {
             console.error('获取角色失败:', error);
             const container = document.getElementById('roleCheckboxes');
-            container.innerHTML = '<div class="alert alert-danger">获取角色失败，请稍后重试</div>';
+            if (container) {
+                container.innerHTML = '<div class="alert alert-danger">获取角色失败，请稍后重试</div>';
+            }
             return [];
         });
 }
@@ -2495,6 +2655,11 @@ function loadRolesForGroupModal() {
     fetchAPI('roles')
     .then(roles => {
         const container = document.getElementById('roleCheckboxes');
+        if (!container) {
+            console.log('未找到roleCheckboxes元素，可能在当前页面不存在');
+            return; // 提前返回，避免null引用
+        }
+        
         container.innerHTML = '';
         
         roles.forEach(role => {
@@ -2537,6 +2702,10 @@ function loadModelsForGroupModal() {
         // console.log('获取到的模型配置数据:', data);
         
         const select = document.querySelector('#addGroupForm select[name="summary_model_id"]');
+        if (!select) {
+            console.log('未找到summary_model_id选择器，可能在当前页面不存在');
+            return; // 提前返回，避免null引用
+        }
         
         // 清空现有选项并添加默认选项
         select.innerHTML = '<option value="" data-translate="useDefaultModel">使用默认模型</option>';
@@ -2570,7 +2739,9 @@ function loadModelsForGroupModal() {
         
         // 添加一个默认选项以防API调用失败
         const select = document.querySelector('#addGroupForm select[name="summary_model_id"]');
-        select.innerHTML = '<option value="" data-translate="useDefaultModel">使用默认模型</option>';
+        if (select) {
+            select.innerHTML = '<option value="" data-translate="useDefaultModel">使用默认模型</option>';
+        }
     });
 }
 
@@ -2601,14 +2772,26 @@ function insertTemplatePrompt() {
 
 // 获取当前语言
 function getCurrentLanguage() {
-    return localStorage.getItem('language') || 'zh';
+    return localStorage.getItem('preferred_language') || 'en';
+}
+
+function getCurrentTranslation(key) {
+    const lang = getCurrentLanguage();
+    const t = translations[lang] || translations['en']; // 默认使用英文
+    return t[key] || key; // 如果翻译不存在，返回键名
 }
 
 // 在模态框显示后添加事件监听器
-document.getElementById('addGroupModal').addEventListener('shown.bs.modal', function() {
-    // 为插入模板按钮添加事件监听器
-    document.querySelector('.insert-template-btn').addEventListener('click', insertTemplatePrompt);
-});
+const addGroupModal = document.getElementById('addGroupModal');
+if (addGroupModal) {
+    addGroupModal.addEventListener('shown.bs.modal', function() {
+        // 为插入模板按钮添加事件监听器
+        const insertTemplateBtn = document.querySelector('.insert-template-btn');
+        if (insertTemplateBtn) {
+            insertTemplateBtn.addEventListener('click', insertTemplatePrompt);
+        }
+    });
+}
 
 // 添加applyLanguage函数定义（如果尚未存在）
 function applyLanguage(lang) {
@@ -2630,5 +2813,320 @@ function applyLanguage(lang) {
                 el.textContent = translations[lang][key];
             }
         }
+    });
+}
+
+// 添加人类角色切换事件
+function setupHumanRoleToggle() {
+    const isHumanCheckbox = document.getElementById('isHuman');
+    const modelSection = document.getElementById('modelSection');
+    const parametersSection = document.getElementById('parametersSection');
+    const hostRoleSection = document.getElementById('hostRoleSection');
+    
+    if (isHumanCheckbox) {
+        isHumanCheckbox.addEventListener('change', function() {
+            if (this.checked) {
+                // 如果是人类角色，隐藏模型和参数部分，显示寄生角色选择
+                modelSection.style.display = 'none';
+                parametersSection.style.display = 'none';
+                hostRoleSection.style.display = 'block';
+                
+                // 移除model_id的required属性，使其可选
+                const modelSelect = document.querySelector('select[name="model_id"]');
+                if (modelSelect) {
+                    modelSelect.removeAttribute('required');
+                }
+                
+                // 加载所有可寄生的AI角色
+                loadHostRoles();
+            } else {
+                // 如果不是人类角色，显示模型和参数部分，隐藏寄生角色选择
+                modelSection.style.display = 'block';
+                parametersSection.style.display = 'block';
+                hostRoleSection.style.display = 'none';
+                
+                // 恢复model_id的required属性
+                const modelSelect = document.querySelector('select[name="model_id"]');
+                if (modelSelect) {
+                    modelSelect.setAttribute('required', '');
+                }
+            }
+        });
+    }
+}
+
+// 加载寄生角色列表
+function loadHostRoles() {
+    const hostRoleSelect = document.querySelector('select[name="host_role_id"]');
+    if (!hostRoleSelect) return Promise.reject('无法找到寄生角色选择器');
+    
+    // 清除现有选项（保留第一个"无"选项）
+    const firstOption = hostRoleSelect.querySelector('option:first-child');
+    hostRoleSelect.innerHTML = '';
+    hostRoleSelect.appendChild(firstOption);
+    
+    // 获取所有角色
+    return fetchAPI('roles')
+        .then(roles => {
+            // 过滤出非人类角色
+            const aiRoles = roles.filter(role => !role.is_human);
+            
+            // 添加角色选项
+            aiRoles.forEach(role => {
+                const option = document.createElement('option');
+                option.value = role.id;
+                option.textContent = role.name;
+                hostRoleSelect.appendChild(option);
+            });
+            
+            return roles;
+        })
+        .catch(error => {
+            console.error('加载寄生角色失败:', error);
+            showToast('加载寄生角色失败', 'error');
+            return Promise.reject(error);
+        });
+}
+
+// 为角色模态框加载模型
+function loadModelsForRoleModal() {
+    const modelSelect = document.getElementById('addRoleForm').querySelector('select[name="model_id"]');
+    if (!modelSelect) return;
+    
+    // 清空现有选项
+    modelSelect.innerHTML = '';
+    
+    // 添加默认选项
+    const defaultOption = document.createElement('option');
+    defaultOption.value = '';
+    defaultOption.textContent = '请选择模型';
+    defaultOption.disabled = true;
+    defaultOption.selected = true;
+    modelSelect.appendChild(defaultOption);
+    
+    // 获取模型列表 - 修改为使用model_configs端点
+    fetchAPI('model_configs')
+        .then(models => {
+            // 检查确保models是数组
+            if (!Array.isArray(models)) {
+                console.error('获取到的模型数据格式不正确:', models);
+                return;
+            }
+            
+            console.log('获取到的模型数据:', models);
+            
+            // 添加模型选项
+            models.forEach(model => {
+                const option = document.createElement('option');
+                option.value = model.id;
+                option.textContent = model.name;
+                modelSelect.appendChild(option);
+            });
+        })
+        .catch(error => {
+            console.error('加载模型列表失败:', error);
+            showToast('加载模型列表失败', 'error');
+        });
+}
+
+// 为会议页面添加人类参与功能（需要在会议页面加载时调用）
+function setupHumanParticipation() {
+    // 检查是否在会议页面
+    if (!window.location.href.includes('discussion.html')) return;
+    
+    const meetingId = new URLSearchParams(window.location.search).get('id');
+    if (!meetingId) return;
+    
+    // 添加人类参与区域到页面
+    const humanParticipationArea = document.createElement('div');
+    humanParticipationArea.id = 'humanParticipationArea';
+    humanParticipationArea.className = 'human-participation-area';
+    humanParticipationArea.innerHTML = `
+        <div class="card">
+            <div class="card-header">
+                <h5 data-translate="humanInput">人类输入</h5>
+            </div>
+            <div class="card-body">
+                <div id="humanRolesList" class="mb-3">
+                    <!-- 人类角色将在这里动态显示 -->
+                    <div class="text-center" id="loadingHumanRoles">
+                        <div class="spinner-border spinner-border-sm" role="status">
+                            <span class="visually-hidden">Loading...</span>
+                        </div>
+                        <span class="ms-2">加载人类角色...</span>
+                    </div>
+                </div>
+                <div id="humanInputForm" style="display: none;">
+                    <div class="mb-3">
+                        <label for="humanRoleSelect" class="form-label">选择角色</label>
+                        <select id="humanRoleSelect" class="form-select">
+                            <!-- 人类角色选项将在这里添加 -->
+                        </select>
+                    </div>
+                    <div class="mb-3">
+                        <label for="humanMessage" class="form-label" data-translate="yourMessage">您的消息</label>
+                        <textarea id="humanMessage" class="form-control" rows="3"></textarea>
+                    </div>
+                    <div class="d-flex justify-content-between">
+                        <button id="submitHumanMessage" class="btn btn-primary" data-translate="submitMessage">提交消息</button>
+                        <button id="interruptMeeting" class="btn btn-warning" data-translate="interruptMeeting">打断会议</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    `;
+    
+    // 添加到页面
+    document.querySelector('.meeting-container').appendChild(humanParticipationArea);
+    
+    // 加载人类角色并设置事件
+    loadHumanRoles(meetingId);
+    setupHumanInputEvents(meetingId);
+    
+    // 每5秒刷新一次人类角色状态
+    setInterval(() => loadHumanRoles(meetingId), 5000);
+}
+
+// 加载会议中的人类角色
+function loadHumanRoles(meetingId) {
+    fetchAPI(`discussions/${meetingId}/human_roles`)
+        .then(roles => {
+            const humanRolesList = document.getElementById('humanRolesList');
+            const humanRoleSelect = document.getElementById('humanRoleSelect');
+            const loadingElement = document.getElementById('loadingHumanRoles');
+            const humanInputForm = document.getElementById('humanInputForm');
+            
+            // 移除加载指示器
+            if (loadingElement) loadingElement.style.display = 'none';
+            
+            // 如果没有人类角色
+            if (!roles || roles.length === 0) {
+                humanRolesList.innerHTML = '<div class="alert alert-info">此会议没有人类角色参与</div>';
+                return;
+            }
+            
+            // 显示输入表单
+            if (humanInputForm) humanInputForm.style.display = 'block';
+            
+            // 更新人类角色列表
+            const roleStatusHtml = roles.map(role => `
+                <div class="role-status ${role.is_waiting ? 'waiting' : ''}">
+                    <span class="role-name">${role.name}</span>
+                    ${role.host_role ? `<span class="badge bg-info">寄生于 ${role.host_role}</span>` : ''}
+                    ${role.is_waiting ? '<span class="badge bg-warning" data-translate="waitingForInput">等待您的输入...</span>' : ''}
+                </div>
+            `).join('');
+            
+            humanRolesList.innerHTML = `
+                <div class="human-roles-status mb-3">
+                    ${roleStatusHtml}
+                </div>
+            `;
+            
+            // 更新角色选择下拉框
+            if (humanRoleSelect) {
+                // 清除现有选项
+                humanRoleSelect.innerHTML = '';
+                
+                // 添加角色选项
+                roles.forEach(role => {
+                    const option = document.createElement('option');
+                    option.value = role.name;
+                    option.textContent = `${role.name}${role.host_role ? ` (寄生于 ${role.host_role})` : ''}`;
+                    // 如果角色正在等待输入，设为默认选中
+                    if (role.is_waiting) {
+                        option.selected = true;
+                    }
+                    humanRoleSelect.appendChild(option);
+                });
+            }
+        })
+        .catch(error => {
+            console.error('加载人类角色失败:', error);
+            const humanRolesList = document.getElementById('humanRolesList');
+            humanRolesList.innerHTML = '<div class="alert alert-danger">无法加载人类角色</div>';
+        });
+}
+
+// 设置人类输入相关的事件处理
+function setupHumanInputEvents(meetingId) {
+    // 提交消息按钮
+    const submitButton = document.getElementById('submitHumanMessage');
+    if (submitButton) {
+        submitButton.addEventListener('click', () => {
+            submitHumanMessage(meetingId, false);
+        });
+    }
+    
+    // 打断会议按钮
+    const interruptButton = document.getElementById('interruptMeeting');
+    if (interruptButton) {
+        interruptButton.addEventListener('click', () => {
+            submitHumanMessage(meetingId, true);
+        });
+    }
+    
+    // 设置按键事件: Ctrl+Enter提交
+    const messageTextarea = document.getElementById('humanMessage');
+    if (messageTextarea) {
+        messageTextarea.addEventListener('keydown', (e) => {
+            if (e.ctrlKey && e.key === 'Enter') {
+                submitHumanMessage(meetingId, false);
+            }
+        });
+    }
+}
+
+// 提交人类消息
+function submitHumanMessage(meetingId, isInterruption) {
+    const humanRoleSelect = document.getElementById('humanRoleSelect');
+    const messageTextarea = document.getElementById('humanMessage');
+    
+    if (!humanRoleSelect || !messageTextarea) return;
+    
+    const agentName = humanRoleSelect.value;
+    const message = messageTextarea.value.trim();
+    
+    if (!agentName || !message) {
+        showToast('请选择角色并输入消息', 'warning');
+        return;
+    }
+    
+    // 禁用按钮和输入框
+    const submitButton = document.getElementById('submitHumanMessage');
+    const interruptButton = document.getElementById('interruptMeeting');
+    if (submitButton) submitButton.disabled = true;
+    if (interruptButton) interruptButton.disabled = true;
+    messageTextarea.disabled = true;
+    
+    // 发送消息
+    fetchAPI(`discussions/${meetingId}/human_input`, 'POST', {
+        agent_name: agentName,
+        message: message
+    })
+    .then(response => {
+        if (response.success) {
+            // 清空消息输入框
+            messageTextarea.value = '';
+            showToast('消息已提交', 'success');
+            
+            // 如果是打断，可能需要刷新会议状态
+            if (isInterruption) {
+                // 可以在这里添加刷新会议状态的逻辑
+            }
+        } else {
+            showToast(response.message || '提交失败', 'error');
+        }
+    })
+    .catch(error => {
+        console.error('提交人类消息失败:', error);
+        showToast('提交消息失败', 'error');
+    })
+    .finally(() => {
+        // 恢复按钮和输入框
+        if (submitButton) submitButton.disabled = false;
+        if (interruptButton) interruptButton.disabled = false;
+        messageTextarea.disabled = false;
+        messageTextarea.focus();
     });
 }
