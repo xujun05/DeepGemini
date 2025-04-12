@@ -3,17 +3,28 @@ import logging
 import asyncio
 import time
 from app.meeting.agents.agent import Agent
+from datetime import datetime
 
 # 设置日志
-logger = logging.getLogger("HumanAgent")
+logger = logging.getLogger(__name__)
 
 class HumanAgent(Agent):
     """人类智能体，表示会议中的人类参与者"""
     
-    def __init__(self, name: str, role_description: str, personality: str = "", 
-                 skills: List[str] = None, model_params: Dict[str, Any] = None,
-                 base_url: str = None, api_key: str = None):
-        """初始化人类智能体"""
+    def __init__(self, name: str, role_description: str, personality: Optional[str] = None, skills: Optional[List[str]] = None,
+                 model_params: Dict[str, Any] = None, base_url: str = None, api_key: str = None):
+        """
+        初始化人类智能体
+        
+        参数:
+            name: 人类角色名称
+            role_description: 人类角色描述
+            personality: 人格特点描述
+            skills: 技能列表
+            model_params: 模型参数
+            base_url: 基础URL
+            api_key: API密钥
+        """
         super().__init__(name, role_description, personality, skills, model_params, base_url, api_key)
         self.is_human = True
         self.human_responses = {}  # 存储人类的响应，格式为 {round_id: response}
@@ -25,60 +36,83 @@ class HumanAgent(Agent):
         self.host_role_name = None  # 寄生的角色名称
         self.response_queue = asyncio.Queue()
         self.stream_lock = asyncio.Lock()
-        
-    def generate_response(self, prompt: str, context: List[Dict[str, str]] = None) -> str:
-        """生成回应 - 对于人类用户，返回一个占位符，实际响应将在用户提交后更新"""
-        logger.info(f"人类角色 {self.name} 需要回应，等待用户输入")
-        self.is_waiting_response = True
-        
-        # 检查是否已有待处理的响应
-        if self.pending_response:
-            response = self.pending_response
-            self.pending_response = None
-            self.is_waiting_response = False
-            return response
-            
-        # 否则返回一个占位符，表示正在等待
-        return f"[等待 {self.name} 的输入...]"
+        self.is_waiting_input = False  # 是否等待人类输入
+        self.pending_message = None  # 等待发送的消息
+        self.input_timeout = 600  # 默认等待人类输入的超时时间（秒）
+        self.input_start_time = None  # 记录开始等待人类输入的时间
     
-    async def generate_response_stream(self, prompt: str, context: Optional[List[Dict[str, Any]]] = None) -> AsyncGenerator[str, None]:
-        """流式生成响应 - 对于人类用户，实时流式返回输入的内容"""
-        self.is_waiting_response = True
-        logger.info(f"等待人类角色 {self.name} 的响应")
+    def wait_for_input(self):
+        """设置为等待人类输入状态，并记录开始时间"""
+        self.is_waiting_input = True
+        self.input_start_time = time.time()
+        logger.info(f"人类智能体 {self.name} 等待输入")
+        # 通知系统会议暂停，等待人类输入
+        return True
+    
+    def is_waiting_for_input(self):
+        """检查是否正在等待人类输入"""
+        # 返回实际的等待状态值
+        return self.is_waiting_input
+    
+    def add_message(self, content: str):
+        """添加人类消息"""
+        self.pending_message = content
+        # 将消息存入human_responses字典，以当前轮次为键
+        self.human_responses[self.current_round] = content
+        # 重置等待状态
+        self.is_waiting_input = False
+        self.input_start_time = None
+        # 记录为最后响应
+        self.last_response = content
+        logger.info(f"人类智能体 {self.name} 收到消息: {content[:50]}..., 当前轮次: {self.current_round}")
+        return True
+    
+    def get_input_wait_duration(self):
+        """获取已等待人类输入的时间（秒）"""
+        if not self.is_waiting_input or not self.input_start_time:
+            return 0
+        return time.time() - self.input_start_time
+    
+    def has_input_timeout(self):
+        """检查是否已超过等待人类输入的超时时间"""
+        wait_duration = self.get_input_wait_duration()
+        return wait_duration > self.input_timeout if wait_duration > 0 else False
+    
+    def generate_response(self, prompt: str, context: List[Dict[str, Any]] = None) -> str:
+        """
+        生成响应 - 对于人类智能体，返回预先输入的消息或等待输入
         
-        try:
-            # 如果有待处理的响应，立即返回
-            if self.pending_response:
-                response = self.pending_response
-                self.pending_response = None
-                self.last_response = response
-                self.is_waiting_response = False
-                yield response
-                return
+        参数:
+            prompt: 提示词
+            context: 上下文消息历史
             
-            # 返回等待消息
-            yield f"[等待 {self.name} 的输入...]"
-            
-            # 等待响应
-            while self.is_waiting_response:
-                try:
-                    # 等待新的响应块，设置超时以避免永久阻塞
-                    chunk = await asyncio.wait_for(self.response_queue.get(), timeout=0.5)
-                    if chunk == "[END]":
-                        self.is_waiting_response = False
-                        break
-                    yield chunk
-                except asyncio.TimeoutError:
-                    continue
-                except Exception as e:
-                    logger.error(f"处理人类响应时出错: {str(e)}")
-                    break
-            
-        except Exception as e:
-            logger.error(f"生成人类响应流时出错: {str(e)}")
-            yield f"[错误] 处理人类响应时出错: {str(e)}"
-        finally:
-            self.is_waiting_response = False
+        返回:
+            消息内容或等待人类输入的提示
+        """
+        # 如果有待发送的消息，返回它
+        if self.pending_message:
+            message = self.pending_message
+            self.pending_message = None
+            return message
+        
+        # 否则设置为等待输入状态并暂停会议
+        self.wait_for_input()
+        # 特殊标志，表示需要等待人类输入
+        return f"[WAITING_FOR_HUMAN_INPUT:{self.name}]"
+    
+    async def generate_response_stream(self, prompt: str, context: List[Dict[str, Any]] = None):
+        """流式生成响应 - 对于人类智能体，返回等待人类输入的特殊标记"""
+        # 检查是否已有待处理的消息
+        if self.pending_message:
+            message = self.pending_message
+            self.pending_message = None
+            yield message
+            return
+        
+        # 设置等待人类输入状态
+        self.wait_for_input()
+        # 返回特殊标记，表示需要等待人类输入
+        yield f"[WAITING_FOR_HUMAN_INPUT:{self.name}]"
     
     async def add_response_chunk(self, chunk: str) -> None:
         """添加响应块到流中"""
@@ -95,6 +129,8 @@ class HumanAgent(Agent):
         self.pending_response = response
         self.last_response = response
         self.is_waiting_response = False
+        self.is_waiting_input = False
+        self.input_start_time = None
     
     async def interrupt(self, message: str) -> None:
         """中断当前会议，插入人类消息"""
@@ -103,6 +139,8 @@ class HumanAgent(Agent):
             self.pending_response = message
             self.is_interrupted = True
             self.is_waiting_response = False
+            self.is_waiting_input = False
+            self.input_start_time = None
             # 清空现有队列
             while not self.response_queue.empty():
                 try:
@@ -121,10 +159,6 @@ class HumanAgent(Agent):
         """检查是否正在进行中断"""
         return self.is_interrupted
     
-    def is_waiting_for_input(self) -> bool:
-        """检查是否正在等待人类输入"""
-        return self.is_waiting_response
-    
     def get_current_round(self) -> int:
         """获取当前轮次"""
         return self.current_round
@@ -134,7 +168,7 @@ class HumanAgent(Agent):
         self.current_round = round_id
     
     def response(self, meeting_id: str, round_id: int, context: str) -> str:
-        """返回人类参与者的响应"""
+        """返回人类参与者的响应，如果没有输入则暂停会议"""
         try:
             # 更新当前轮次
             self.current_round = round_id
@@ -150,8 +184,23 @@ class HumanAgent(Agent):
                 
                 return response
             
-            # 如果没有回应，返回等待消息
-            return f"正在等待 {self.name} 的回应..."
+            # 没有回应，设置等待状态
+            self.wait_for_input()
+            
+            # 返回特殊格式的等待消息
+            return f"[WAITING_FOR_HUMAN_INPUT:{self.name}]"
         except Exception as e:
             logger.error(f"人类智能体响应出错: {str(e)}", exc_info=True)
-            return f"[错误] 无法获取 {self.name} 的响应。错误: {str(e)}" 
+            return f"[错误] 无法获取 {self.name} 的响应。错误: {str(e)}"
+    
+    def to_dict(self) -> Dict[str, Any]:
+        """转换为字典表示"""
+        return {
+            "name": self.name,
+            "role_description": self.role_description,
+            "personality": self.personality,
+            "skills": self.skills,
+            "is_human": True,
+            "is_waiting_input": self.is_waiting_input,
+            "input_wait_duration": self.get_input_wait_duration() if self.is_waiting_input else 0
+        } 

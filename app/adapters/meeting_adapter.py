@@ -26,6 +26,9 @@ class MeetingAdapter:
     适配器类，用于将DeepGemini的模型系统与会议系统整合
     """
     
+    # 类级别变量，用于在不同的实例之间共享活跃会议
+    _shared_active_meetings = {}
+    
     def __init__(self, db: Session):
         self.db = db
         self.mode_classes = {
@@ -36,7 +39,11 @@ class MeetingAdapter:
             "swot_analysis": SWOTAnalysisMode,
             "six_thinking_hats": SixThinkingHatsMode
         }
-        self.active_meetings = {}  # 存储活跃的会议会话
+        # 使用类级别共享变量
+        self.active_meetings = self.__class__._shared_active_meetings
+        
+        # 启动时记录活跃会议
+        logger.info(f"MeetingAdapter初始化，当前活跃会议数量: {len(self.active_meetings)}, IDs: {list(self.active_meetings.keys())}")
     
     # ===== 角色管理功能 =====
     
@@ -435,12 +442,6 @@ class MeetingAdapter:
             mode_name = group.mode
             max_rounds = group.max_rounds  # 使用数据库中的最大轮数
 
-            # mode_name为six_thinking_hats时，max_rounds为6
-            if mode_name == "six_thinking_hats":
-                max_rounds = 6
-            elif mode_name == "swot_analysis":
-                max_rounds = 4
-                
             # 创建会议模式
             mode_class = self.mode_classes.get(mode_name)
             if not mode_class:
@@ -456,51 +457,56 @@ class MeetingAdapter:
                 raise ValueError("讨论组中没有角色")
             
             agents = []
-            # 为每个角色创建智能体
             for role in group.roles:
-                logger.info(f"处理角色: id={role.id}, name={role.name}")
+                # 跳过没有设置模型的角色
+                if not role.model_id:
+                    logger.warning(f"角色 {role.name} 没有设置模型，将被跳过")
+                    continue
                 
-                # 获取模型配置
+                # 获取模型信息
                 model = self.db.query(ModelConfiguration).filter(ModelConfiguration.id == role.model_id).first()
                 if not model:
-                    logger.error(f"角色模型配置不存在: role_id={role.id}, model_id={role.model_id}")
-                    raise ValueError(f"角色 {role.name} 的模型配置不存在")
+                    logger.warning(f"角色 {role.name} 的模型 (ID: {role.model_id}) 不存在，将被跳过")
+                    continue
                 
+                logger.info(f"处理角色: id={role.id}, name={role.name}")
                 logger.info(f"使用模型: id={model.id}, name={model.name}")
                 
-                # 获取模型API设置 - 修正属性名和URL处理
-                api_url = getattr(model, 'api_url', None)
-                api_key = getattr(model, 'api_key', None)
+                # 获取模型API参数
+                api_key = model.api_key
+                api_url = model.api_url
                 
-                # 处理URL，从完整URL中提取基础部分
-                base_url = None
-                if api_url:
-                    # 如果URL包含/v1/chat/completions，则去掉这部分
-                    if "/v1/chat/completions" in api_url:
-                        base_url = api_url.split("/v1/chat/completions")[0]
-                    else:
-                        base_url = api_url
+                # 处理 base_url
+                base_url = api_url
+                if "/v1/chat/completions" in api_url:
+                    base_url = api_url.split("/v1/chat/completions")[0]
                 
-                logger.info(f"模型API设置: api_url={api_url or '未设置'}, 提取base_url={base_url or '未设置'}, api_key={'已设置' if api_key else '未设置'}")
-                
-                # 如果模型没有设置API基础URL，使用默认值
-                if not base_url:
-                    base_url = "http://localhost:8000"
-                    logger.info(f"使用默认API基础URL: {base_url}")
+                logger.info(f"模型API设置: api_url={api_url}, 提取base_url={base_url}, api_key={'已设置' if api_key else '未设置'}")
                 
                 # 创建智能体
-                agent = MeetingAgent(
-                    name=role.name,
-                    role_description=role.description,
-                    personality=role.personality,
-                    skills=role.skills,
-                    model_params={
-                        "model_name": model.name,
-                        "base_url": base_url,  # 使用base_url而不是api_base
-                        "api_key": api_key,
-                        **role.parameters
-                    }
-                )
+                if role.is_human:
+                    # 创建人类智能体
+                    from app.meeting.agents.human_agent import HumanAgent
+                    agent = HumanAgent(
+                        name=role.name,
+                        role_description=role.description,
+                        personality=role.personality,
+                        skills=role.skills
+                    )
+                else:
+                    # 创建AI智能体
+                    agent = MeetingAgent(
+                        name=role.name,
+                        role_description=role.description,
+                        personality=role.personality,
+                        skills=role.skills,
+                        model_params={
+                            "model_name": model.name,
+                            "base_url": base_url,  # 使用base_url而不是api_base
+                            "api_key": api_key,
+                            **role.parameters
+                        }
+                    )
                 agents.append(agent)
                 logger.info(f"已创建智能体: {role.name} (使用模型: {model.name}, API基础URL: {base_url})")
             
@@ -519,7 +525,12 @@ class MeetingAdapter:
             meeting.group_info = self._group_to_dict(group)
             
             # 加入会议历史
-            self.active_meetings[meeting_id] = meeting
+            self.active_meetings[meeting_id] = {
+                "meeting": meeting,
+                "group_id": group.id,
+                "start_time": datetime.now()
+            }
+            logger.info(f"会议已创建并保存: meeting_id={meeting_id}, 当前活跃会议数: {len(self.active_meetings)}")
             
             return meeting_id
         except Exception as e:
@@ -552,45 +563,134 @@ class MeetingAdapter:
             logger.error(f"获取讨论状态失败: {str(e)}", exc_info=True)
             raise HTTPException(status_code=500, detail=f"获取讨论状态失败: {str(e)}")
     
-    def conduct_discussion_round(self, meeting_id: str) -> Dict[str, Any]:
-        """进行一轮讨论"""
-        try:
-            logger.info(f"开始执行讨论轮次: meeting_id={meeting_id}")
-            
-            meeting = self.active_meetings.get(meeting_id)
-            if not meeting:
-                logger.error(f"找不到会议: meeting_id={meeting_id}")
-                raise ValueError(f"会议ID {meeting_id} 不存在")
-            
-            logger.info(f"找到会议: id={meeting_id}, 状态={meeting.status}, 当前轮次={meeting.current_round}")
-            
-            # 进行一轮讨论
-            logger.info(f"开始执行一轮讨论")
-            meeting.conduct_round()
-            logger.info(f"讨论轮次完成: id={meeting_id}, 新状态={meeting.status}, 新轮次={meeting.current_round}")
-            
-            result = {
+    def conduct_discussion_round(self, meeting_id: str, prompt_type: str = None):
+        meeting = self._get_meeting(meeting_id)
+        
+        # 在开始新轮次前检查是否已达到最大轮次
+        if meeting.current_round > meeting.max_rounds:
+            logger.info(f"讨论轮次已超过上限: 当前轮次 {meeting.current_round}, 最大轮次 {meeting.max_rounds}")
+            meeting.status = "已结束"
+            meeting.end_time = datetime.now()
+            return {
+                "success": False,
+                "message": "会议已结束 (达到最大轮次)",
+                "meeting_id": meeting_id,
+                "status": meeting.status,
+                "current_round": meeting.current_round,
+                "max_rounds": meeting.max_rounds
+            }
+        
+        logger.info(f"找到会议: id={meeting_id}, 状态={meeting.status}, 当前轮次={meeting.current_round}")
+        
+        # 如果会议尚未开始，则先开始会议
+        if meeting.status == "未开始":
+            logger.info(f"会议尚未开始，先开始会议: id={meeting_id}")
+            meeting.start_meeting()
+            logger.info(f"会议已开始: id={meeting_id}, 新状态={meeting.status}")
+        
+        # 检查会议状态是否为进行中
+        if meeting.status != "进行中":
+            logger.warning(f"会议状态不是'进行中'，无法执行讨论轮次: id={meeting_id}, 状态={meeting.status}")
+            return {
                 "meeting_id": meeting_id,
                 "current_round": meeting.current_round,
-                "status": meeting.status
+                "status": meeting.status,
+                "message": f"会议状态为'{meeting.status}'，无法进行讨论"
             }
-            logger.info(f"返回讨论轮次结果: {result}")
+        
+        # 检查是否有人类智能体正在等待输入
+        waiting_for_human = False
+        waiting_human_name = None
+        
+        for agent in meeting.agents:
+            if hasattr(agent, 'is_human') and agent.is_human and agent.is_waiting_for_input():
+                waiting_for_human = True
+                waiting_human_name = agent.name
+                logger.info(f"检测到人类智能体 {agent.name} 正在等待输入，会议暂停")
+                break
+        
+        if waiting_for_human and waiting_human_name:
+            # 返回等待人类输入的状态
+            return {
+                "meeting_id": meeting_id,
+                "current_round": meeting.current_round,
+                "status": "等待人类输入",
+                "waiting_for_human_input": waiting_human_name,
+                "success": False,
+                "message": f"会议暂停，等待人类角色 {waiting_human_name} 输入"
+            }
+        
+        # 进行一轮讨论
+        logger.info(f"开始执行一轮讨论")
+        result = meeting.conduct_round()
+        logger.info(f"讨论轮次完成: id={meeting_id}, 新状态={meeting.status}, 新轮次={meeting.current_round}")
+        
+        # 检查讨论结果中是否有人类智能体需要输入
+        for msg in meeting.meeting_history[-3:]:  # 检查最近的3条消息
+            content = msg.get('content', '')
+            if content and isinstance(content, str):
+                if "[WAITING_FOR_HUMAN_INPUT:" in content:
+                    # 提取人类角色名称
+                    import re
+                    match = re.search(r"\[WAITING_FOR_HUMAN_INPUT:(.*?)\]", content)
+                    if match:
+                        human_name = match.group(1)
+                        logger.info(f"在消息中检测到等待人类输入标记: {human_name}")
+                        
+                        # 更新会议状态，表示等待人类输入
+                        return {
+                            "meeting_id": meeting_id,
+                            "current_round": meeting.current_round,
+                            "status": "等待人类输入",
+                            "waiting_for_human_input": human_name,
+                            "success": False,
+                            "message": f"会议暂停，等待人类角色 {human_name} 输入"
+                        }
+        
+        # 如果会议返回了结果，直接返回
+        if isinstance(result, dict) and "success" in result:
             return result
-        except Exception as e:
-            logger.error(f"进行讨论轮次失败: {str(e)}", exc_info=True)
-            raise
+        
+        # 否则构建标准响应
+        return {
+            "meeting_id": meeting_id,
+            "current_round": meeting.current_round,
+            "status": meeting.status,
+            "success": True
+        }
     
     async def end_meeting(self, meeting_id: str) -> Dict[str, Any]:
         """结束会议并获取总结"""
         try:
             # 获取会议对象
-            meeting = self.active_meetings.get(meeting_id)
-            if not meeting:
+            meeting_data = self.active_meetings.get(meeting_id)
+            if not meeting_data:
                 logger.error(f"结束会议失败: 会议ID {meeting_id} 不存在")
                 return {"error": f"会议ID {meeting_id} 不存在"}
             
+            # 从会议数据中获取会议对象
+            meeting = meeting_data.get("meeting")
+            if not meeting:
+                logger.error(f"会议数据格式错误: meeting_id={meeting_id}")
+                return {"error": f"会议数据格式错误: meeting_id={meeting_id}"}
+            
             # 获取讨论组信息
             group_info = meeting.group_info
+            
+            # 检查会议是否已有总结
+            existing_summary = meeting.get_summary() if hasattr(meeting, 'get_summary') else None
+            if meeting.status == "已结束" and existing_summary and len(existing_summary) > 100 and "未找到总结" not in existing_summary:
+                logger.info(f"会议已结束且已有总结，直接返回: meeting_id={meeting_id}")
+                result = meeting.to_dict()
+                if "summary" not in result:
+                    result["summary"] = existing_summary
+                return result
+            
+            # 设置会议状态为已结束(如果尚未结束)
+            if meeting.status != "已结束":
+                meeting.status = "已结束"
+                meeting.end_time = datetime.now()
+                logger.info(f"会议状态设置为已结束: meeting_id={meeting_id}")
             
             # 获取自定义总结模型（如果有）
             summary_model = None
@@ -648,9 +748,10 @@ class MeetingAdapter:
             # 添加总结到会议历史
             meeting.add_message("system", summary)
             
-            # 更新会议状态
+            # 确保会议状态为已结束
             meeting.status = "已结束"
-            meeting.end_time = datetime.now()
+            if not meeting.end_time:
+                meeting.end_time = datetime.now()
             
             # 构建返回结果
             result = meeting.to_dict()

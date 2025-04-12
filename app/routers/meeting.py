@@ -3,6 +3,7 @@ from sqlalchemy.orm import Session
 from typing import List, Dict, Any, Optional
 import logging
 from fastapi.responses import StreamingResponse
+from fastapi.responses import JSONResponse
 
 from app.models.database import get_db
 from app.adapters.meeting_adapter import MeetingAdapter
@@ -146,14 +147,47 @@ def delete_discussion_group(group_id: int, db: Session = Depends(get_db)):
 # ===== 讨论功能 =====
 
 @router.post("/discussions", response_model=Dict[str, Any])
-def start_discussion(
-    group_id: int = Body(...),
+def create_discussion(
     topic: str = Body(...),
+    group_id: int = Body(...),
     db: Session = Depends(get_db)
 ):
-    """启动讨论组会议"""
-    adapter = MeetingAdapter(db)
-    return {"meeting_id": adapter.start_meeting(group_id, topic), "message": "讨论已启动"}
+    """创建新讨论"""
+    try:
+        adapter = MeetingAdapter(db)
+        
+        # 输出所有活跃会议的ID，帮助调试
+        logger.info(f"创建前活跃会议IDs: {list(adapter.active_meetings.keys())}")
+        
+        # 创建会议
+        meeting_id = adapter.start_meeting(group_id, topic)
+        
+        # 确认创建成功
+        logger.info(f"创建后活跃会议IDs: {list(adapter.active_meetings.keys())}")
+        
+        # 创建带有X-Meeting-Id头的响应对象
+        response = JSONResponse(
+            content={
+                "success": True,
+                "message": "讨论已创建",
+                "meeting_id": meeting_id,
+                "topic": topic
+            }
+        )
+        
+        # 添加会议ID到响应头
+        response.headers["X-Meeting-Id"] = meeting_id
+        
+        return response
+    except Exception as e:
+        logger.error(f"创建讨论失败: {str(e)}", exc_info=True)
+        return JSONResponse(
+            status_code=500,
+            content={
+                "success": False,
+                "message": f"创建讨论失败: {str(e)}"
+            }
+        )
 
 @router.post("/discussions/{meeting_id}/round", response_model=Dict[str, Any])
 def conduct_discussion_round(meeting_id: str, db: Session = Depends(get_db)):
@@ -188,9 +222,60 @@ def conduct_discussion_round(meeting_id: str, db: Session = Depends(get_db)):
     
     # 调用讨论轮次
     try:
-        result = adapter.conduct_discussion_round(meeting_id)
-        logger.info(f"讨论轮次结果: {result}")
-        return result
+        # 获取当前轮次所有角色的发言顺序
+        speaking_order = meeting.mode.determine_speaking_order(
+            [{"name": agent.name, "role": agent.role_description} for agent in meeting.agents],
+            meeting.current_round
+        )
+        
+        # 记录当前轮次和参与者
+        logger.info(f"当前轮次: {meeting.current_round}, 发言顺序: {speaking_order}")
+        
+        # 记录开始时的轮次和发言者索引
+        start_round = meeting.current_round
+        start_speaker_index = meeting.current_speaker_index
+        
+        # 准备收集本轮所有发言结果
+        results = []
+        completed_speakers = 0
+        round_completed = False
+        
+        # 持续执行直到完成当前轮次（所有角色都发言完毕或轮次增加）
+        while not round_completed and completed_speakers < len(meeting.agents):
+            # 执行单个发言者的发言
+            result = adapter.conduct_discussion_round(meeting_id)
+            results.append(result)
+            completed_speakers += 1
+            
+            logger.info(f"发言者 {completed_speakers}/{len(meeting.agents)} 结果: {result}")
+            
+            # 如果需要等待人类输入，则中断循环
+            if result.get("waiting_for_human", False):
+                logger.info(f"等待人类角色 {result.get('speaker', '未知')} 的输入，暂停轮次")
+                return result
+            
+            # 如果轮次已经变化，表示完成了一轮
+            if meeting.current_round > start_round:
+                round_completed = True
+                logger.info(f"轮次已增加: {start_round} -> {meeting.current_round}，认为当前轮次已完成")
+            
+            # 如果会议状态变为"已结束"，也中断循环
+            if meeting.status == "已结束" or result.get("status") == "已结束":
+                round_completed = True
+                logger.info("会议已结束")
+        
+        # 返回最终结果
+        final_result = {
+            "meeting_id": meeting_id,
+            "current_round": meeting.current_round,
+            "status": meeting.status,
+            "success": True,
+            "message": "当前轮次所有角色已完成发言" if round_completed else "已处理部分角色发言",
+            "results": results  # 包含每个角色的发言结果
+        }
+        
+        logger.info(f"讨论轮次完成: {final_result}")
+        return final_result
     except Exception as e:
         logger.error(f"执行讨论轮次时发生错误: {str(e)}", exc_info=True)
         raise HTTPException(status_code=500, detail=f"执行讨论轮次失败: {str(e)}")
@@ -204,16 +289,18 @@ def get_discussion_round(
     adapter = MeetingAdapter(db)
     
     # 输出所有活跃会议的ID，帮助调试
-    logger.info(f"活跃会议IDs: {list(adapter.active_meetings.keys())}")
+    logger.info(f"获取讨论回合，活跃会议IDs: {list(adapter.active_meetings.keys())}")
     
     # 检查会议是否存在
     meeting_data = adapter.active_meetings.get(meeting_id)
     if not meeting_data:
+        logger.error(f"会议ID {meeting_id} 不存在，当前活跃会议：{list(adapter.active_meetings.keys())}")
         raise HTTPException(status_code=404, detail=f"会议ID {meeting_id} 不存在")
     
     # 从会议数据中获取会议对象
     meeting = meeting_data.get("meeting")
     if not meeting:
+        logger.error(f"会议数据格式错误: meeting_id={meeting_id}")
         raise HTTPException(status_code=500, detail=f"会议数据格式错误")
     
     # 记录会议对象类型，帮助调试
@@ -260,30 +347,77 @@ def submit_human_input(
     adapter = MeetingAdapter(db)
     
     # 输出所有活跃会议的ID，帮助调试
-    logger.info(f"活跃会议IDs: {list(adapter.active_meetings.keys())}")
+    logger.info(f"提交人类输入，活跃会议IDs: {list(adapter.active_meetings.keys())}")
     
     # 检查会议是否存在
     meeting_data = adapter.active_meetings.get(meeting_id)
     if not meeting_data:
+        logger.error(f"会议ID {meeting_id} 不存在，当前活跃会议：{list(adapter.active_meetings.keys())}")
         raise HTTPException(status_code=404, detail=f"会议ID {meeting_id} 不存在")
     
     # 从会议数据中获取会议对象
     meeting = meeting_data.get("meeting")
     if not meeting:
+        logger.error(f"会议数据格式错误: meeting_id={meeting_id}")
         raise HTTPException(status_code=500, detail=f"会议数据格式错误")
+    
+    # 查找对应的人类智能体
+    human_agent = None
+    for agent in meeting.agents:
+        if hasattr(agent, 'is_human') and agent.is_human and agent.name == agent_name:
+            human_agent = agent
+            break
+    
+    if not human_agent:
+        logger.error(f"找不到人类智能体 {agent_name}，会议ID={meeting_id}")
+        raise HTTPException(status_code=404, detail=f"找不到人类智能体 {agent_name}")
+    
+    # 检查是否正在等待该人类角色的输入
+    if not human_agent.is_waiting_for_input():
+        logger.info(f"当前不需要 {agent_name} 的输入，会议ID={meeting_id}")
+        # 尽管如此，我们还是接受这个输入
     
     # 添加人类消息
     success = meeting.add_human_message(agent_name, message)
     if not success:
+        logger.error(f"无法为 {agent_name} 添加消息，会议ID={meeting_id}")
         raise HTTPException(status_code=400, detail=f"无法为 {agent_name} 添加消息")
+    
+    # 重置等待状态
+    if hasattr(human_agent, 'is_waiting_input'):
+        human_agent.is_waiting_input = False
+        if hasattr(human_agent, 'input_start_time'):
+            human_agent.input_start_time = None
+        logger.info(f"已重置人类智能体 {agent_name} 的等待状态")
+    
+    # 如果会议有等待人类输入的标记，清除它
+    if hasattr(meeting, 'waiting_for_human_input') and meeting.waiting_for_human_input == agent_name:
+        meeting.waiting_for_human_input = None
+        logger.info(f"已清除会议的等待人类输入标记")
+    
+    # 确保会议状态是"进行中"
+    if meeting.status == "等待人类输入" or meeting.status == "未开始":
+        meeting.status = "进行中"
+        logger.info(f"已将会议状态从'{meeting.status}'更改为'进行中'")
     
     # 输出会议状态
     logger.info(f"人类输入已添加: 会议ID={meeting_id}, 角色={agent_name}, 消息长度={len(message)}")
     
+    # 尝试继续会议进程
+    try:
+        # 这里我们不立即执行下一轮，而是在客户端请求时执行
+        # 但我们需要确保会议状态正确
+        logger.info(f"人类输入已处理，会议准备继续进行: 会议ID={meeting_id}, 当前状态={meeting.status}")
+    except Exception as e:
+        logger.error(f"继续会议失败: {str(e)}")
+        # 即使出现错误，我们仍然返回成功，因为消息已经添加
+    
     return {
         "success": True,
-        "message": f"{agent_name} 的消息已提交",
-        "meeting_id": meeting_id
+        "message": f"{agent_name} 的消息已提交，会议将继续进行",
+        "meeting_id": meeting_id,
+        "status": meeting.status,
+        "current_round": meeting.current_round
     }
 
 @router.get("/discussions/{meeting_id}/human_roles", response_model=List[Dict[str, Any]])
@@ -292,23 +426,27 @@ def get_human_roles(meeting_id: str, db: Session = Depends(get_db)):
     adapter = MeetingAdapter(db)
     
     # 输出所有活跃会议的ID，帮助调试
-    logger.info(f"活跃会议IDs: {list(adapter.active_meetings.keys())}")
+    logger.info(f"获取人类角色，活跃会议IDs: {list(adapter.active_meetings.keys())}")
     
     # 检查会议是否存在
     meeting_data = adapter.active_meetings.get(meeting_id)
     if not meeting_data:
+        logger.error(f"会议ID {meeting_id} 不存在，当前活跃会议：{list(adapter.active_meetings.keys())}")
         raise HTTPException(status_code=404, detail=f"会议ID {meeting_id} 不存在")
     
     # 从会议数据中获取会议对象
     meeting = meeting_data.get("meeting")
     if not meeting:
+        logger.error(f"会议数据格式错误: meeting_id={meeting_id}")
         raise HTTPException(status_code=500, detail=f"会议数据格式错误")
     
     # 输出会议对象类型，帮助调试
     logger.info(f"会议对象类型: {type(meeting)}")
     
     # 获取人类角色列表
-    return meeting.get_human_roles()
+    human_roles = meeting.get_human_roles()
+    logger.info(f"找到 {len(human_roles)} 个人类角色: {[role.get('name') for role in human_roles]}")
+    return human_roles
 
 @router.get("/discussions/{meeting_id}/messages", response_model=Dict[str, Any])
 def get_meeting_messages(meeting_id: str, format: str = "standard", db: Session = Depends(get_db)):
@@ -316,7 +454,7 @@ def get_meeting_messages(meeting_id: str, format: str = "standard", db: Session 
     adapter = MeetingAdapter(db)
     
     # 输出所有活跃会议的ID，帮助调试
-    logger.info(f"活跃会议IDs: {list(adapter.active_meetings.keys())}")
+    logger.info(f"获取会议消息，活跃会议IDs: {list(adapter.active_meetings.keys())}")
     
     # 检查会议是否存在
     meeting_data = adapter.active_meetings.get(meeting_id)
@@ -338,10 +476,50 @@ def get_meeting_messages(meeting_id: str, format: str = "standard", db: Session 
     
     # 添加角色等待状态
     waiting_for_agent = None
+    waiting_for_human = []
+    
+    # 获取人类角色信息
+    human_roles = meeting.get_human_roles()
+    
+    # 检查是否有人类角色正在等待输入
+    is_waiting_for_human = False
     for agent in meeting.agents:
         if hasattr(agent, 'is_human') and agent.is_human and agent.is_waiting_for_input():
             waiting_for_agent = agent.name
-            break
+            is_waiting_for_human = True
+            # 查找对应的人类角色详细信息
+            for role in human_roles:
+                if role['name'] == agent.name:
+                    waiting_for_human.append(role)
+                    break
+            # 如果没有找到角色信息，添加基本信息
+            if not waiting_for_human or waiting_for_human[-1]['name'] != agent.name:
+                waiting_for_human.append({
+                    'name': agent.name,
+                    'id': getattr(agent, 'id', 0),
+                    'is_waiting': True
+                })
+    
+    # 检查下一个发言者是否为人类角色
+    if meeting.status == "进行中" and meeting.current_speaker_index < len(meeting.agents):
+        next_speaker = meeting.agents[meeting.current_speaker_index]
+        if hasattr(next_speaker, 'is_human') and next_speaker.is_human:
+            is_waiting_for_human = True
+            waiting_for_agent = next_speaker.name
+            
+            # 确保这个人类角色也在waiting_for_human列表中
+            agent_in_list = False
+            for role in waiting_for_human:
+                if role.get('name') == next_speaker.name:
+                    agent_in_list = True
+                    break
+            
+            if not agent_in_list:
+                waiting_for_human.append({
+                    'name': next_speaker.name,
+                    'id': getattr(next_speaker, 'id', 0),
+                    'is_waiting': True
+                })
     
     # 格式化消息供前端使用
     formatted_messages = []
@@ -353,14 +531,41 @@ def get_meeting_messages(meeting_id: str, format: str = "standard", db: Session 
             "timestamp": msg.get("timestamp", "")
         })
     
-    return {
-        "status": meeting.status,
-        "waiting_for_human_input": waiting_for_agent is not None,
+    # 如果有人类角色等待输入，设置状态为waiting_for_human
+    status = meeting.status
+    if is_waiting_for_human:
+        status = "waiting_for_human"
+    
+    # 整理讨论的轮次信息
+    rounds = []
+    for round_idx, round_data in enumerate(meeting.rounds if hasattr(meeting, 'rounds') else []):
+        if round_data and isinstance(round_data, dict) and round_data.get('messages'):
+            rounds.append({
+                'round_number': round_idx + 1,
+                'messages': [
+                    {
+                        "agent_name": msg.get("agent", "系统"),
+                        "content": msg.get("content", ""),
+                        "timestamp": msg.get("timestamp", "")
+                    } for msg in round_data.get('messages', [])
+                ]
+            })
+    
+    # 记录结果信息
+    result = {
+        "status": status,
+        "waiting_for_human": waiting_for_human,
         "waiting_for_agent": waiting_for_agent,
         "messages": formatted_messages,
         "current_round": meeting.current_round,
-        "max_rounds": meeting.max_rounds
+        "max_rounds": meeting.max_rounds,
+        "topic": meeting.topic,
+        "rounds": rounds if rounds else [{"round_number": 1, "messages": []}]
     }
+    
+    logger.info(f"返回会议消息，状态:{status}, 当前轮次:{meeting.current_round}, 消息数:{len(formatted_messages)}, 等待人类输入:{is_waiting_for_human}")
+    
+    return result
 
 @router.get("/discussions/active", response_model=Dict[str, Any])
 def get_active_meetings(db: Session = Depends(get_db)):
@@ -454,89 +659,77 @@ async def generate_meeting_stream(meeting, adapter, meeting_id: str):
         # 获取当前轮次状态
         result = adapter.conduct_discussion_round(meeting_id)
         
-        # 如果成功，返回内容
-        if result.get("success") and isinstance(result["success"], dict):
-            content = result["success"].get("content")
-            speaker = result["success"].get("speaker")
+        # 如果结果表示等待人类输入，直接返回
+        if result.get("waiting_for_human", False):
+            waiting_info = {
+                "id": f"{conversation_id}-waiting",
+                "object": "chat.completion.chunk",
+                "created": int(time.time()),
+                "model": "meeting-stream",
+                "choices": [{
+                    "index": 0,
+                    "delta": {"content": f"\n### 等待人类角色 {result.get('speaker', '未知')} 的输入...\n\n"},
+                    "finish_reason": None
+                }]
+            }
+            yield f"data: {json.dumps(waiting_info)}\n\n".encode('utf-8')
             
-            if content and speaker:
-                # 发送发言者信息
-                speaker_info = {
-                    "id": f"{conversation_id}-{speaker}",
-                    "object": "chat.completion.chunk",
-                    "created": int(time.time()),
-                    "model": "meeting-stream",
-                    "choices": [{
-                        "index": 0,
-                        "delta": {"content": f"\n### {speaker} 发言：\n\n"},
-                        "finish_reason": None
-                    }]
-                }
-                yield f"data: {json.dumps(speaker_info)}\n\n".encode('utf-8')
-                await asyncio.sleep(0.2)
-                
-                # 如果内容是嵌套的JSON格式，提取实际文本
-                if isinstance(content, dict) and content.get("choices"):
-                    # 找到当前发言的智能体
-                    current_agent = None
-                    for agent in meeting.agents:
-                        if agent.name == speaker:
-                            current_agent = agent
-                            break
-                    
-                    if current_agent:
-                        # 构建当前上下文
-                        context = meeting._build_meeting_context()
-                        prompt = meeting.mode.get_agent_prompt(
-                            agent_name=current_agent.name,
-                            agent_role=current_agent.role_description,
-                            meeting_topic=meeting.topic,
-                            current_round=meeting.current_round
-                        )
-                        
-                        # 直接使用智能体的流式生成方法
-                        async for chunk in current_agent.generate_response_stream(prompt, context):
-                            content_chunk = {
-                                "id": f"{conversation_id}-{speaker}-chunk",
-                                "object": "chat.completion.chunk",
-                                "created": int(time.time()),
-                                "model": "meeting-stream",
-                                "choices": [{
-                                    "index": 0,
-                                    "delta": {"content": chunk},
-                                    "finish_reason": None
-                                }]
-                            }
-                            yield f"data: {json.dumps(content_chunk)}\n\n".encode('utf-8')
-                    else:
-                        # 回退到标准方式
-                        message_content = content["choices"][0]["message"]["content"]
-                        content_chunk = {
-                            "id": f"{conversation_id}-{speaker}-content",
-                            "object": "chat.completion.chunk",
-                            "created": int(time.time()),
-                            "model": "meeting-stream",
-                            "choices": [{
-                                "index": 0,
-                                "delta": {"content": message_content},
-                                "finish_reason": None
-                            }]
-                        }
-                        yield f"data: {json.dumps(content_chunk)}\n\n".encode('utf-8')
-                else:
-                    # 直接返回内容
+            # 发送完成事件
+            done_event = {
+                "id": f"{conversation_id}-done",
+                "object": "chat.completion.chunk",
+                "created": int(time.time()),
+                "model": "meeting-stream",
+                "choices": [{
+                    "index": 0,
+                    "delta": {},
+                    "finish_reason": "stop"
+                }]
+            }
+            yield f"data: {json.dumps(done_event)}\n\n".encode('utf-8')
+            yield f"data: [DONE]\n\n".encode('utf-8')
+            return
+        
+        # 如果成功，生成内容
+        if result.get("success") and result.get("speaker"):
+            speaker = result.get("speaker")
+            content = result.get("content", "")
+            
+            # 发送发言者信息
+            speaker_info = {
+                "id": f"{conversation_id}-{speaker}",
+                "object": "chat.completion.chunk",
+                "created": int(time.time()),
+                "model": "meeting-stream",
+                "choices": [{
+                    "index": 0,
+                    "delta": {"content": f"\n### {speaker} 发言：\n\n"},
+                    "finish_reason": None
+                }]
+            }
+            yield f"data: {json.dumps(speaker_info)}\n\n".encode('utf-8')
+            await asyncio.sleep(0.2)
+            
+            # 流式发送内容
+            if content:
+                # 将内容分成小块流式发送，模拟打字效果
+                chunk_size = 3  # 每次发送的字符数
+                for i in range(0, len(content), chunk_size):
+                    chunk = content[i:i+chunk_size]
                     content_chunk = {
-                        "id": f"{conversation_id}-{speaker}-content",
+                        "id": f"{conversation_id}-{speaker}-chunk-{i}",
                         "object": "chat.completion.chunk",
                         "created": int(time.time()),
                         "model": "meeting-stream",
                         "choices": [{
                             "index": 0,
-                            "delta": {"content": str(content)},
+                            "delta": {"content": chunk},
                             "finish_reason": None
                         }]
                     }
                     yield f"data: {json.dumps(content_chunk)}\n\n".encode('utf-8')
+                    # 添加延迟，模拟真实打字速度，但不要太慢
+                    await asyncio.sleep(0.05)
         
         # 发送完成事件
         done_event = {
@@ -616,4 +809,35 @@ async def start_and_stream_discussion(
             yield f"data: {json.dumps(error_data)}\n\n".encode('utf-8')
             yield f"data: [DONE]\n\n".encode('utf-8')
         
-        return StreamingResponse(error_stream(), media_type="text/event-stream") 
+        return StreamingResponse(error_stream(), media_type="text/event-stream")
+
+@router.get("/discussions/{meeting_id}", response_model=Dict[str, Any])
+def get_discussion_info(meeting_id: str, db: Session = Depends(get_db)):
+    """获取会议基本信息"""
+    adapter = MeetingAdapter(db)
+    
+    # 输出所有活跃会议的ID，帮助调试
+    logger.info(f"获取会议基本信息，活跃会议IDs: {list(adapter.active_meetings.keys())}")
+    
+    # 检查会议是否存在
+    meeting_data = adapter.active_meetings.get(meeting_id)
+    if not meeting_data:
+        logger.error(f"会议ID {meeting_id} 不存在，当前活跃会议：{list(adapter.active_meetings.keys())}")
+        raise HTTPException(status_code=404, detail=f"会议ID {meeting_id} 不存在")
+    
+    # 从会议数据中获取会议对象
+    meeting = meeting_data.get("meeting")
+    if not meeting:
+        logger.error(f"会议数据格式错误: meeting_id={meeting_id}")
+        raise HTTPException(status_code=500, detail=f"会议数据格式错误")
+    
+    # 简化的会议状态信息
+    return {
+        "id": meeting_id,
+        "topic": meeting.topic,
+        "status": meeting.status,
+        "current_round": meeting.current_round,
+        "max_rounds": meeting.max_rounds,
+        "start_time": meeting_data.get("start_time").isoformat() if meeting_data.get("start_time") else None,
+        "group_id": meeting_data.get("group_id")
+    } 

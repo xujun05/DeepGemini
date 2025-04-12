@@ -48,6 +48,25 @@ class Agent:
         
         self.system_prompt = self._create_system_prompt()
         self.last_response = ""  # 添加存储最后响应的属性
+        
+        # 初始化会话历史
+        self.conversation_history = []
+        
+        # 初始化LLM实例
+        try:
+            # 将base_url和api_key添加到model_params中
+            if self.base_url and "base_url" not in self.model_params:
+                self.model_params["base_url"] = self.base_url
+            if self.api_key and "api_key" not in self.model_params:
+                self.model_params["api_key"] = self.api_key
+                
+            # 创建LLM实例
+            self.llm = ChatOpenAI(**self.model_params)
+            logger.info(f"已初始化智能体 {self.name} 的LLM模型: {model_name}")
+        except Exception as e:
+            logger.error(f"初始化LLM实例失败: {str(e)}", exc_info=True)
+            # 创建一个空属性，以便后续可以检查
+            self.llm = None
     
     def _create_system_prompt(self) -> str:
         """创建系统提示"""
@@ -61,6 +80,10 @@ class Agent:
             
         prompt += "\n请根据你的角色特点和专业知识参与讨论。"
         
+        # 确保conversation_history已初始化
+        if not hasattr(self, 'conversation_history') or self.conversation_history is None:
+            self.conversation_history = []
+            
         return prompt
     
     def generate_response(self, prompt: str, context: List[Dict[str, str]] = None) -> str:
@@ -239,31 +262,101 @@ class Agent:
 请根据你的角色、个性和技能，对当前讨论发表看法:
 """
             
-            # 构建消息列表
-            messages = [SystemMessage(content=self.system_prompt)]
+            # 构建消息列表，直接使用OpenAI格式的消息
+            messages = [{"role": "system", "content": self.system_prompt}]
             
-            # 添加会话历史记录
+            # 确保conversation_history已初始化
+            if not hasattr(self, 'conversation_history') or self.conversation_history is None:
+                self.conversation_history = []
+                
+            # 添加会话历史记录 - 转换为API格式
             for message in self.conversation_history:
-                messages.append(message)
+                if hasattr(message, 'type') and message.type == 'human':
+                    messages.append({"role": "user", "content": message.content})
+                elif hasattr(message, 'type') and message.type == 'ai':
+                    messages.append({"role": "assistant", "content": message.content})
             
             # 添加当前请求
-            messages.append(HumanMessage(content=prompt))
+            messages.append({"role": "user", "content": prompt})
             
-            # 使用智能重试机制调用LLM
-            response = self._invoke_with_smart_retry(messages)
+            # 使用直接API调用
+            response_content = self._call_api_directly(messages)
             
-            # 更新会话历史
-            self.conversation_history.append(HumanMessage(content=prompt))
-            self.conversation_history.append(AIMessage(content=response.content))
+            # 如果使用LangChain类，则更新会话历史
+            if self.llm is not None:
+                from langchain.schema import HumanMessage, AIMessage
+                self.conversation_history.append(HumanMessage(content=prompt))
+                self.conversation_history.append(AIMessage(content=response_content))
             
             # 返回响应内容
-            return response.content
+            return response_content
         except Exception as e:
             error_message = f"智能体发言时出错: {str(e)}"
             logger.error(f"{self.name} 发言失败: {error_message}")
             logger.error(traceback.format_exc())  # 记录完整堆栈跟踪
             print(f"错误: {error_message}")  # 打印到控制台便于调试
             return f"[出错] {self.name} 尝试回应，但遇到了技术问题。错误消息: {str(e)}"
+    
+    def _call_api_directly(self, messages: List[Dict[str, str]]) -> str:
+        """直接调用模型API，避免使用LangChain的消息格式转换"""
+        try:
+            # 确保API基本URL存在并有效
+            base_url = self.base_url or self.model_params.get("base_url", "http://localhost:8000")
+            if not base_url:
+                base_url = "http://localhost:8000"  # 如果未设置，使用默认值
+            
+            # 检查base_url是否已经包含了api路径
+            if not base_url.endswith("/v1/chat/completions") and not base_url.endswith("/chat/completions"):
+                # 根据模型名称决定使用哪个API端点
+                model_name = self.model_params.get("model_name", "").lower()
+                if "deepseek" in model_name:
+                    url = f"{base_url}/chat/completions"  # DeepSeek API路径
+                else:
+                    url = f"{base_url}/v1/chat/completions"  # 标准OpenAI格式路径
+            else:
+                url = base_url
+            
+            logger.info(f"直接调用API: url={url}, model={self.model_params.get('model_name')}")
+            
+            # API请求数据
+            data = {
+                "model": self.model_params.get("model_name", "gpt-3.5-turbo"),
+                "messages": messages,
+                "temperature": self.model_params.get("temperature", 0.7),
+                "max_tokens": self.model_params.get("max_tokens", 2000)
+            }
+            
+            # 添加API密钥头(如果有)
+            headers = {"Content-Type": "application/json"}
+            api_key = self.api_key or self.model_params.get("api_key")
+            if api_key:
+                headers["Authorization"] = f"Bearer {api_key}"
+                logger.info("使用API密钥进行请求")
+            
+            # 发送请求
+            logger.info(f"发送直接API请求: messages_count={len(messages)}")
+            start_time = time.time()
+            response = requests.post(
+                url,
+                json=data,
+                headers=headers
+            )
+            end_time = time.time()
+            logger.info(f"API响应时间: {end_time - start_time:.2f}秒, 状态码: {response.status_code}")
+            
+            # 解析响应
+            if response.status_code == 200:
+                result = response.json()
+                content = result.get("choices", [{}])[0].get("message", {}).get("content", "")
+                logger.info(f"API响应成功: content_length={len(content)}")
+                return content
+            else:
+                error_text = response.text
+                logger.error(f"API请求失败: 状态码={response.status_code}, 错误={error_text[:200]}")
+                raise Exception(f"API请求失败: {response.status_code} {error_text[:200]}")
+        except Exception as e:
+            logger.error(f"直接API调用发生异常: {str(e)}", exc_info=True)
+            raise
     
     def _get_fallback_model(self):
         """获取备用模型，在主模型失败时使用"""
@@ -294,6 +387,16 @@ class Agent:
     
     def _invoke_with_smart_retry(self, messages):
         """带有智能重试机制的LLM调用方法"""
+        # 如果llm未初始化，尝试初始化
+        if self.llm is None:
+            try:
+                logger.info(f"{self.name} 尝试初始化LLM模型...")
+                self.llm = ChatOpenAI(**self.model_params)
+                logger.info(f"{self.name} 成功初始化LLM模型")
+            except Exception as e:
+                logger.error(f"{self.name} 初始化LLM模型失败: {str(e)}")
+                raise ValueError(f"无法初始化LLM模型: {str(e)}")
+        
         max_retries = 5  # 最大重试次数
         base_delay = 2  # 基础延迟（秒）
         max_delay = 60  # 最大延迟（秒）

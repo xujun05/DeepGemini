@@ -398,38 +398,27 @@ async def chat_completions(
                 # 获取最后一条消息作为提示
                 prompt = messages[-1]["content"] if messages else ""
                 
-                # 获取流式参数
-                stream = stream
-                
                 if stream:
                     # 创建处理协程的流式响应
-                    return StreamingResponse(
-                        convert_coroutine_to_stream(processor.process_request(prompt, stream=True)),
+                    # 先启动会议获取会议ID
+                    meeting_id = processor.start_meeting(group_id, prompt)
+                    logger.info(f"启动会议成功，meeting_id={meeting_id}")
+                    
+                    # 创建流式响应，带上会议ID头
+                    response = StreamingResponse(
+                        convert_coroutine_to_stream(processor.process_request(prompt, stream=True, meeting_id=meeting_id)),
                         media_type="text/event-stream"
                     )
+                    response.headers["X-Meeting-Id"] = meeting_id
+                    return response
                 else:
-                    response = await processor.process_request(prompt, stream=False)
-                    return {
-                        "id": f"chatcmpl-{uuid.uuid4()}",
-                        "object": "chat.completion",
-                        "created": int(time.time()),
-                        "model": model,
-                        "choices": [
-                            {
-                                "index": 0,
-                                "message": {
-                                    "role": "assistant",
-                                    "content": response
-                                },
-                                "finish_reason": "stop"
-                            }
-                        ],
-                        "usage": {
-                            "prompt_tokens": 0,  # 我们不跟踪token使用
-                            "completion_tokens": 0,
-                            "total_tokens": 0
-                        }
-                    }
+                    # 非流式模式下先启动会议，以保证一致性
+                    meeting_id = processor.start_meeting(group_id, prompt)
+                    logger.info(f"启动会议成功，meeting_id={meeting_id}")
+                    
+                    # 使用现有会议ID处理请求
+                    response = await processor.process_request(prompt, stream=False, meeting_id=meeting_id)
+                    return response
             except Exception as e:
                 logger.error(f"处理讨论组请求失败: {str(e)}", exc_info=True)
                 raise HTTPException(status_code=500, detail=str(e))
@@ -549,6 +538,7 @@ app.include_router(meeting.router)
 app.include_router(roles.router)
 app.include_router(discussion_groups.router)
 app.include_router(discussions.router)
+app.include_router(discussions.router)  # 确保discussions路由已注册
 
 @app.get("/dashboard")
 async def dashboard():

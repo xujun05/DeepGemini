@@ -33,6 +33,7 @@ class Meeting:
         self.agents = []
         self.history = []  # 统一使用history存储会议历史
         self.meeting_history = []  # 保持meeting_history兼容性
+        self.rounds = []  # 存储每轮讨论的消息
         self.status = "未开始"
         self.current_round = 1
         self.current_speaker_index = 0  # 添加当前发言者索引
@@ -50,11 +51,26 @@ class Meeting:
         self.history.append(message)
         self.meeting_history.append(message)  # 同时更新两个历史记录列表
         
+    def start_meeting(self):
+        """开始会议"""
+        if self.status != "未开始":
+            logger.warning(f"会议状态已经是 {self.status}，不需要再次开始")
+            return False
+            
+        self.status = "进行中"
+        logger.info(f"会议 {self.id} 已开始，主题: {self.topic}")
+        
+        # 添加会议开始的记录
+        self.add_message("system", f"会议已开始，主题: {self.topic}")
+        
+        return True
+        
     async def conduct_round_stream(self):
         """进行一轮讨论，支持流式输出"""
         # 检查讨论是否已经完成
-        if self.current_round > self.max_rounds:
+        if self.current_round >= self.max_rounds + 1:
             self.status = "已结束"
+            self.end_time = datetime.now()
             return []
         
         if self.status == "已结束":
@@ -132,12 +148,31 @@ class Meeting:
         结束会议并生成摘要
         该方法用于外部调用，提供了一个公共接口来结束会议
         """
+        # 先检查是否已有总结
+        existing_summary = None
+        for message in reversed(self.meeting_history):
+            if message["agent"] == "system" and message["content"] and len(message["content"]) > 50:
+                # 找到最后一条有意义的系统消息（总结通常较长）
+                existing_summary = message["content"]
+                break
+                
+        # 如果已有有效的总结，直接返回
+        if existing_summary and len(existing_summary) > 100 and "未找到总结" not in existing_summary:
+            logger.info(f"会议 {self.id} 已有有效总结，长度: {len(existing_summary)}，避免重复生成")
+            return existing_summary
+        
         # 确保会议已结束
         if self.status != "已结束":
             self._end_meeting()
         
-        # 如果已经结束，不需要重复执行
-        return self.mode.summarize_meeting(self.topic, self.meeting_history)
+        # 生成总结
+        summary = self.mode.summarize_meeting(self.topic, self.meeting_history)
+        
+        # 将总结添加到会议历史中
+        self.add_message("system", summary)
+        
+        logger.info(f"会议 {self.id} 已生成总结，长度: {len(summary)}")
+        return summary
     
     def get_summary(self) -> str:
         """
@@ -161,14 +196,89 @@ class Meeting:
         # 如果没有找到合适的总结，返回一个默认消息
         return f"关于'{self.topic}'的会议已结束，但未找到总结。"
     
-    def get_meeting_history(self) -> List[Dict[str, Any]]:
-        """
-        获取会议历史记录
-        
-        返回:
-            List[Dict[str, Any]]: 会议历史记录列表
-        """
+    def get_meeting_history(self):
+        """获取会议历史记录"""
         return self.meeting_history
+    
+    def get_human_roles(self):
+        """获取会议中的人类角色列表"""
+        human_roles = []
+        for agent in self.agents:
+            if hasattr(agent, 'is_human') and agent.is_human:
+                human_roles.append({
+                    "name": agent.name,
+                    "role": agent.role_description,
+                    "is_waiting": agent.is_waiting_for_input()
+                })
+        return human_roles
+    
+    def get_waiting_human_roles(self):
+        """获取当前等待输入的人类角色列表"""
+        waiting_roles = []
+        for agent in self.agents:
+            if hasattr(agent, 'is_human') and agent.is_human and agent.is_waiting_for_input():
+                waiting_roles.append({
+                    "name": agent.name,
+                    "role": agent.role_description
+                })
+        return waiting_roles
+    
+    def add_human_message(self, agent_name, message):
+        """添加人类角色的消息"""
+        # 查找人类智能体
+        for agent in self.agents:
+            if agent.name == agent_name and hasattr(agent, 'is_human') and agent.is_human:
+                # 添加消息
+                agent.add_message(message)
+                
+                # 添加到会议历史
+                self.add_message(agent_name, message)
+                
+                # 重置等待状态
+                if hasattr(agent, 'is_waiting_input'):
+                    agent.is_waiting_input = False
+                    if hasattr(agent, 'input_start_time'):
+                        agent.input_start_time = None
+                
+                # 清除会议等待状态
+                if hasattr(self, 'waiting_for_human_input'):
+                    self.waiting_for_human_input = None
+                
+                # 确保会议状态为"进行中"
+                if self.status == "等待人类输入":
+                    self.status = "进行中"
+                    logger.info(f"会议状态从'等待人类输入'更改为'进行中'，会议ID={self.id}")
+                
+                # 如果此人类角色是当前发言者，处理其回应并移动到下一位发言者
+                if self.current_speaker_index < len(self.agents) and self.agents[self.current_speaker_index].name == agent_name:
+                    # 处理响应并移动到下一个发言者
+                    logger.info(f"人类 {agent_name} 是当前发言者，处理其响应并移到下一位")
+                    self.handle_agent_response(agent, message)
+                else:
+                    # 如果需要，记录来自非当前发言者的人类输入
+                    logger.info(f"收到非当前发言者 {agent_name} 的输入，会议ID={self.id}")
+                    
+                    # 尝试更新轮次和发言顺序，确保会议可以继续
+                    # 查找该人类角色在发言序列中的位置
+                    for i, spk in enumerate(self.agents):
+                        if spk.name == agent_name:
+                            logger.info(f"将当前发言位置从 {self.current_speaker_index} 更新为 {(i+1)%len(self.agents)}")
+                            # 将当前发言位置设置为该人类角色的下一位
+                            self.current_speaker_index = (i + 1) % len(self.agents)
+                            # 如果轮次完成，增加轮次计数
+                            if self.current_speaker_index == 0:
+                                self.current_round += 1
+                                logger.info(f"人类发言后完成一轮，会议 {self.id} 进入第 {self.current_round} 轮")
+                            break
+                
+                # 确保会议状态保持在"进行中"
+                self.status = "进行中"
+                logger.info(f"已成功处理人类角色 {agent_name} 的输入，会议ID={self.id}，当前轮次={self.current_round}, 当前发言索引={self.current_speaker_index}")
+                return True
+        
+        # 如果没有找到对应的人类角色
+        logger.warning(f"未找到人类角色: {agent_name}，会议ID={self.id}")
+        return False
     
     def conduct_round(self) -> Dict[str, Any]:
         """进行一轮会议讨论"""
@@ -183,10 +293,24 @@ class Meeting:
             # 构建当前上下文 - 包含会议历史记录
             current_context = self._build_meeting_context()
             
-            # 检查是否有人类参与者等待响应
+            # 检查是否有人类参与者
             if hasattr(current_speaker, 'is_human') and current_speaker.is_human:
-                # 处理人类参与者响应
-                response = current_speaker.response(self.id, self.current_round, current_context)
+                # 设置人类参与者等待输入状态
+                current_speaker.wait_for_input()
+                logger.info(f"等待人类角色 {current_speaker.name} 的输入")
+                
+                # 对于人类参与者，返回等待状态
+                return {
+                    "success": True,
+                    "message": "等待人类输入",
+                    "meeting_id": self.id,
+                    "round": self.current_round,
+                    "speaker": current_speaker.name,
+                    "content": f"等待 {current_speaker.name} 的输入...",
+                    "is_finished": False,
+                    "next_speaker": current_speaker.name,  # 下一个发言者仍是当前人类
+                    "waiting_for_human": True
+                }
             else:
                 # 生成AI智能体响应
                 mode_specific_prompt = self._get_mode_specific_prompt()
@@ -202,9 +326,9 @@ class Meeting:
                     current_context=current_context,
                     mode_specific_prompt=mode_specific_prompt
                 )
-            
-            # 处理响应
-            return self.handle_agent_response(current_speaker, response)
+                
+                # 处理响应
+                return self.handle_agent_response(current_speaker, response)
             
         except Exception as e:
             logger.error(f"会议 {self.id} 进行轮次时出错: {str(e)}", exc_info=True)
@@ -272,9 +396,9 @@ class Meeting:
                 "error": str(e)
             }
 
-    def _check_end_conditions(self):
-        """检查是否达到结束条件"""
-        return self.current_round > self.max_rounds or self.mode.should_end_meeting(self.current_round - 1, self.history)
+    def _check_end_conditions(self) -> bool:
+        """检查会议是否应该结束"""
+        return self.current_round >= self.max_rounds or self.mode.should_end_meeting(self.current_round - 1, self.history)
 
     def _build_meeting_context(self) -> List[Dict[str, str]]:
         """构建会议上下文 - 返回字典列表以便于在流式生成中正确处理"""
@@ -315,51 +439,20 @@ class Meeting:
 
     def _move_to_next_speaker(self):
         """移动到下一位发言者"""
+        prev_index = self.current_speaker_index
         self.current_speaker_index = (self.current_speaker_index + 1) % len(self.agents)
         
+        # 注释掉自动增加轮次的逻辑，现在由discussion_processor管理轮次
         # 如果已经循环一轮，增加轮次计数
+        # if self.current_speaker_index == 0:
+        #     self.current_round += 1
+        #     logger.info(f"会议 {self.id} 进入第 {self.current_round} 轮")
+        
+        logger.info(f"会议 {self.id} 发言者从 {prev_index} 移动到 {self.current_speaker_index}")
+        
+        # 如果回到第一个发言者，记录但不增加轮次
         if self.current_speaker_index == 0:
-            self.current_round += 1
-            logger.info(f"会议 {self.id} 进入第 {self.current_round} 轮")
-
-    def add_human_message(self, agent_name, message):
-        """添加来自特定人类角色的消息"""
-        # 查找对应的人类智能体
-        agent = next((a for a in self.agents if a.name == agent_name and hasattr(a, 'is_human') and a.is_human), None)
-        if not agent:
-            logger.warning(f"找不到人类角色 {agent_name}")
-            return False
-            
-        # 设置响应或中断
-        if agent.is_waiting_for_input():
-            # 如果正在等待输入，直接设置响应
-            agent.set_human_response(message)
-        else:
-            # 否则作为中断处理
-            agent.interrupt(message)
-            
-        return True
-        
-    def get_human_roles(self):
-        """获取所有人类角色"""
-        return [
-            {
-                "name": agent.name,
-                "id": agent.name,  # 使用名称作为ID
-                "is_waiting": agent.is_waiting_for_input() if hasattr(agent, 'is_waiting_for_input') else False,
-                "host_role": agent.host_role_name if hasattr(agent, 'host_role_name') else None
-            }
-            for agent in self.agents if hasattr(agent, 'is_human') and agent.is_human
-        ]
-        
-    def get_waiting_human_roles(self):
-        """获取正在等待输入的人类角色列表"""
-        waiting_roles = []
-        for agent in self.agents:
-            if hasattr(agent, 'is_human') and agent.is_human and hasattr(agent, 'is_waiting_for_input'):
-                if agent.is_waiting_for_input():
-                    waiting_roles.append(agent.name)
-        return waiting_roles
+            logger.info(f"会议 {self.id} 已循环完成一轮发言，等待由讨论处理器管理轮次增加")
 
     def get_history(self) -> List[Dict[str, Any]]:
         """
