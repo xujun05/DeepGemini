@@ -1473,3 +1473,56 @@ body.dark-theme {
     --system-message-bg: rgba(0, 123, 255, 0.1);
     --code-bg: #2d2d2d;
 }
+
+/* 等待人类输入的系统提示 */
+.waiting-human-prompt {
+    background-color: #f0f8ff;
+    border-left: 4px solid #007bff;
+    margin: 10px 0;
+    padding: 10px 15px;
+    font-style: italic;
+    color: #6c757d;
+}
+
+.dark-theme .waiting-human-prompt {
+    background-color: #1a2130;
+    border-left: 4px solid #0d6efd;
+    color: #adb5bd;
+}
+
+/* 人类角色占位容器 */
+.waiting-human {
+    margin-top: 5px;
+    margin-bottom: 15px;
+    padding: 10px;
+    border-radius: 8px;
+    background-color: #f8f9fa;
+    border: 1px dashed #dee2e6;
+}
+
+.dark-theme .waiting-human {
+    background-color: #212529;
+    border: 1px dashed #495057;
+}
+
+/* 人类输入状态指示器 */
+.human-input-status {
+    position: sticky;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    background-color: rgba(248, 249, 250, 0.8);
+    backdrop-filter: blur(5px);
+    padding: 5px 10px;
+    border-top: 1px solid #dee2e6;
+    text-align: center;
+    font-size: 0.9rem;
+    z-index: 100;
+    margin-top: 10px;
+}
+
+.dark-theme .human-input-status {
+    background-color: rgba(33, 37, 41, 0.8);
+    border-top: 1px solid #495057;
+    color: #adb5bd;
+}

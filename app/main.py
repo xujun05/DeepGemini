@@ -12,6 +12,9 @@ import json
 import uuid
 import time
 import re
+import logging
+from starlette.middleware.base import BaseHTTPMiddleware
+from starlette.types import ASGIApp
 
 from app.utils.logger import logger
 from app.utils.auth import verify_api_key
@@ -24,6 +27,49 @@ from app.routers import meeting, roles, discussion_groups, discussions
 from app.processors.role_processor import RoleProcessor
 from app.processors.discussion_processor import DiscussionProcessor
 from app.adapters.meeting_adapter import MeetingAdapter
+
+# 自定义中间件类，用于过滤特定路径的访问日志
+class AccessLogFilter(BaseHTTPMiddleware):
+    def __init__(self, app: ASGIApp, paths_to_ignore: List[str]):
+        super().__init__(app)
+        self.paths_to_ignore = paths_to_ignore
+        
+    async def dispatch(self, request: Request, call_next):
+        # 获取请求路径
+        path = request.url.path
+        
+        # 检查是否是需要忽略的路径
+        should_ignore = False
+        for ignore_path in self.paths_to_ignore:
+            if '*' in ignore_path:
+                # 处理包含通配符的路径
+                pattern = ignore_path.replace('*', '.*')
+                if re.match(pattern, path):
+                    should_ignore = True
+                    break
+            else:
+                # 处理精确匹配的路径
+                if ignore_path == path:
+                    should_ignore = True
+                    break
+        
+        if should_ignore:
+            # 临时禁用访问日志记录器
+            access_logger = logging.getLogger("uvicorn.access")
+            original_level = access_logger.level
+            access_logger.setLevel(logging.WARNING)  # 提高日志级别以忽略INFO级别的日志
+            
+            try:
+                # 处理请求
+                response = await call_next(request)
+                return response
+            finally:
+                # 恢复日志级别
+                access_logger.setLevel(original_level)
+        
+        # 处理其他正常记录日志的请求
+        response = await call_next(request)
+        return response
 
 # 加载环境变量
 load_dotenv()
@@ -43,6 +89,16 @@ app.add_middleware(
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
+)
+
+# 添加日志过滤中间件，忽略特定路径的访问日志
+app.add_middleware(
+    AccessLogFilter,
+    paths_to_ignore=[
+        "/api/meeting/discussions/.*/messages",  # 忽略讨论消息轮询请求
+        "/api/meeting/discussions/.*/round",     # 忽略轮次请求
+        "/api/meeting/discussions/.*/human_roles" # 忽略人类角色查询
+    ]
 )
 
 # Initialize database

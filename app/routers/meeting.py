@@ -840,4 +840,71 @@ def get_discussion_info(meeting_id: str, db: Session = Depends(get_db)):
         "max_rounds": meeting.max_rounds,
         "start_time": meeting_data.get("start_time").isoformat() if meeting_data.get("start_time") else None,
         "group_id": meeting_data.get("group_id")
+    }
+
+@router.get("/discussions/{meeting_id}/status", response_model=Dict[str, Any])
+async def get_meeting_status_and_summary(meeting_id: str, db: Session = Depends(get_db)):
+    """获取会议状态和总结"""
+    adapter = MeetingAdapter(db)
+    
+    logger.info(f"获取会议状态和总结，会议ID: {meeting_id}")
+    
+    # 检查会议是否存在
+    meeting_data = adapter.active_meetings.get(meeting_id)
+    if not meeting_data:
+        logger.warning(f"找不到会议ID: {meeting_id}，尝试结束会议以获取总结")
+        try:
+            # 尝试调用end_meeting以获取总结
+            result = await adapter.end_meeting(meeting_id)
+            if result and not result.get("error"):
+                logger.info(f"成功获取到会议总结，长度: {len(result.get('summary', ''))}")
+                return {
+                    "status": "已结束",
+                    "summary": result.get("summary", ""),
+                    "topic": result.get("topic", ""),
+                    "meeting_id": meeting_id
+                }
+            else:
+                logger.error(f"会议总结获取失败: {result.get('error', '未知错误')}")
+                raise HTTPException(status_code=404, detail=f"会议ID {meeting_id} 不存在或无法获取总结")
+        except Exception as e:
+            logger.error(f"获取总结时出错: {str(e)}", exc_info=True)
+            raise HTTPException(status_code=404, detail=f"会议ID {meeting_id} 不存在")
+    
+    # 从会议数据中获取会议对象
+    meeting = meeting_data.get("meeting")
+    if not meeting:
+        logger.error(f"会议数据格式错误: meeting_id={meeting_id}")
+        raise HTTPException(status_code=500, detail=f"会议数据格式错误")
+    
+    # 获取总结
+    summary = ""
+    if meeting.status == "已结束" or meeting.current_round > meeting.max_rounds:
+        # 如果会议已结束，尝试获取现有总结
+        existing_summary = meeting.get_summary() if hasattr(meeting, 'get_summary') else None
+        
+        # 如果没有找到有效的总结，尝试生成一个
+        if not existing_summary or len(existing_summary) < 100 or "未找到总结" in existing_summary:
+            logger.info(f"会议已结束但未找到有效总结，生成总结...")
+            try:
+                summary = meeting.finish()
+                logger.info(f"已生成会议总结，长度: {len(summary)}")
+            except Exception as e:
+                logger.error(f"生成总结时出错: {str(e)}", exc_info=True)
+                summary = "无法生成总结，请稍后再试。"
+        else:
+            summary = existing_summary
+            logger.info(f"使用现有总结，长度: {len(summary)}")
+    else:
+        # 会议未结束，返回当前状态
+        logger.info(f"会议未结束，仅返回当前状态: status={meeting.status}, round={meeting.current_round}")
+    
+    # 返回会议状态和总结
+    return {
+        "status": meeting.status,
+        "current_round": meeting.current_round,
+        "max_rounds": meeting.max_rounds,
+        "topic": meeting.topic,
+        "summary": summary,
+        "meeting_id": meeting_id
     } 

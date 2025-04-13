@@ -40,6 +40,7 @@ class Meeting:
         self.start_time = datetime.now()
         self.end_time = None
         self.group_info = None  # 用于存储讨论组信息
+        self._skip_auto_summary = False  # 标志是否跳过自动生成总结
         
     def add_message(self, agent_name: str, content: str):
         """添加消息到会议历史记录"""
@@ -97,11 +98,81 @@ class Meeting:
         self.status = "已结束"
         self.end_time = datetime.now()
         
-        # 生成会议总结
-        summary = self.mode.summarize_meeting(self.topic, self.meeting_history)
+        # 检查是否设置了跳过自动生成总结的标志
+        if hasattr(self, '_skip_auto_summary') and self._skip_auto_summary:
+            logger.info(f"会议 {self.id} 设置了_skip_auto_summary标志，跳过自动生成总结")
+            return
+        
+        # 使用讨论组的自定义总结模型和提示进行总结
+        from app.meeting.utils.summary_generator import SummaryGenerator
+        import logging
+        
+        logger = logging.getLogger(__name__)
+        
+        # 检查是否有讨论组信息和总结模型配置
+        custom_prompt = None
+        model_id = None
+        api_key = None
+        api_base_url = None
+        model_name = None
+        
+        if self.group_info:
+            # 获取自定义提示模板（如果有）
+            if 'summary_prompt' in self.group_info and self.group_info['summary_prompt']:
+                custom_prompt = self.group_info['summary_prompt']
+                logger.info(f"使用讨论组自定义总结提示模板: length={len(custom_prompt)}")
+            
+            # 获取自定义总结模型（如果有）
+            if 'summary_model_id' in self.group_info and self.group_info['summary_model_id']:
+                model_id = self.group_info['summary_model_id']
+                logger.info(f"使用讨论组自定义总结模型: model_id={model_id}")
+                
+                try:
+                    # 这里简化处理，实际使用时应从adapter获取model信息
+                    # 这里是为了保证即使无法获取model详情，也能使用默认模型生成总结
+                    from app.models.database import get_db, Model
+                    from sqlalchemy.orm import Session
+                    
+                    # 获取数据库会话
+                    db = next(get_db())
+                    
+                    # 查询模型配置
+                    summary_model = db.query(Model).filter(Model.id == model_id).first()
+                    
+                    if summary_model:
+                        logger.info(f"找到总结模型: {summary_model.name}")
+                        model_name = summary_model.name
+                        
+                        # 获取API密钥和基础URL
+                        api_key = getattr(summary_model, 'api_key', None)
+                        api_url = getattr(summary_model, 'api_url', None)
+                        
+                        # 处理URL，从完整URL中提取基础部分
+                        if api_url:
+                            if "/v1/chat/completions" in api_url:
+                                api_base_url = api_url.split("/v1/chat/completions")[0]
+                            else:
+                                api_base_url = api_url
+                except Exception as e:
+                    logger.error(f"获取总结模型信息失败: {str(e)}，将使用默认模型", exc_info=True)
+        
+        # 使用模式的默认提示模板或自定义提示
+        prompt_template = custom_prompt if custom_prompt else self.mode.get_summary_prompt_template()
+        
+        # 生成总结
+        summary = SummaryGenerator.generate_summary(
+            meeting_topic=self.topic,
+            meeting_history=self.meeting_history,
+            prompt_template=prompt_template,
+            model_name=model_name,
+            api_key=api_key,
+            api_base_url=api_base_url
+        )
         
         # 添加总结到会议历史
         self.add_message("system", summary)
+        
+        logger.info(f"会议 {self.id} 已结束，使用{'自定义' if custom_prompt else '默认'}提示模板和{'自定义' if model_name else '默认'}模型生成总结")
     
     def _get_current_context(self) -> List[Dict[str, str]]:
         """获取当前会议上下文"""
@@ -148,6 +219,23 @@ class Meeting:
         结束会议并生成摘要
         该方法用于外部调用，提供了一个公共接口来结束会议
         """
+        # 检查是否设置了跳过自动生成总结的标志
+        if hasattr(self, '_skip_auto_summary') and self._skip_auto_summary:
+            logger.info(f"会议 {self.id} 设置了_skip_auto_summary标志，跳过自动生成总结")
+            # 确保会议已结束
+            if self.status != "已结束":
+                self.status = "已结束"
+                self.end_time = datetime.now()
+            
+            # 尝试查找已有的总结，如果有则返回
+            for message in reversed(self.meeting_history):
+                if message["agent"] == "system" and message["content"] and len(message["content"]) > 50:
+                    logger.info(f"找到已有总结，长度: {len(message['content'])}")
+                    return message["content"]
+            
+            # 如果没有找到总结，返回默认消息
+            return f"关于'{self.topic}'的会议已结束，总结将由外部处理。"
+        
         # 先检查是否已有总结
         existing_summary = None
         for message in reversed(self.meeting_history):
@@ -164,9 +252,70 @@ class Meeting:
         # 确保会议已结束
         if self.status != "已结束":
             self._end_meeting()
+            return self.get_summary()  # 直接调用get_summary获取总结，因为_end_meeting已经生成了
+        
+        # 如果会议已结束但没有总结，则使用与_end_meeting相同的逻辑重新生成总结
+        from app.meeting.utils.summary_generator import SummaryGenerator
+        
+        # 检查是否有讨论组信息和总结模型配置
+        custom_prompt = None
+        model_id = None
+        api_key = None
+        api_base_url = None
+        model_name = None
+        
+        if self.group_info:
+            # 获取自定义提示模板（如果有）
+            if 'summary_prompt' in self.group_info and self.group_info['summary_prompt']:
+                custom_prompt = self.group_info['summary_prompt']
+                logger.info(f"使用讨论组自定义总结提示模板: length={len(custom_prompt)}")
+            
+            # 获取自定义总结模型（如果有）
+            if 'summary_model_id' in self.group_info and self.group_info['summary_model_id']:
+                model_id = self.group_info['summary_model_id']
+                logger.info(f"使用讨论组自定义总结模型: model_id={model_id}")
+                
+                try:
+                    # 这里简化处理，实际使用时应从adapter获取model信息
+                    # 这里是为了保证即使无法获取model详情，也能使用默认模型生成总结
+                    from app.models.database import get_db, Model
+                    from sqlalchemy.orm import Session
+                    
+                    # 获取数据库会话
+                    db = next(get_db())
+                    
+                    # 查询模型配置
+                    summary_model = db.query(Model).filter(Model.id == model_id).first()
+                    
+                    if summary_model:
+                        logger.info(f"找到总结模型: {summary_model.name}")
+                        model_name = summary_model.name
+                        
+                        # 获取API密钥和基础URL
+                        api_key = getattr(summary_model, 'api_key', None)
+                        api_url = getattr(summary_model, 'api_url', None)
+                        
+                        # 处理URL，从完整URL中提取基础部分
+                        if api_url:
+                            if "/v1/chat/completions" in api_url:
+                                api_base_url = api_url.split("/v1/chat/completions")[0]
+                            else:
+                                api_base_url = api_url
+                except Exception as e:
+                    logger.error(f"获取总结模型信息失败: {str(e)}，将使用默认模型", exc_info=True)
+        
+        # 使用模式的默认提示模板或自定义提示
+        prompt_template = custom_prompt if custom_prompt else self.mode.get_summary_prompt_template()
         
         # 生成总结
-        summary = self.mode.summarize_meeting(self.topic, self.meeting_history)
+        summary = SummaryGenerator.generate_summary(
+            meeting_topic=self.topic,
+            meeting_history=self.meeting_history,
+            prompt_template=prompt_template,
+            model_name=model_name,
+            api_key=api_key,
+            api_base_url=api_base_url
+        )
         
         # 将总结添加到会议历史中
         self.add_message("system", summary)
@@ -376,7 +525,14 @@ class Meeting:
             
             # 检查是否达到结束条件
             if self._check_end_conditions():
+                logger.info(f"会议 {self.id} 达到结束条件，自动结束会议")
                 self._end_meeting()
+            
+            # 特别检查：如果当前轮次已是最后一轮，且所有发言者都已发言(speaker_index回到0)，主动结束会议
+            if self.current_round >= self.max_rounds and self.current_speaker_index == 0:
+                logger.info(f"会议 {self.id} 已完成最后一轮且所有发言者已发言，自动结束会议")
+                if self.status != "已结束":
+                    self._end_meeting()
             
             return {
                 "success": True,

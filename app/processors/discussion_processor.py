@@ -10,6 +10,7 @@ from datetime import datetime
 
 from app.models.database import DiscussionGroup, Role
 from app.adapters.meeting_adapter import MeetingAdapter
+from app.meeting.utils.summary_generator import SummaryGenerator
 
 logger = logging.getLogger(__name__)
 
@@ -307,29 +308,207 @@ class DiscussionProcessor:
         print(f"当前历史消息数: {len(meeting.meeting_history)}")
         print(f"{'='*80}\n")
             
-        # 检查会议状态，如果已结束则退出
+        # 检查会议状态，如果已结束则获取总结并返回
         if meeting.status == "已结束":
-            # 确保已生成会议总结
-            summary = meeting.get_summary()
-            # 如果没有找到有效的总结（返回的是默认消息），尝试生成一个
-            if not summary or len(summary) < 100 or "未找到总结" in summary:
-                logger.info(f"会议已结束但未找到有效总结，生成总结...")
-                summary = meeting.finish()
-                logger.info(f"已生成会议总结，长度: {len(summary)}")
-            
-            # 发送会议结束信息
-            summary_event = {
-                "id": f"{conversation_id}-meeting-summary",
+            # 发送会话开始事件 (确保前端能正确识别)
+            start_event = {
+                "id": conversation_id,
                 "object": "chat.completion.chunk",
                 "created": int(time.time()),
                 "model": "discussion-group",
                 "choices": [{
                     "index": 0,
-                    "delta": {"content": f"\n## 会议总结\n\n{summary}\n\n"},
+                    "delta": {"role": "assistant", "content": ""},
+                    "finish_reason": None
+                }]
+            }
+            yield f"data: {json.dumps(start_event, ensure_ascii=False)}\n\n"
+            
+            # 发送会议结束信息
+            end_meeting_info = {
+                "id": f"{conversation_id}-meeting-end",
+                "object": "chat.completion.chunk",
+                "created": int(time.time()),
+                "model": "discussion-group",
+                "choices": [{
+                    "index": 0,
+                    "delta": {"content": "\n\n## 会议结束\n\n*正在生成会议总结*\n\n"},
+                    "finish_reason": None
+                }]
+            }
+            yield f"data: {json.dumps(end_meeting_info, ensure_ascii=False)}\n\n"
+            await asyncio.sleep(0.5)
+            
+            # 使用流式总结生成器实时生成并发送总结
+            # 获取会议主题和历史
+            meeting_topic = meeting.topic
+            meeting_history = meeting.meeting_history
+            
+            # 获取讨论组信息和总结模型配置
+            custom_prompt = None
+            model_name = None
+            api_key = None
+            api_base_url = None
+            
+            # 从会议对象获取讨论组信息
+            group_info = getattr(meeting, 'group_info', None)
+            
+            if group_info:
+                # 获取自定义提示模板（如果有）
+                if 'summary_prompt' in group_info and group_info['summary_prompt']:
+                    custom_prompt = group_info['summary_prompt']
+                    logger.info(f"使用讨论组自定义总结提示模板: length={len(custom_prompt)}")
+                
+                # 获取自定义总结模型（如果有）
+                if 'summary_model_id' in group_info and group_info['summary_model_id']:
+                    model_id = group_info['summary_model_id']
+                    logger.info(f"使用讨论组自定义总结模型: model_id={model_id}")
+                    
+                    try:
+                        # 获取模型信息
+                        from app.models.database import get_db, Model
+                        
+                        # 获取数据库会话
+                        db = next(get_db())
+                        
+                        # 查询模型配置
+                        summary_model = db.query(Model).filter(Model.id == model_id).first()
+                        
+                        if summary_model:
+                            logger.info(f"找到总结模型: {summary_model.name}")
+                            model_name = summary_model.name
+                            
+                            # 获取API密钥和基础URL
+                            api_key = getattr(summary_model, 'api_key', None)
+                            api_url = getattr(summary_model, 'api_url', None)
+                            
+                            # 处理URL，从完整URL中提取基础部分
+                            if api_url:
+                                if "/v1/chat/completions" in api_url:
+                                    api_base_url = api_url.split("/v1/chat/completions")[0]
+                                else:
+                                    api_base_url = api_url
+                    except Exception as e:
+                        logger.error(f"获取总结模型信息失败: {str(e)}", exc_info=True)
+            
+            # 使用模式的默认提示模板或自定义提示
+            prompt_template = custom_prompt if custom_prompt else meeting.mode.get_summary_prompt_template()
+            
+            # 先发送总结标题
+            summary_title_event = {
+                "id": f"{conversation_id}-meeting-summary-title",
+                "object": "chat.completion.chunk",
+                "created": int(time.time()),
+                "model": "discussion-group",
+                "choices": [{
+                    "index": 0,
+                    "delta": {"content": "\n## 会议总结\n\n"},
+                    "finish_reason": None
+                }]
+            }
+            yield f"data: {json.dumps(summary_title_event, ensure_ascii=False)}\n\n"
+            await asyncio.sleep(0.3)
+            
+            # 使用流式总结生成器实时生成并发送总结
+            logger.info(f"开始直接流式生成和发送会议总结")
+            
+            # 获取会议主题和历史
+            meeting_topic = meeting.topic
+            meeting_history = meeting.meeting_history
+            
+            # 获取讨论组信息和总结模型配置
+            custom_prompt = None
+            model_name = None
+            api_key = None
+            api_base_url = None
+            
+            # 从会议对象获取讨论组信息
+            group_info = getattr(meeting, 'group_info', None)
+            
+            if group_info:
+                # 获取自定义提示模板（如果有）
+                if 'summary_prompt' in group_info and group_info['summary_prompt']:
+                    custom_prompt = group_info['summary_prompt']
+                    logger.info(f"使用讨论组自定义总结提示模板: length={len(custom_prompt)}")
+                
+                # 获取自定义总结模型（如果有）
+                if 'summary_model_id' in group_info and group_info['summary_model_id']:
+                    model_id = group_info['summary_model_id']
+                    logger.info(f"使用讨论组自定义总结模型: model_id={model_id}")
+                    
+                    try:
+                        # 获取模型信息
+                        from app.models.database import get_db, Model
+                        
+                        # 获取数据库会话
+                        db = next(get_db())
+                        
+                        # 查询模型配置
+                        summary_model = db.query(Model).filter(Model.id == model_id).first()
+                        
+                        if summary_model:
+                            logger.info(f"找到总结模型: {summary_model.name}")
+                            model_name = summary_model.name
+                            
+                            # 获取API密钥和基础URL
+                            api_key = getattr(summary_model, 'api_key', None)
+                            api_url = getattr(summary_model, 'api_url', None)
+                            
+                            # 处理URL，从完整URL中提取基础部分
+                            if api_url:
+                                if "/v1/chat/completions" in api_url:
+                                    api_base_url = api_url.split("/v1/chat/completions")[0]
+                                else:
+                                    api_base_url = api_url
+                    except Exception as e:
+                        logger.error(f"获取总结模型信息失败: {str(e)}", exc_info=True)
+            
+            # 使用模式的默认提示模板或自定义提示
+            prompt_template = custom_prompt if custom_prompt else meeting.mode.get_summary_prompt_template()
+            
+            # 开始流式生成总结
+            accumulated_summary = ""
+            async for chunk in SummaryGenerator.generate_summary_stream(
+                meeting_topic=meeting_topic,
+                meeting_history=meeting_history,
+                prompt_template=prompt_template,
+                model_name=model_name,
+                api_key=api_key,
+                api_base_url=api_base_url
+            ):
+                accumulated_summary += chunk
+                summary_chunk_event = {
+                    "id": f"{conversation_id}-summary-chunk-{int(time.time()*1000)}",
+                    "object": "chat.completion.chunk",
+                    "created": int(time.time()),
+                    "model": "discussion-group",
+                    "choices": [{
+                        "index": 0,
+                        "delta": {"content": chunk},
+                        "finish_reason": None
+                    }]
+                }
+                yield f"data: {json.dumps(summary_chunk_event, ensure_ascii=False)}\n\n"
+            
+            # 将累积的总结保存到会议历史
+            meeting.add_message("system", accumulated_summary)
+            
+            # 发送完成事件
+            summary_end_event = {
+                "id": f"{conversation_id}-summary-end",
+                "object": "chat.completion.chunk",
+                "created": int(time.time()),
+                "model": "discussion-group",
+                "choices": [{
+                    "index": 0,
+                    "delta": {"content": ""},
                     "finish_reason": "stop"
                 }]
             }
-            yield f"data: {json.dumps(summary_event, ensure_ascii=False)}\n\n"
+            yield f"data: {json.dumps(summary_end_event, ensure_ascii=False)}\n\n"
+            
+            logger.info(f"总结内容已通过流式方式实时生成和发送完毕，总长度: {len(accumulated_summary)}")
+            print("会议结束，已实时生成并流式发送总结")
             
             # 发送结束标志
             yield f"data: [DONE]\n\n"
@@ -414,11 +593,7 @@ class DiscussionProcessor:
                 meeting.status = "已结束"
                 meeting.end_time = datetime.now()
                 
-                # 调用finish方法生成会议总结
-                summary = meeting.finish()
-                logger.info(f"已生成会议总结，长度: {len(summary)}")
-                
-                # 发送会议结束信息 - 美化格式
+                # 发送会议结束信息
                 end_meeting_info = {
                     "id": f"{conversation_id}-meeting-end",
                     "object": "chat.completion.chunk",
@@ -426,32 +601,121 @@ class DiscussionProcessor:
                     "model": "discussion-group",
                     "choices": [{
                         "index": 0,
-                        "delta": {"content": "\n\n## 会议结束\n\n*已生成会议总结*\n\n"},
+                        "delta": {"content": "\n\n## 会议结束\n\n*正在生成会议总结...*\n\n"},
                         "finish_reason": None
                     }]
                 }
                 yield f"data: {json.dumps(end_meeting_info, ensure_ascii=False)}\n\n"
+                await asyncio.sleep(0.5)
                 
-                # 发送会议总结
-                summary_event = {
-                    "id": f"{conversation_id}-meeting-summary",
+                # 调用finish方法生成会议总结，使用讨论组的自定义模型和提示
+                summary = meeting.finish()
+                logger.info(f"已生成会议总结，长度: {len(summary)}")
+                
+                # 发送会议总结 - 使用流式方式发送
+                logger.info(f"开始直接流式生成和发送会议总结")
+                
+                # 获取会议主题和历史
+                meeting_topic = meeting.topic
+                meeting_history = meeting.meeting_history
+                
+                # 获取讨论组信息和总结模型配置
+                custom_prompt = None
+                model_name = None
+                api_key = None
+                api_base_url = None
+                
+                # 从会议对象获取讨论组信息
+                group_info = getattr(meeting, 'group_info', None)
+                
+                if group_info:
+                    # 获取自定义提示模板（如果有）
+                    if 'summary_prompt' in group_info and group_info['summary_prompt']:
+                        custom_prompt = group_info['summary_prompt']
+                        logger.info(f"使用讨论组自定义总结提示模板: length={len(custom_prompt)}")
+                    
+                    # 获取自定义总结模型（如果有）
+                    if 'summary_model_id' in group_info and group_info['summary_model_id']:
+                        model_id = group_info['summary_model_id']
+                        logger.info(f"使用讨论组自定义总结模型: model_id={model_id}")
+                        
+                        try:
+                            # 获取模型信息
+                            from app.models.database import get_db, Model
+                            
+                            # 获取数据库会话
+                            db = next(get_db())
+                            
+                            # 查询模型配置
+                            summary_model = db.query(Model).filter(Model.id == model_id).first()
+                            
+                            if summary_model:
+                                logger.info(f"找到总结模型: {summary_model.name}")
+                                model_name = summary_model.name
+                                
+                                # 获取API密钥和基础URL
+                                api_key = getattr(summary_model, 'api_key', None)
+                                api_url = getattr(summary_model, 'api_url', None)
+                                
+                                # 处理URL，从完整URL中提取基础部分
+                                if api_url:
+                                    if "/v1/chat/completions" in api_url:
+                                        api_base_url = api_url.split("/v1/chat/completions")[0]
+                                    else:
+                                        api_base_url = api_url
+                        except Exception as e:
+                            logger.error(f"获取总结模型信息失败: {str(e)}", exc_info=True)
+                
+                # 使用模式的默认提示模板或自定义提示
+                prompt_template = custom_prompt if custom_prompt else meeting.mode.get_summary_prompt_template()
+                
+                # 开始流式生成总结
+                accumulated_summary = ""
+                async for chunk in SummaryGenerator.generate_summary_stream(
+                    meeting_topic=meeting_topic,
+                    meeting_history=meeting_history,
+                    prompt_template=prompt_template,
+                    model_name=model_name,
+                    api_key=api_key,
+                    api_base_url=api_base_url
+                ):
+                    accumulated_summary += chunk
+                    summary_chunk_event = {
+                        "id": f"{conversation_id}-summary-chunk-{int(time.time()*1000)}",
+                        "object": "chat.completion.chunk",
+                        "created": int(time.time()),
+                        "model": "discussion-group",
+                        "choices": [{
+                            "index": 0,
+                            "delta": {"content": chunk},
+                            "finish_reason": None
+                        }]
+                    }
+                    yield f"data: {json.dumps(summary_chunk_event, ensure_ascii=False)}\n\n"
+                
+                # 将累积的总结保存到会议历史
+                meeting.add_message("system", accumulated_summary)
+                
+                # 发送完成事件
+                summary_end_event = {
+                    "id": f"{conversation_id}-summary-end",
                     "object": "chat.completion.chunk",
                     "created": int(time.time()),
                     "model": "discussion-group",
                     "choices": [{
                         "index": 0,
-                        "delta": {"content": f"\n## 会议总结\n\n{summary}\n\n"},
+                        "delta": {"content": ""},
                         "finish_reason": "stop"
                     }]
                 }
-                yield f"data: {json.dumps(summary_event, ensure_ascii=False)}\n\n"
-                print("会议结束，已生成总结")
+                yield f"data: {json.dumps(summary_end_event, ensure_ascii=False)}\n\n"
+                
+                logger.info(f"总结内容已通过流式方式实时生成和发送完毕，总长度: {len(accumulated_summary)}")
+                print("会议结束，已实时生成并流式发送总结")
                 
                 # 发送结束标志
                 yield f"data: [DONE]\n\n"
-                
-                # 跳转到生成总结的逻辑
-                break
+                return
             
             # 确保会议状态为"进行中"
             if meeting.status != "进行中":
@@ -544,7 +808,7 @@ class DiscussionProcessor:
                         "model": "discussion-group",
                         "choices": [{
                             "index": 0,
-                            "delta": {"content": waiting_msg},
+                            "delta": {"content": f"\n\n[WAITING_FOR_HUMAN_INPUT:{agent.name}]\n\n"},
                             "finish_reason": None
                         }]
                     }
@@ -619,7 +883,7 @@ class DiscussionProcessor:
                                 "model": "discussion-group",
                                 "choices": [{
                                     "index": 0,
-                                    "delta": {"content": waiting_msg},
+                                    "delta": {"content": f"\n\n[WAITING_FOR_HUMAN_INPUT:{human_name}]\n\n"},
                                     "finish_reason": "waiting_human"
                                 }]
                             }
@@ -767,6 +1031,135 @@ class DiscussionProcessor:
             }
             yield f"data: {json.dumps(round_separator, ensure_ascii=False)}\n\n"
             
+            # 检查是否已达到最大轮次，如果是则结束会议并生成总结
+            if meeting.current_round > meeting.max_rounds and meeting.status != "已结束":
+                logger.info(f"已达到最大轮次({meeting.max_rounds})，主动结束会议并生成总结")
+                meeting.status = "已结束"
+                meeting.end_time = datetime.now()
+                
+                # 设置跳过自动生成总结的标志
+                meeting._skip_auto_summary = True
+                
+                # 发送会议结束信息
+                end_meeting_info = {
+                    "id": f"{conversation_id}-meeting-end",
+                    "object": "chat.completion.chunk",
+                    "created": int(time.time()),
+                    "model": "discussion-group",
+                    "choices": [{
+                        "index": 0,
+                        "delta": {"content": "\n\n## 会议结束\n\n*正在生成会议总结...*\n\n"},
+                        "finish_reason": None
+                    }]
+                }
+                yield f"data: {json.dumps(end_meeting_info, ensure_ascii=False)}\n\n"
+                await asyncio.sleep(0.5)
+                
+                # 直接流式生成总结，不再调用meeting.finish()
+                logger.info(f"开始直接流式生成和发送会议总结")
+                
+                # 获取会议主题和历史
+                meeting_topic = meeting.topic
+                meeting_history = meeting.meeting_history
+                
+                # 获取讨论组信息和总结模型配置
+                custom_prompt = None
+                model_name = None
+                api_key = None
+                api_base_url = None
+                
+                # 从会议对象获取讨论组信息
+                group_info = getattr(meeting, 'group_info', None)
+                
+                if group_info:
+                    # 获取自定义提示模板（如果有）
+                    if 'summary_prompt' in group_info and group_info['summary_prompt']:
+                        custom_prompt = group_info['summary_prompt']
+                        logger.info(f"使用讨论组自定义总结提示模板: length={len(custom_prompt)}")
+                    
+                    # 获取自定义总结模型（如果有）
+                    if 'summary_model_id' in group_info and group_info['summary_model_id']:
+                        model_id = group_info['summary_model_id']
+                        logger.info(f"使用讨论组自定义总结模型: model_id={model_id}")
+                        
+                        try:
+                            # 获取模型信息
+                            from app.models.database import get_db, Model
+                            
+                            # 获取数据库会话
+                            db = next(get_db())
+                            
+                            # 查询模型配置
+                            summary_model = db.query(Model).filter(Model.id == model_id).first()
+                            
+                            if summary_model:
+                                logger.info(f"找到总结模型: {summary_model.name}")
+                                model_name = summary_model.name
+                                
+                                # 获取API密钥和基础URL
+                                api_key = getattr(summary_model, 'api_key', None)
+                                api_url = getattr(summary_model, 'api_url', None)
+                                
+                                # 处理URL，从完整URL中提取基础部分
+                                if api_url:
+                                    if "/v1/chat/completions" in api_url:
+                                        api_base_url = api_url.split("/v1/chat/completions")[0]
+                                    else:
+                                        api_base_url = api_url
+                        except Exception as e:
+                            logger.error(f"获取总结模型信息失败: {str(e)}", exc_info=True)
+                
+                # 使用模式的默认提示模板或自定义提示
+                prompt_template = custom_prompt if custom_prompt else meeting.mode.get_summary_prompt_template()
+                
+                # 开始流式生成总结
+                accumulated_summary = ""
+                async for chunk in SummaryGenerator.generate_summary_stream(
+                    meeting_topic=meeting_topic,
+                    meeting_history=meeting_history,
+                    prompt_template=prompt_template,
+                    model_name=model_name,
+                    api_key=api_key,
+                    api_base_url=api_base_url
+                ):
+                    accumulated_summary += chunk
+                    summary_chunk_event = {
+                        "id": f"{conversation_id}-summary-chunk-{int(time.time()*1000)}",
+                        "object": "chat.completion.chunk",
+                        "created": int(time.time()),
+                        "model": "discussion-group",
+                        "choices": [{
+                            "index": 0,
+                            "delta": {"content": chunk},
+                            "finish_reason": None
+                        }]
+                    }
+                    yield f"data: {json.dumps(summary_chunk_event, ensure_ascii=False)}\n\n"
+                
+                # 将累积的总结保存到会议历史
+                meeting.add_message("system", accumulated_summary)
+                
+                # 发送完成事件
+                summary_end_event = {
+                    "id": f"{conversation_id}-summary-end",
+                    "object": "chat.completion.chunk",
+                    "created": int(time.time()),
+                    "model": "discussion-group",
+                    "choices": [{
+                        "index": 0,
+                        "delta": {"content": ""},
+                        "finish_reason": "stop"
+                    }]
+                }
+                yield f"data: {json.dumps(summary_end_event, ensure_ascii=False)}\n\n"
+                
+                logger.info(f"总结内容已通过流式方式实时生成和发送完毕，总长度: {len(accumulated_summary)}")
+                print("会议结束，已实时生成并流式发送总结")
+                
+                # 发送结束标志
+                yield f"data: [DONE]\n\n"
+                return
+            
             # 暂停一下再进行下一轮 - 适当的延迟使整体流程更自然
             await asyncio.sleep(0.7 + random.uniform(0, 0.5))
         
@@ -781,8 +1174,110 @@ class DiscussionProcessor:
             
             # 生成并添加总结
             try:
-                summary = meeting.finish()
-                logger.info(f"会议结束，已生成总结，长度: {len(summary)}")
+                logger.info(f"检测到会议已结束但未找到有效总结，开始流式生成总结...")
+                
+                # 使用流式总结生成器实时生成并发送总结
+                # 获取会议主题和历史
+                meeting_topic = meeting.topic
+                meeting_history = meeting.meeting_history
+                
+                # 获取讨论组信息和总结模型配置
+                custom_prompt = None
+                model_name = None
+                api_key = None
+                api_base_url = None
+                
+                # 从会议对象获取讨论组信息
+                group_info = getattr(meeting, 'group_info', None)
+                
+                if group_info:
+                    # 获取自定义提示模板（如果有）
+                    if 'summary_prompt' in group_info and group_info['summary_prompt']:
+                        custom_prompt = group_info['summary_prompt']
+                        logger.info(f"使用讨论组自定义总结提示模板: length={len(custom_prompt)}")
+                    
+                    # 获取自定义总结模型（如果有）
+                    if 'summary_model_id' in group_info and group_info['summary_model_id']:
+                        model_id = group_info['summary_model_id']
+                        logger.info(f"使用讨论组自定义总结模型: model_id={model_id}")
+                        
+                        try:
+                            # 获取模型信息
+                            from app.models.database import get_db, Model
+                            
+                            # 获取数据库会话
+                            db = next(get_db())
+                            
+                            # 查询模型配置
+                            summary_model = db.query(Model).filter(Model.id == model_id).first()
+                            
+                            if summary_model:
+                                logger.info(f"找到总结模型: {summary_model.name}")
+                                model_name = summary_model.name
+                                
+                                # 获取API密钥和基础URL
+                                api_key = getattr(summary_model, 'api_key', None)
+                                api_url = getattr(summary_model, 'api_url', None)
+                                
+                                # 处理URL，从完整URL中提取基础部分
+                                if api_url:
+                                    if "/v1/chat/completions" in api_url:
+                                        api_base_url = api_url.split("/v1/chat/completions")[0]
+                                    else:
+                                        api_base_url = api_url
+                        except Exception as e:
+                            logger.error(f"获取总结模型信息失败: {str(e)}", exc_info=True)
+                
+                # 使用模式的默认提示模板或自定义提示
+                prompt_template = custom_prompt if custom_prompt else meeting.mode.get_summary_prompt_template()
+                
+                # 开始流式生成总结
+                accumulated_summary = ""
+                async for chunk in SummaryGenerator.generate_summary_stream(
+                    meeting_topic=meeting_topic,
+                    meeting_history=meeting_history,
+                    prompt_template=prompt_template,
+                    model_name=model_name,
+                    api_key=api_key,
+                    api_base_url=api_base_url
+                ):
+                    accumulated_summary += chunk
+                    summary_chunk_event = {
+                        "id": f"{conversation_id}-summary-chunk-{int(time.time()*1000)}",
+                        "object": "chat.completion.chunk",
+                        "created": int(time.time()),
+                        "model": "discussion-group",
+                        "choices": [{
+                            "index": 0,
+                            "delta": {"content": chunk},
+                            "finish_reason": None
+                        }]
+                    }
+                    yield f"data: {json.dumps(summary_chunk_event, ensure_ascii=False)}\n\n"
+                
+                # 将累积的总结保存到会议历史
+                meeting.add_message("system", accumulated_summary)
+                
+                # 发送完成事件
+                summary_end_event = {
+                    "id": f"{conversation_id}-summary-end",
+                    "object": "chat.completion.chunk",
+                    "created": int(time.time()),
+                    "model": "discussion-group",
+                    "choices": [{
+                        "index": 0,
+                        "delta": {"content": ""},
+                        "finish_reason": "stop"
+                    }]
+                }
+                yield f"data: {json.dumps(summary_end_event, ensure_ascii=False)}\n\n"
+                
+                logger.info(f"总结内容已通过流式方式实时生成和发送完毕，总长度: {len(accumulated_summary)}")
+                print("会议结束，已实时生成并流式发送总结")
+                
+                # 发送结束标志
+                yield f"data: [DONE]\n\n"
+                
             except Exception as e:
                 logger.error(f"生成会议总结时出错: {str(e)}", exc_info=True)
         
@@ -791,9 +1286,110 @@ class DiscussionProcessor:
             summary = meeting.get_summary()
             if not summary or len(summary) < 100 or "未找到总结" in summary:
                 try:
-                    logger.info(f"检测到会议已结束但未找到有效总结，生成总结...")
-                    summary = meeting.finish()
-                    logger.info(f"已补充生成会议总结，长度: {len(summary)}")
+                    logger.info(f"检测到会议已结束但未找到有效总结，开始流式生成总结...")
+                    
+                    # 使用流式总结生成器实时生成并发送总结
+                    # 获取会议主题和历史
+                    meeting_topic = meeting.topic
+                    meeting_history = meeting.meeting_history
+                    
+                    # 获取讨论组信息和总结模型配置
+                    custom_prompt = None
+                    model_name = None
+                    api_key = None
+                    api_base_url = None
+                    
+                    # 从会议对象获取讨论组信息
+                    group_info = getattr(meeting, 'group_info', None)
+                    
+                    if group_info:
+                        # 获取自定义提示模板（如果有）
+                        if 'summary_prompt' in group_info and group_info['summary_prompt']:
+                            custom_prompt = group_info['summary_prompt']
+                            logger.info(f"使用讨论组自定义总结提示模板: length={len(custom_prompt)}")
+                        
+                        # 获取自定义总结模型（如果有）
+                        if 'summary_model_id' in group_info and group_info['summary_model_id']:
+                            model_id = group_info['summary_model_id']
+                            logger.info(f"使用讨论组自定义总结模型: model_id={model_id}")
+                            
+                            try:
+                                # 获取模型信息
+                                from app.models.database import get_db, Model
+                                
+                                # 获取数据库会话
+                                db = next(get_db())
+                                
+                                # 查询模型配置
+                                summary_model = db.query(Model).filter(Model.id == model_id).first()
+                                
+                                if summary_model:
+                                    logger.info(f"找到总结模型: {summary_model.name}")
+                                    model_name = summary_model.name
+                                    
+                                    # 获取API密钥和基础URL
+                                    api_key = getattr(summary_model, 'api_key', None)
+                                    api_url = getattr(summary_model, 'api_url', None)
+                                    
+                                    # 处理URL，从完整URL中提取基础部分
+                                    if api_url:
+                                        if "/v1/chat/completions" in api_url:
+                                            api_base_url = api_url.split("/v1/chat/completions")[0]
+                                        else:
+                                            api_base_url = api_url
+                            except Exception as e:
+                                logger.error(f"获取总结模型信息失败: {str(e)}", exc_info=True)
+                    
+                    # 使用模式的默认提示模板或自定义提示
+                    prompt_template = custom_prompt if custom_prompt else meeting.mode.get_summary_prompt_template()
+                    
+                    # 开始流式生成总结
+                    accumulated_summary = ""
+                    async for chunk in SummaryGenerator.generate_summary_stream(
+                        meeting_topic=meeting_topic,
+                        meeting_history=meeting_history,
+                        prompt_template=prompt_template,
+                        model_name=model_name,
+                        api_key=api_key,
+                        api_base_url=api_base_url
+                    ):
+                        accumulated_summary += chunk
+                        summary_chunk_event = {
+                            "id": f"{conversation_id}-summary-chunk-{int(time.time()*1000)}",
+                            "object": "chat.completion.chunk",
+                            "created": int(time.time()),
+                            "model": "discussion-group",
+                            "choices": [{
+                                "index": 0,
+                                "delta": {"content": chunk},
+                                "finish_reason": None
+                            }]
+                        }
+                        yield f"data: {json.dumps(summary_chunk_event, ensure_ascii=False)}\n\n"
+                    
+                    # 将累积的总结保存到会议历史
+                    meeting.add_message("system", accumulated_summary)
+                    
+                    # 发送完成事件
+                    summary_end_event = {
+                        "id": f"{conversation_id}-summary-end",
+                        "object": "chat.completion.chunk",
+                        "created": int(time.time()),
+                        "model": "discussion-group",
+                        "choices": [{
+                            "index": 0,
+                            "delta": {"content": ""},
+                            "finish_reason": "stop"
+                        }]
+                    }
+                    yield f"data: {json.dumps(summary_end_event, ensure_ascii=False)}\n\n"
+                    
+                    logger.info(f"总结内容已通过流式方式实时生成和发送完毕，总长度: {len(accumulated_summary)}")
+                    print("会议结束，已实时生成并流式发送总结")
+                    
+                    # 发送结束标志
+                    yield f"data: [DONE]\n\n"
+                    
                 except Exception as e:
                     logger.error(f"补充生成会议总结时出错: {str(e)}", exc_info=True)
             
@@ -967,4 +1563,149 @@ class DiscussionProcessor:
             "meeting_id": meeting_id,
             "status": meeting.status,
             "current_round": meeting.current_round
-        } 
+        }
+
+    async def _end_meeting(self, meeting_id: str) -> Dict[str, Any]:
+        """结束会议并获取总结"""
+        try:
+            # 获取会议对象
+            meeting_data = self.active_meetings.get(meeting_id)
+            if not meeting_data:
+                logger.error(f"结束会议失败: 会议ID {meeting_id} 不存在")
+                return {"error": f"会议ID {meeting_id} 不存在"}
+            
+            # 从会议数据中获取会议对象
+            meeting = meeting_data.get("meeting")
+            if not meeting:
+                logger.error(f"会议数据格式错误: meeting_id={meeting_id}")
+                return {"error": f"会议数据格式错误: meeting_id={meeting_id}"}
+            
+            # 获取讨论组信息
+            group_info = meeting.group_info
+            
+            # 检查会议是否已有总结
+            existing_summary = meeting.get_summary() if hasattr(meeting, 'get_summary') else None
+            if meeting.status == "已结束" and existing_summary and len(existing_summary) > 100 and "未找到总结" not in existing_summary:
+                logger.info(f"会议已结束且已有总结，直接返回: meeting_id={meeting_id}")
+                result = meeting.to_dict()
+                if "summary" not in result:
+                    result["summary"] = existing_summary
+                return result
+            
+            # 设置会议状态为已结束(如果尚未结束)
+            if meeting.status != "已结束":
+                meeting.status = "已结束"
+                meeting.end_time = datetime.now()
+                logger.info(f"会议状态设置为已结束: meeting_id={meeting_id}")
+            
+            # 获取自定义总结模型（如果有）
+            summary_model = None
+            api_key = None
+            api_base_url = None
+            
+            if group_info and 'summary_model_id' in group_info and group_info['summary_model_id']:
+                model_id = group_info['summary_model_id']
+                logger.info(f"使用自定义总结模型: model_id={model_id}")
+                
+                # 从数据库获取模型配置
+                try:
+                    from app.models.database import Model
+                    summary_model = self.db.query(Model).filter(Model.id == model_id).first()
+                
+                    if summary_model:
+                        logger.info(f"找到总结模型: {summary_model.name}")
+                        # 获取API密钥和基础URL
+                        api_key = getattr(summary_model, 'api_key', None)
+                        api_url = getattr(summary_model, 'api_url', None)
+                        
+                        # 处理URL，从完整URL中提取基础部分
+                        if api_url:
+                            if "/v1/chat/completions" in api_url:
+                                api_base_url = api_url.split("/v1/chat/completions")[0]
+                            else:
+                                api_base_url = api_url
+                except Exception as e:
+                    logger.error(f"获取总结模型信息失败: {str(e)}，将使用默认模型", exc_info=True)
+            
+            # 获取自定义提示模板（如果有）
+            custom_prompt = None
+            if group_info and 'summary_prompt' in group_info and group_info['summary_prompt']:
+                custom_prompt = group_info['summary_prompt']
+                logger.info(f"使用自定义总结提示模板: length={len(custom_prompt)}")
+            
+            # 检查会议历史中是否已包含总结
+            has_summary_in_history = False
+            for msg in meeting.meeting_history:
+                if msg.get("agent") == "system" and len(msg.get("content", "")) > 100:
+                    # 如果历史中已经有看起来像总结的系统消息，标记为已有总结
+                    has_summary_in_history = True
+                    existing_summary = msg.get("content", "")
+                    logger.info(f"在会议历史中找到总结: 长度={len(existing_summary)}")
+                    break
+            
+            # 如果还未生成总结，则生成
+            if not has_summary_in_history:
+                # 生成总结
+                meeting_topic = meeting.topic
+                meeting_history = meeting.meeting_history
+                
+                # 使用自定义模型和提示（如果有），否则使用默认
+                model_name = summary_model.name if summary_model else None  # 使用默认值
+                
+                # 使用会议模式的默认提示模板或自定义提示
+                prompt_template = custom_prompt if custom_prompt else meeting.mode.get_summary_prompt_template()
+                
+                logger.info(f"生成总结: model_name={model_name or '默认'}, 提示模板长度={len(prompt_template)}")
+                
+                # 使用流式方式生成总结
+                logger.info(f"开始流式生成总结: meeting_id={meeting_id}")
+                accumulated_summary = ""
+                
+                # 使用流式总结生成器
+                async for chunk in SummaryGenerator.generate_summary_stream(
+                    meeting_topic=meeting_topic,
+                    meeting_history=meeting_history,
+                    prompt_template=prompt_template,
+                    model_name=model_name,
+                    api_key=api_key,
+                    api_base_url=api_base_url
+                ):
+                    accumulated_summary += chunk
+                
+                # 将累积的总结添加到会议历史
+                meeting.add_message("system", accumulated_summary)
+                logger.info(f"已流式生成并添加总结到会议历史: 长度={len(accumulated_summary)}")
+                
+                # 使用累积的总结作为结果
+                summary = accumulated_summary
+            else:
+                # 使用已有的总结
+                summary = existing_summary
+                logger.info(f"使用已有总结: 长度={len(summary)}")
+            
+            # 确保会议状态为已结束
+            meeting.status = "已结束"
+            if not meeting.end_time:
+                meeting.end_time = datetime.now()
+            
+            # 构建返回结果
+            result = meeting.to_dict()
+            
+            # 确保返回的数据包含summary字段
+            if "summary" not in result:
+                result["summary"] = summary
+            
+            # 记录会议结束
+            logger.info(f"会议已结束: meeting_id={meeting_id}, 总结长度={len(result.get('summary', ''))}")
+            
+            return result
+        except Exception as e:
+            logger.error(f"结束会议时出错: {str(e)}", exc_info=True)
+            # 尝试创建一个基本的错误返回
+            return {
+                "error": f"结束会议时出错: {str(e)}",
+                "id": meeting_id,
+                "topic": meeting.topic if meeting else "未知主题",
+                "history": meeting.meeting_history if meeting else [],
+                "summary": "由于技术问题，无法生成会议总结。"
+            } 

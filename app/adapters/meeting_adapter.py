@@ -702,20 +702,24 @@ class MeetingAdapter:
                 logger.info(f"使用自定义总结模型: model_id={model_id}")
                 
                 # 从数据库获取模型配置
-                summary_model = self.db.query(ModelConfiguration).filter(ModelConfiguration.id == model_id).first()
+                try:
+                    from app.models.database import Model
+                    summary_model = self.db.query(Model).filter(Model.id == model_id).first()
                 
-                if summary_model:
-                    logger.info(f"找到总结模型: name={summary_model.name}")
-                    # 获取API密钥和基础URL
-                    api_key = getattr(summary_model, 'api_key', None)
-                    api_url = getattr(summary_model, 'api_url', None)
-                    
-                    # 处理URL，从完整URL中提取基础部分
-                    if api_url:
-                        if "/v1/chat/completions" in api_url:
-                            api_base_url = api_url.split("/v1/chat/completions")[0]
-                        else:
-                            api_base_url = api_url
+                    if summary_model:
+                        logger.info(f"找到总结模型: name={summary_model.name}")
+                        # 获取API密钥和基础URL
+                        api_key = getattr(summary_model, 'api_key', None)
+                        api_url = getattr(summary_model, 'api_url', None)
+                        
+                        # 处理URL，从完整URL中提取基础部分
+                        if api_url:
+                            if "/v1/chat/completions" in api_url:
+                                api_base_url = api_url.split("/v1/chat/completions")[0]
+                            else:
+                                api_base_url = api_url
+                except Exception as e:
+                    logger.error(f"获取总结模型信息失败: {str(e)}，将使用默认模型", exc_info=True)
             
             # 获取自定义提示模板（如果有）
             custom_prompt = None
@@ -723,30 +727,47 @@ class MeetingAdapter:
                 custom_prompt = group_info['summary_prompt']
                 logger.info(f"使用自定义总结提示模板: length={len(custom_prompt)}")
             
-            # 生成总结
-            meeting_topic = meeting.topic
-            meeting_history = meeting.meeting_history
+            # 检查会议历史中是否已包含总结
+            has_summary_in_history = False
+            for msg in meeting.meeting_history:
+                if msg.get("agent") == "system" and len(msg.get("content", "")) > 100:
+                    # 如果历史中已经有看起来像总结的系统消息，标记为已有总结
+                    has_summary_in_history = True
+                    existing_summary = msg.get("content", "")
+                    logger.info(f"在会议历史中找到总结: 长度={len(existing_summary)}")
+                    break
             
-            # 使用自定义模型和提示（如果有），否则使用默认
-            model_name = summary_model.name if summary_model else None  # 使用默认值
-            
-            # 使用会议模式的默认提示模板或自定义提示
-            prompt_template = custom_prompt if custom_prompt else meeting.mode.get_summary_prompt_template()
-            
-            logger.info(f"生成总结: model_name={model_name or '默认'}, 提示模板长度={len(prompt_template)}")
-            
-            # 调用总结生成器，传递API信息
-            summary = SummaryGenerator.generate_summary(
-                meeting_topic=meeting_topic,
-                meeting_history=meeting_history,
-                prompt_template=prompt_template,
-                model_name=model_name,
-                api_key=api_key,
-                api_base_url=api_base_url
-            )
-            
-            # 添加总结到会议历史
-            meeting.add_message("system", summary)
+            # 如果还未生成总结，则生成
+            if not has_summary_in_history:
+                # 生成总结
+                meeting_topic = meeting.topic
+                meeting_history = meeting.meeting_history
+                
+                # 使用自定义模型和提示（如果有），否则使用默认
+                model_name = summary_model.name if summary_model else None  # 使用默认值
+                
+                # 使用会议模式的默认提示模板或自定义提示
+                prompt_template = custom_prompt if custom_prompt else meeting.mode.get_summary_prompt_template()
+                
+                logger.info(f"生成总结: model_name={model_name or '默认'}, 提示模板长度={len(prompt_template)}")
+                
+                # 调用总结生成器，传递API信息
+                summary = SummaryGenerator.generate_summary(
+                    meeting_topic=meeting_topic,
+                    meeting_history=meeting_history,
+                    prompt_template=prompt_template,
+                    model_name=model_name,
+                    api_key=api_key,
+                    api_base_url=api_base_url
+                )
+                
+                # 添加总结到会议历史
+                meeting.add_message("system", summary)
+                logger.info(f"已生成并添加总结到会议历史: 长度={len(summary)}")
+            else:
+                # 使用已有的总结
+                summary = existing_summary
+                logger.info(f"使用已有总结: 长度={len(summary)}")
             
             # 确保会议状态为已结束
             meeting.status = "已结束"
