@@ -1410,13 +1410,21 @@ async function saveAsModel(modelId) {
 // Sidebar navigation
 document.querySelectorAll('.sidebar-menu li').forEach(item => {
     item.addEventListener('click', () => {
+        const page = item.dataset.page;
+        
+        // 如果是chatllm页面，直接导航
+        if (page === 'chatllm') {
+            window.location.href = '/static/chatllm.html';
+            return;
+        }
+        
         // Remove active class from all items
         document.querySelectorAll('.sidebar-menu li').forEach(i => i.classList.remove('active'));
         // Add active class to clicked item
         item.classList.add('active');
         
         // Show corresponding page
-        const pageId = item.dataset.page + '-page';
+        const pageId = page + '-page';
         document.querySelectorAll('.content-page').forEach(page => {
             page.classList.add('d-none');
         });

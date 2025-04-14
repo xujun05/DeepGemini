@@ -919,9 +919,8 @@ document.addEventListener("DOMContentLoaded", function() {
                                     currentSpeaker = speakerMatch[1];
                                     speakerContent = '';
                                     
-                                    // 检查是否是人类角色（特别是小明）
-                                    const isHumanRole = currentSpeaker === "小明" || 
-                                                      humanRoles.some(role => role.name === currentSpeaker);
+                                    // 检查是否是人类角色
+                                    const isHumanRole = humanRoles.some(role => role.name === currentSpeaker);
                                     
                                     // 如果是人类角色，提前检查是否需要等待输入
                                     if (isHumanRole) {
@@ -1102,21 +1101,7 @@ document.addEventListener("DOMContentLoaded", function() {
                                         // 如果有当前发言人，添加到发言人内容
                                         speakerContent += delta;
                                         
-                                        // 检查是否包含特定的人类角色等待输入标记
-                                        if (speakerContent.includes("等待人类输入") && currentSpeaker === "小明") {
-                                            console.log("小明角色需要输入");
-                                            
-                                            // 设置人类角色名称
-                                            humanRoleName.textContent = currentSpeaker;
-                                            
-                                            // 强制显示人类输入区域
-                                            isWaitingForHumanInput = true;
-                                            humanInputArea.classList.remove('d-none');
-                                            document.querySelector('.chat-input').classList.add('d-none');
-                                            
-                                            // 聚焦到输入框
-                                            humanInputMessage.focus();
-                                        }
+                                        
                                         
                                         if (speakerContentElement) {
                                             speakerContentElement.innerHTML = marked.parse(speakerContent);
@@ -1451,9 +1436,8 @@ document.addEventListener("DOMContentLoaded", function() {
                                     currentSpeaker = speakerMatch[1];
                                     speakerContent = '';
                                     
-                                    // 检查是否是人类角色（特别是小明）
-                                    const isHumanRole = currentSpeaker === "小明" || 
-                                                      humanRoles.some(role => role.name === currentSpeaker);
+                                    // 检查是否是人类角色
+                                    const isHumanRole = humanRoles.some(role => role.name === currentSpeaker);
                                     
                                     // 如果是人类角色，提前检查是否需要等待输入
                                     if (isHumanRole) {
@@ -1634,21 +1618,7 @@ document.addEventListener("DOMContentLoaded", function() {
                                         // 如果有当前发言人，添加到发言人内容
                                         speakerContent += delta;
                                         
-                                        // 检查是否包含特定的人类角色等待输入标记
-                                        if (speakerContent.includes("等待人类输入") && currentSpeaker === "小明") {
-                                            console.log("小明角色需要输入");
-                                            
-                                            // 设置人类角色名称
-                                            humanRoleName.textContent = currentSpeaker;
-                                            
-                                            // 强制显示人类输入区域
-                                            isWaitingForHumanInput = true;
-                                            humanInputArea.classList.remove('d-none');
-                                            document.querySelector('.chat-input').classList.add('d-none');
-                                            
-                                            // 聚焦到输入框
-                                            humanInputMessage.focus();
-                                        }
+                                        
                                         
                                         if (speakerContentElement) {
                                             speakerContentElement.innerHTML = marked.parse(speakerContent);
@@ -1890,10 +1860,7 @@ document.addEventListener("DOMContentLoaded", function() {
                 // 检查系统消息是否指示等待人类输入
                 if (systemContent.includes("等待人类输入") || 
                     systemContent.includes("等待用户输入") ||
-                    systemContent.includes("请输入") ||
-                    systemContent.includes("等待小明") ||
-                    systemContent.includes("轮到小明") ||
-                    systemContent.includes("小明的回合")) {
+                    systemContent.includes("请输入")) {
                     
                     // 找到人类角色名称
                     const matchedRole = humanRoles.find(role => 
@@ -1934,29 +1901,8 @@ document.addEventListener("DOMContentLoaded", function() {
                     }
                 }
                 
-                // 特别处理"小明"角色 - 更全面的检测
-                if (humanRoles.some(role => role.name === "小明")) {
-                    // 检查是否明确提到小明需要发言
-                    if ((content.includes("小明该发言") || 
-                         content.includes("轮到小明") || 
-                         content.includes("该小明发言") || 
-                         content.includes("小明发言") ||
-                         content.includes("小明的回合") ||
-                         content.includes("小明请") ||
-                         content.includes("请小明") ||
-                         content.includes("等待小明") ||
-                         content.includes("需要小明") ||
-                         content.includes("小明回答") ||
-                         content.includes("小明应该") ||
-                         (content.includes("小明") && content.includes("问题"))) &&
-                        !content.includes("小明：") && 
-                        !content.includes("小明:")) {
-                        
-                        showHumanInputArea("小明");
-                        console.log(`检测到需要小明输入`);
-                        return;
-                    }
-                }
+                
+                
             }
             
             // 3. 分析会议状态中的特殊标记
@@ -2000,39 +1946,7 @@ document.addEventListener("DOMContentLoaded", function() {
     
     // 根据发言模式分析是否需要人类输入
     function requiresHumanInputBasedOnPattern(speakers, humanName, mode) {
-        // 特别针对"小明"角色的特殊处理
-        if (humanName === "小明") {
-            // 在轮流讨论模式下，如果最近的发言者是讨论的前一个角色，可能接下来是小明
-            if (mode === "discussion" || mode === "debate") {
-                // 获取聊天历史中所有发言者的顺序
-                const allSpeakers = Array.from(document.querySelectorAll('.chat-message'))
-                    .map(msg => {
-                        const speakerName = msg.querySelector('.message-sender')?.textContent.replace(':', '').trim();
-                        return speakerName;
-                    })
-                    .filter(Boolean);
-                
-                // 查找小明在发言顺序中的位置模式
-                if (allSpeakers.length >= 5) {
-                    // 查找是否有一个固定的发言顺序
-                    const speakingPattern = allSpeakers.slice(-5);
-                    const smallMingIndex = speakingPattern.indexOf("小明");
-                    
-                    // 如果找到小明在最近的发言序列中
-                    if (smallMingIndex >= 0) {
-                        // 计算小明前面的发言者
-                        const previousSpeaker = smallMingIndex > 0 
-                            ? speakingPattern[smallMingIndex - 1] 
-                            : speakingPattern[speakingPattern.length - 1];
-                        
-                        // 如果最后一个发言者是小明前面的发言者，则可能接下来是小明
-                        if (speakers[speakers.length - 1] === previousSpeaker) {
-                            return true;
-                        }
-                    }
-                }
-            }
-        }
+        
         
         return false;
     }
@@ -2992,7 +2906,7 @@ document.addEventListener("DOMContentLoaded", function() {
     }
 });
 
-// 修复侧边栏导航
+// 侧边栏导航
 document.addEventListener('DOMContentLoaded', function() {
     // 监听侧边栏项目点击
     const sidebarItems = document.querySelectorAll('.sidebar-menu li');
