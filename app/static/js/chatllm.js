@@ -3140,13 +3140,40 @@ document.addEventListener("DOMContentLoaded", function() {
         // 使用markdown渲染内容，使得代码和格式更好看
         messageContent.innerHTML = marked.parse(content);
         
-        // 为代码块添加主题适配
-        if (document.body.classList.contains('dark-theme')) {
-            const codeBlocks = messageContent.querySelectorAll('pre code');
-            codeBlocks.forEach(block => {
+        // 为代码块添加主题适配和复制按钮
+        const codeBlocks = messageContent.querySelectorAll('pre code');
+        codeBlocks.forEach(block => {
+            // 为代码块添加暗色模式样式
+            if (document.body.classList.contains('dark-theme')) {
                 block.classList.add('dark-code');
+            }
+            
+            // 添加复制按钮
+            const pre = block.parentNode;
+            const copyButton = document.createElement('button');
+            copyButton.className = 'code-copy-btn';
+            copyButton.innerHTML = '<i class="fas fa-copy"></i>';
+            copyButton.title = '复制代码';
+            copyButton.addEventListener('click', function() {
+                const code = block.textContent;
+                navigator.clipboard.writeText(code).then(() => {
+                    // 复制成功效果
+                    const originalHTML = copyButton.innerHTML;
+                    copyButton.innerHTML = '<i class="fas fa-check"></i>';
+                    copyButton.classList.add('copied');
+                    setTimeout(() => {
+                        copyButton.innerHTML = originalHTML;
+                        copyButton.classList.remove('copied');
+                    }, 1500);
+                });
             });
-        }
+            
+            // 为复制按钮容器添加定位
+            if (!pre.style.position) {
+                pre.style.position = 'relative';
+            }
+            pre.appendChild(copyButton);
+        });
         
         messageContainer.appendChild(messageContent);
         chatMessages.appendChild(messageContainer);
@@ -3623,7 +3650,29 @@ function toggleTheme() {
     
     // 触发主题变化事件，更新相关样式
     document.dispatchEvent(new CustomEvent('themeChanged'));
+    
+    // 更新代码块样式
+    updateCodeBlocksTheme();
 } 
+
+// 更新代码块主题
+function updateCodeBlocksTheme() {
+    const isDarkMode = document.body.classList.contains('dark-theme');
+    const codeBlocks = document.querySelectorAll('pre code');
+    
+    codeBlocks.forEach(block => {
+        if (isDarkMode) {
+            block.classList.add('dark-code');
+        } else {
+            block.classList.remove('dark-code');
+        }
+    });
+}
+
+// 添加主题变化事件监听器
+document.addEventListener('DOMContentLoaded', function() {
+    document.addEventListener('themeChanged', updateCodeBlocksTheme);
+});
 
 // 添加一个新函数来专门获取会议总结
 async function fetchMeetingSummary(meetingId) {
