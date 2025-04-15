@@ -1,12 +1,67 @@
 // ChatLLM Interface Logic
+// 全局变量来控制自动滚动
+let autoScroll = true;
+
+// 滚动到底部函数
+function scrollToBottom() {
+    const chatMessages = document.getElementById('chatMessages');
+    if (autoScroll && chatMessages) {
+        chatMessages.scrollTop = chatMessages.scrollHeight;
+    } else if (chatMessages) {
+        // 显示滚动控制按钮
+        const scrollControl = document.getElementById('scroll-control');
+        if (scrollControl) {
+            scrollControl.style.display = 'flex';
+        }
+    }
+}
+
 document.addEventListener("DOMContentLoaded", function() {
     // 添加CSS样式
     const style = document.createElement('style');
     style.textContent = `
     /* 人类角色相关样式 */
-    .human-message {
-        border-left: 4px solid #007bff;
+    .human-message, .user {
+        border-left: none;
+        border-right: 4px solid #6c757d;
         background-color: rgba(0, 123, 255, 0.05);
+        margin-left: auto;
+        margin-right: 0;
+        text-align: right;
+        max-width: 80%;
+        border-radius: 8px;
+    }
+    
+    .ai {
+        border-left: 4px solid #6c757d;
+        border-right: none;
+        background-color: rgba(108, 117, 125, 0.05);
+        margin-left: 0;
+        margin-right: auto;
+        text-align: left;
+        max-width: 80%;
+        border-radius: 8px;
+    }
+    
+    .message-container {
+        display: flex;
+        flex-direction: column;
+        margin-bottom: 12px;
+        padding: 10px;
+        border-radius: 8px;
+    }
+    
+    .message-name {
+        font-weight: bold;
+        margin-bottom: 5px;
+    }
+    
+    .user .message-name, .human-message .message-name {
+        text-align: right;
+    }
+    
+    .ai .message-name {
+        text-align: left;
     }
     
     .human-badge {
@@ -198,6 +253,51 @@ document.addEventListener("DOMContentLoaded", function() {
         border-left-color: #495057;
     }
     
+    /* 聊天区域滚动控制 */
+    #chat-messages {
+        scroll-behavior: smooth;
+        overflow-y: auto;
+        height: calc(100vh - 200px);
+    }
+    
+    /* 用于控制是否自动滚动的标志 */
+    .auto-scroll-disabled {
+        cursor: pointer;
+    }
+    
+    /* 滚动控制按钮 */
+    #scroll-control {
+        position: fixed;
+        bottom: 100px;
+        right: 20px;
+        background-color: rgba(0,0,0,0.5);
+        color: white;
+        border-radius: 50%;
+        width: 40px;
+        height: 40px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        cursor: pointer;
+        z-index: 1000;
+        opacity: 0.7;
+        transition: opacity 0.3s;
+    }
+    
+    #scroll-control:hover {
+        opacity: 1;
+    }
+    
+    /* 暗色主题适配 */
+    body.dark-theme .user,
+    body.dark-theme .human-message {
+        background-color: rgba(0, 123, 255, 0.15);
+    }
+    
+    body.dark-theme .ai {
+        background-color: rgba(108, 117, 125, 0.15);
+    }
+    
     /* 总结消息特殊样式 */
     .summary-message {
         border-left: 4px solid #28a745;
@@ -338,6 +438,77 @@ document.addEventListener("DOMContentLoaded", function() {
         color: #2980b9;
         text-decoration: underline;
     }
+    
+    .message-content {
+        padding: 12px;
+        font-size: 14px;
+        line-height: 1.5;
+        color: #333;
+        white-space: pre-wrap;
+        word-break: break-word;
+    }
+    
+    .human-message .message-content, .user .message-content {
+        text-align: right;
+    }
+    
+    .ai .message-content {
+        text-align: left;
+    }
+    
+    .message-avatar {
+        width: 32px;
+        height: 32px;
+        border-radius: 50%;
+        margin-right: 12px;
+        object-fit: cover;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+    }
+    
+    .avatar-img {
+        width: 100%;
+        height: 100%;
+        border-radius: 50%;
+        object-fit: cover;
+    }
+    
+    .message-header {
+        display: flex;
+        align-items: center;
+        margin-bottom: 5px;
+    }
+    
+    .user .message-header, .human-message .message-header {
+        flex-direction: row-reverse;
+        justify-content: flex-start;
+    }
+    
+    .user .message-avatar, .human-message .message-avatar {
+        margin-right: 0;
+        margin-left: 12px;
+    }
+    
+    .text-avatar {
+        width: 100%;
+        height: 100%;
+        border-radius: 50%;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-weight: bold;
+        color: white;
+        font-size: 14px;
+    }
+    
+    .ai-avatar {
+        background-color: #007bff;
+    }
+    
+    .user-avatar {
+        background-color: #6c757d;
+    }
     `;
     document.head.appendChild(style);
 
@@ -371,6 +542,36 @@ document.addEventListener("DOMContentLoaded", function() {
     const humanInputMessage = document.getElementById('humanInputMessage');
     const sendHumanInputBtn = document.getElementById('sendHumanInput');
     const loadingSpinner = document.getElementById('loadingSpinner');
+    
+    // 创建并添加滚动控制按钮
+    const scrollControl = document.createElement('div');
+    scrollControl.id = 'scroll-control';
+    scrollControl.innerHTML = '<i class="fas fa-arrow-down"></i>';
+    scrollControl.style.display = 'none';
+    document.body.appendChild(scrollControl);
+    
+    // 滚动控制按钮点击事件
+    scrollControl.addEventListener('click', function() {
+        console.log("滚动按钮被点击");
+        autoScroll = true;
+        if (chatMessages) {
+            chatMessages.scrollTop = chatMessages.scrollHeight;
+            this.style.display = 'none';
+        }
+    });
+    
+    // 监听聊天区域滚动事件
+    if (chatMessages) {
+        chatMessages.addEventListener('wheel', function() {
+            // 检查是否已滚动到底部
+            const isAtBottom = chatMessages.scrollHeight - chatMessages.scrollTop <= chatMessages.clientHeight + 50;
+            autoScroll = isAtBottom;
+            
+            // 如果不在底部，显示滚动控制按钮
+            scrollControl.style.display = isAtBottom ? 'none' : 'flex';
+            console.log("滚动事件触发，自动滚动状态:", autoScroll);
+        });
+    }
     
     // 确保加载状态初始隐藏
     if (loadingSpinner) {
@@ -818,7 +1019,7 @@ document.addEventListener("DOMContentLoaded", function() {
             chatMessages.appendChild(messageContainer);
             
             // 滚动到底部
-            chatMessages.scrollTop = chatMessages.scrollHeight;
+            scrollToBottom();
             
             // 保存完整响应内容
             let fullContent = '';
@@ -861,7 +1062,7 @@ document.addEventListener("DOMContentLoaded", function() {
                                 }
                                 
                                 // 滚动到底部
-                                chatMessages.scrollTop = chatMessages.scrollHeight;
+                                scrollToBottom();
                             }
                         } catch (e) {
                             console.error('解析流式响应失败:', e);
@@ -1069,7 +1270,7 @@ document.addEventListener("DOMContentLoaded", function() {
             chatMessages.appendChild(messageContainer);
             
             // 滚动到底部
-            chatMessages.scrollTop = chatMessages.scrollHeight;
+            scrollToBottom();
             
             // 保存完整响应内容
             let fullContent = '';
@@ -1345,7 +1546,7 @@ document.addEventListener("DOMContentLoaded", function() {
                                     }
                                     
                                     // 滚动到底部
-                                    chatMessages.scrollTop = chatMessages.scrollHeight;
+                                    scrollToBottom();
                                 }
                                 // 当已经在显示总结内容时，继续累积总结内容
                                 else if (currentSpeaker === "总结") {
@@ -1356,7 +1557,7 @@ document.addEventListener("DOMContentLoaded", function() {
                                     if (speakerContentElement) {
                                         speakerContentElement.innerHTML = marked.parse(speakerContent);
                                         // 滚动到底部
-                                        chatMessages.scrollTop = chatMessages.scrollHeight;
+                                        scrollToBottom();
                                     }
                                 } 
                                 // 检查"等待人类输入"标记
@@ -1411,7 +1612,7 @@ document.addEventListener("DOMContentLoaded", function() {
                                 }
                                 
                                 // 滚动到底部
-                                chatMessages.scrollTop = chatMessages.scrollHeight;
+                                scrollToBottom();
                             }
                         } catch (e) {
                             console.error('解析流式响应失败:', e);
@@ -1512,7 +1713,7 @@ document.addEventListener("DOMContentLoaded", function() {
             thinkingContainer.appendChild(thinkingContent);
             
             // 滚动到底部
-            chatMessages.scrollTop = chatMessages.scrollHeight;
+            scrollToBottom();
             
             // 保存完整响应内容
             let fullContent = '';
@@ -1557,7 +1758,7 @@ document.addEventListener("DOMContentLoaded", function() {
                                 }
                                 
                                 // 滚动到底部
-                                chatMessages.scrollTop = chatMessages.scrollHeight;
+                                scrollToBottom();
                             }
                         } catch (e) {
                             console.error('解析流式响应失败:', e);
@@ -2014,7 +2215,7 @@ document.addEventListener("DOMContentLoaded", function() {
                                     }
                                     
                                     // 滚动到底部
-                                    chatMessages.scrollTop = chatMessages.scrollHeight;
+                                    scrollToBottom();
                                 }
                                 // 当已经在显示总结内容时，继续累积总结内容
                                 else if (currentSpeaker === "总结") {
@@ -2025,7 +2226,7 @@ document.addEventListener("DOMContentLoaded", function() {
                                     if (speakerContentElement) {
                                         speakerContentElement.innerHTML = marked.parse(speakerContent);
                                         // 滚动到底部
-                                        chatMessages.scrollTop = chatMessages.scrollHeight;
+                                        scrollToBottom();
                                     }
                                 } 
                                 // 检查"等待人类输入"标记
@@ -2080,7 +2281,7 @@ document.addEventListener("DOMContentLoaded", function() {
                                 }
                                 
                                 // 滚动到底部
-                                chatMessages.scrollTop = chatMessages.scrollHeight;
+                                scrollToBottom();
                             }
                         } catch (e) {
                             console.error('解析流式响应失败:', e);
@@ -2714,7 +2915,7 @@ document.addEventListener("DOMContentLoaded", function() {
                                         }
                                         
                                         // 滚动到底部
-                                        chatMessages.scrollTop = chatMessages.scrollHeight;
+                                        scrollToBottom();
                                         continue;
                                     }
                                     // 当已经在显示总结内容时，继续累积总结内容
@@ -2726,7 +2927,7 @@ document.addEventListener("DOMContentLoaded", function() {
                                         if (speakerContentElement) {
                                             speakerContentElement.innerHTML = marked.parse(speakerContent);
                                             // 滚动到底部
-                                            chatMessages.scrollTop = chatMessages.scrollHeight;
+                                            scrollToBottom();
                                         }
                                         continue;
                                     }
@@ -2783,7 +2984,7 @@ document.addEventListener("DOMContentLoaded", function() {
                                             speakerContainer.appendChild(speakerContentElement);
                                             
                                             chatMessages.appendChild(speakerContainer);
-                                            chatMessages.scrollTop = chatMessages.scrollHeight;
+                                            scrollToBottom();
                                             
                                             console.log(`创建新的发言容器，发言者: ${currentSpeaker}, ID: ${speakerId}`);
                                         }
@@ -2845,7 +3046,7 @@ document.addEventListener("DOMContentLoaded", function() {
                                         // 仅当有当前发言者容器时才更新UI
                                         if (speakerContentElement) {
                                             speakerContentElement.innerHTML = marked.parse(speakerContent);
-                                            chatMessages.scrollTop = chatMessages.scrollHeight;
+                                            scrollToBottom();
                                         }
                                     }
                                 }
@@ -2903,13 +3104,35 @@ document.addEventListener("DOMContentLoaded", function() {
         messageContainer.classList.add('message-container', role);
         messageContainer.setAttribute('data-message-id', messageId);
         
-        // 添加名称元素（如果有）
-        if (speakerName || role === 'ai') {
-            const nameElement = document.createElement('div');
-            nameElement.classList.add('message-name');
-            nameElement.textContent = speakerName || (role === 'ai' ? '助手' : role === 'user' ? '用户' : '系统');
-            messageContainer.appendChild(nameElement);
+        // 创建消息头部布局
+        const messageHeader = document.createElement('div');
+        messageHeader.classList.add('message-header');
+        
+        // 添加头像
+        const avatarElement = document.createElement('div');
+        avatarElement.classList.add('message-avatar');
+        if (role === 'ai') {
+            avatarElement.innerHTML = '<div class="text-avatar ai-avatar">AI</div>';
+        } 
+        // else {
+        //     avatarElement.innerHTML = '<div class="text-avatar user-avatar">人类</div>';
+        // }
+        
+        // 创建名称元素
+        const nameElement = document.createElement('div');
+        nameElement.classList.add('message-name');
+        nameElement.textContent = speakerName || (role === 'ai' ? '助手' : role === 'user' ? '人类' : '系统');
+        
+        // 根据角色调整头像和名称的顺序
+        if (role === 'user' || role === 'human-message') {
+            messageHeader.appendChild(nameElement);
+            messageHeader.appendChild(avatarElement);
+        } else {
+            messageHeader.appendChild(avatarElement);
+            messageHeader.appendChild(nameElement);
         }
+        
+        messageContainer.appendChild(messageHeader);
         
         const messageContent = document.createElement('div');
         messageContent.classList.add('message-content');
@@ -2930,8 +3153,8 @@ document.addEventListener("DOMContentLoaded", function() {
         
         console.log(`添加消息到聊天: 角色=${role}, 发言者=${speakerName || '未指定'}, ID=${messageId}`);
         
-        // 滚动到底部
-        chatMessages.scrollTop = chatMessages.scrollHeight;
+        // 使用滚动控制函数
+        scrollToBottom();
         
         return messageId;
     }
@@ -2955,7 +3178,7 @@ document.addEventListener("DOMContentLoaded", function() {
         }
         
         // 获取聊天消息容器
-        const messagesContainer = document.getElementById('chat-messages');
+        const messagesContainer = document.getElementById('chatMessages');
         
         // 清空当前显示
         // messagesContainer.innerHTML = '';  // 不再清空，避免丢失流式内容
@@ -2990,7 +3213,7 @@ document.addEventListener("DOMContentLoaded", function() {
                     summaryAdded = true;
                     
                     // 滚动到最新消息
-                    messagesContainer.scrollTop = messagesContainer.scrollHeight;
+                    scrollToBottom();
                 }
             }
         });
@@ -3272,9 +3495,14 @@ document.addEventListener("DOMContentLoaded", function() {
         }
     }
     
-    // 仅设置等待人类输入状态，不创建可能覆盖前一个发言的提示
+    // 显示等待人类输入状态
     function showWaitingForHumanInput(roleName) {
         console.log(`====== 显示等待人类输入状态开始 - 角色: ${roleName} ======`);
+        
+        if (!roleName) {
+            console.error("缺少人类角色名称，无法显示等待状态");
+            return;
+        }
         
         if (isWaitingForHumanInput) {
             console.log("已经处于等待状态，不重复处理");
@@ -3323,7 +3551,7 @@ document.addEventListener("DOMContentLoaded", function() {
         statusIndicator.innerHTML = `<p class="text-info"><i class="fas fa-user-edit"></i> 系统提示: 等待人类角色 ${roleName} 输入...</p>`;
         
         // 获取聊天容器
-        const chatContainer = document.getElementById('chat-messages');
+        const chatContainer = document.getElementById('chatMessages');
         if (!chatContainer) {
             console.error("找不到聊天消息容器");
             return;
@@ -3347,6 +3575,9 @@ document.addEventListener("DOMContentLoaded", function() {
         
         console.log(`====== 显示等待人类输入状态完成 - 角色: ${roleName} ======`);
     }
+    
+    // 这里删除重复的滚动控制按钮代码
+    
 });
 
 // 侧边栏导航
