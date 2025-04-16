@@ -653,6 +653,9 @@ document.addEventListener("DOMContentLoaded", function() {
             // 获取API密钥
             await fetchDefaultApiKey();
             
+            // 配置marked使用highlight.js
+            setupMarkedOptions();
+            
             // 获取配置
             await Promise.all([
                 loadModels(),
@@ -725,6 +728,12 @@ document.addEventListener("DOMContentLoaded", function() {
             
             // 设置定时器检查人类输入状态
             setInterval(checkForHumanInput, 3000); // 每3秒检查一次
+            
+            // 不再需要全局导出按钮
+            const oldExportButton = document.getElementById('exportMarkdown');
+            if (oldExportButton) {
+                oldExportButton.remove(); // 移除旧的导出按钮
+            }
             
             console.log('初始化完成');
         } catch (error) {
@@ -800,11 +809,19 @@ document.addEventListener("DOMContentLoaded", function() {
             }
             const data = await response.json();
             
+            // 保存模型信息到全局变量
+            window.modelConfigs = {};
+            data.forEach(model => {
+                window.modelConfigs[model.id] = model;
+            });
+            
             // 填充单模型选择器
             if (singleModelSelect) {
                 let options = '';
                 data.forEach(model => {
-                    options += `<option value="${model.id}">${model.name}</option>`;
+                    // 标记reasoning类型模型
+                    const modelType = model.type === 'reasoning' ? ' (思考型)' : '';
+                    options += `<option value="${model.id}" data-type="${model.type || 'standard'}">${model.name}${modelType}</option>`;
                 });
                 
                 singleModelSelect.innerHTML = options;
@@ -947,6 +964,10 @@ document.addEventListener("DOMContentLoaded", function() {
     async function handleSingleModelChat(message) {
         const modelId = singleModelSelect.value;
         
+        // 检查模型类型
+        const modelConfig = window.modelConfigs?.[modelId] || {};
+        const isReasoningModel = modelConfig.type === 'reasoning';
+        
         // 构建消息历史
         const messages = buildChatMessages(message);
         
@@ -987,6 +1008,11 @@ document.addEventListener("DOMContentLoaded", function() {
             // 创建思考内容容器（初始为折叠状态）
             const thinkingContainer = document.createElement('div');
             thinkingContainer.classList.add('thinking-container');
+            
+            // 只有reasoning类型模型才显示思考过程
+            if (!isReasoningModel) {
+                thinkingContainer.style.display = 'none';
+            }
             
             const thinkingHeader = document.createElement('div');
             thinkingHeader.classList.add('thinking-header');
@@ -1051,14 +1077,18 @@ document.addEventListener("DOMContentLoaded", function() {
                                     messageContent.innerHTML = marked.parse(fullContent);
                                 }
                                 
-                                // 处理思考内容
+                                // 处理思考内容，但只在reasoning模型中显示
                                 if (delta.reasoning_content || delta.hasOwnProperty('reasoning_content')) {
                                     hasThinkingContent = true;
                                     thinkingContentText += delta.reasoning_content || '';
-                                    thinkingContent.innerHTML = marked.parse(thinkingContentText);
                                     
-                                    // 如果有思考内容，显示思考容器
-                                    thinkingContainer.style.display = 'block';
+                                    // 使用自定义函数更安全地更新思考内容而不破坏正在进行的渲染
+                                    updateThinkingContent(thinkingContent, thinkingContentText);
+                                    
+                                    // 如果有思考内容且是reasoning模型，显示思考容器
+                                    if (isReasoningModel) {
+                                        thinkingContainer.style.display = 'block';
+                                    }
                                 }
                                 
                                 // 滚动到底部
@@ -1072,9 +1102,12 @@ document.addEventListener("DOMContentLoaded", function() {
             }
             
             // 如果没有思考内容，隐藏思考容器
-            if (!hasThinkingContent) {
+            if (!hasThinkingContent || !isReasoningModel) {
                 thinkingContainer.style.display = 'none';
             }
+            
+            // 添加导出按钮到AI消息
+            addExportButtonToMessage(messageContainer);
             
             // 更新消息历史
             messageHistory.push({ role: 'user', content: message });
@@ -1138,7 +1171,9 @@ document.addEventListener("DOMContentLoaded", function() {
                         
                         const thinkingContent = document.createElement('div');
                         thinkingContent.classList.add('thinking-content');
-                        thinkingContent.innerHTML = marked.parse(reasoningContent);
+                        
+                        // 使用安全的方式更新思考内容
+                        updateThinkingContent(thinkingContent, reasoningContent);
                         
                         // 默认折叠
                         thinkingHeader.querySelector('.thinking-toggle-icon').classList.add('collapsed');
@@ -1161,6 +1196,9 @@ document.addEventListener("DOMContentLoaded", function() {
                         thinkingContainer.appendChild(thinkingContent);
                         messageElement.appendChild(thinkingContainer);
                         messageElement.appendChild(messageContent);
+                        
+                        // 添加导出按钮
+                        addExportButtonToMessage(messageElement);
                     }
                 }
                 
@@ -1233,6 +1271,9 @@ document.addEventListener("DOMContentLoaded", function() {
             // 创建初始消息容器（如果没有特定发言人，将使用此容器）
             const messageContainer = document.createElement('div');
             messageContainer.classList.add('message-container', 'ai');
+            
+            // 为AI消息添加导出按钮
+            addExportButtonToMessage(messageContainer);
             
             // 创建思考内容容器（初始为折叠状态）
             const thinkingContainer = document.createElement('div');
@@ -1687,6 +1728,9 @@ document.addEventListener("DOMContentLoaded", function() {
             messageContainer.appendChild(messageContent);
             chatMessages.appendChild(messageContainer);
             
+            // 为AI消息添加导出按钮
+            addExportButtonToMessage(messageContainer);
+            
             // 创建思考内容容器（初始为折叠状态）
             const thinkingContainer = document.createElement('div');
             thinkingContainer.classList.add('thinking-container');
@@ -1821,6 +1865,10 @@ document.addEventListener("DOMContentLoaded", function() {
                 if (reasoningContent) {
                     const messageElement = document.querySelector(`[data-message-id="${messageId}"]`);
                     if (messageElement) {
+                        // 清空现有内容以便重新排序
+                        messageElement.innerHTML = '';
+                        
+                        // 创建思考容器
                         const thinkingContainer = document.createElement('div');
                         thinkingContainer.classList.add('thinking-container');
                         
@@ -1830,7 +1878,9 @@ document.addEventListener("DOMContentLoaded", function() {
                         
                         const thinkingContent = document.createElement('div');
                         thinkingContent.classList.add('thinking-content');
-                        thinkingContent.innerHTML = marked.parse(reasoningContent);
+                        
+                        // 使用安全的方式更新思考内容
+                        updateThinkingContent(thinkingContent, reasoningContent);
                         
                         // 默认折叠
                         thinkingHeader.querySelector('.thinking-toggle-icon').classList.add('collapsed');
@@ -1843,9 +1893,19 @@ document.addEventListener("DOMContentLoaded", function() {
                             thinkingContent.classList.toggle('collapsed');
                         });
                         
+                        // 创建常规内容容器
+                        const messageContent = document.createElement('div');
+                        messageContent.classList.add('message-content');
+                        messageContent.innerHTML = marked.parse(aiMessage);
+                        
+                        // 先添加思考再添加内容（思考在上，回答在下）
                         thinkingContainer.appendChild(thinkingHeader);
                         thinkingContainer.appendChild(thinkingContent);
                         messageElement.appendChild(thinkingContainer);
+                        messageElement.appendChild(messageContent);
+                        
+                        // 添加导出按钮
+                        addExportButtonToMessage(messageElement);
                     }
                 }
                 
@@ -3114,9 +3174,6 @@ document.addEventListener("DOMContentLoaded", function() {
         if (role === 'ai') {
             avatarElement.innerHTML = '<div class="text-avatar ai-avatar">AI</div>';
         } 
-        // else {
-        //     avatarElement.innerHTML = '<div class="text-avatar user-avatar">人类</div>';
-        // }
         
         // 创建名称元素
         const nameElement = document.createElement('div');
@@ -3140,40 +3197,16 @@ document.addEventListener("DOMContentLoaded", function() {
         // 使用markdown渲染内容，使得代码和格式更好看
         messageContent.innerHTML = marked.parse(content);
         
-        // 为代码块添加主题适配和复制按钮
-        const codeBlocks = messageContent.querySelectorAll('pre code');
-        codeBlocks.forEach(block => {
-            // 为代码块添加暗色模式样式
-            if (document.body.classList.contains('dark-theme')) {
-                block.classList.add('dark-code');
-            }
+        // 使用统一的代码块处理函数
+        setTimeout(() => {
+            setupCodeBlockCopyButtons();
+            highlightCodeBlocks();
             
-            // 添加复制按钮
-            const pre = block.parentNode;
-            const copyButton = document.createElement('button');
-            copyButton.className = 'code-copy-btn';
-            copyButton.innerHTML = '<i class="fas fa-copy"></i>';
-            copyButton.title = '复制代码';
-            copyButton.addEventListener('click', function() {
-                const code = block.textContent;
-                navigator.clipboard.writeText(code).then(() => {
-                    // 复制成功效果
-                    const originalHTML = copyButton.innerHTML;
-                    copyButton.innerHTML = '<i class="fas fa-check"></i>';
-                    copyButton.classList.add('copied');
-                    setTimeout(() => {
-                        copyButton.innerHTML = originalHTML;
-                        copyButton.classList.remove('copied');
-                    }, 1500);
-                });
-            });
-            
-            // 为复制按钮容器添加定位
-            if (!pre.style.position) {
-                pre.style.position = 'relative';
+            // 如果是AI消息，添加导出按钮
+            if (role === 'ai') {
+                addExportButtonToMessage(messageContainer);
             }
-            pre.appendChild(copyButton);
-        });
+        }, 0);
         
         messageContainer.appendChild(messageContent);
         chatMessages.appendChild(messageContainer);
@@ -3188,72 +3221,99 @@ document.addEventListener("DOMContentLoaded", function() {
     
     // 更新讨论组聊天界面
     function updateDiscussionChat(data) {
-        if (!data || !data.messages) {
+        console.log('更新讨论组聊天内容', data);
+        
+        if (!data || !data.rounds) {
+            console.error('无效的讨论数据');
             return;
         }
         
-        // 清理定时刷新，如果会议已结束
-        if (data.status === "已结束") {
-            console.log("会议已结束，停止定时刷新");
-            if (window.refreshTimer) {
-                clearTimeout(window.refreshTimer);
-                window.refreshTimer = null;
-            }
+        // 获取聊天容器并清空现有内容
+        const chatContainer = document.getElementById('chatMessages');
+        chatContainer.innerHTML = '';
+        
+        // 遍历所有讨论轮次
+        data.rounds.forEach((round, roundIndex) => {
+            // 创建讨论轮次容器
+            const roundContainer = document.createElement('div');
+            roundContainer.className = 'discussion-round';
             
-            // 不要发送额外的结束请求
-            currentMeetingId = null;
-        }
-        
-        // 获取聊天消息容器
-        const messagesContainer = document.getElementById('chatMessages');
-        
-        // 清空当前显示
-        // messagesContainer.innerHTML = '';  // 不再清空，避免丢失流式内容
-        
-        // 记录是否添加了总结
-        let summaryAdded = false;
-        
-        // 添加新消息到容器
-        data.messages.forEach(message => {
-            // 检查消息类型
-            const role = message.role;
-            const agent = message.agent_name || '';
-            const content = message.content || '';
+            // 创建轮次标题
+            const roundTitle = document.createElement('div');
+            roundTitle.className = 'discussion-round-title';
+            roundTitle.textContent = `讨论轮次 ${roundIndex + 1}`;
+            roundContainer.appendChild(roundTitle);
             
-            // 检查是否是系统消息且像是总结
-            if (role === 'system' && agent === 'system' && content.length > 100) {
-                // 查找已经存在的总结消息
-                const existingSummaries = document.querySelectorAll('.summary-message');
-                if (existingSummaries.length === 0) {
-                    // 创建总结消息元素
-                    const summaryElement = document.createElement('div');
-                    summaryElement.className = 'system-message summary-message';
-                    summaryElement.innerHTML = `
-                        <div class="message-header">
-                            <strong>会议总结</strong>
-                        </div>
-                        <div class="message-content">
-                            ${marked.parse(content)}
-                        </div>
-                    `;
-                    messagesContainer.appendChild(summaryElement);
-                    summaryAdded = true;
-                    
-                    // 滚动到最新消息
-                    scrollToBottom();
+            // 遍历该轮次内的所有消息
+            round.messages.forEach(message => {
+                // 创建角色消息容器
+                const agentMessageContainer = document.createElement('div');
+                agentMessageContainer.className = 'agent-message';
+                
+                // 创建角色头部
+                const agentHeader = document.createElement('div');
+                agentHeader.className = 'agent-header';
+                
+                // 创建角色名称
+                const agentName = document.createElement('div');
+                agentName.className = 'agent-name';
+                agentName.textContent = message.role_name || '未知角色';
+                agentHeader.appendChild(agentName);
+                
+                // 如果有角色类型，显示为徽章
+                if (message.role_type) {
+                    const agentBadge = document.createElement('div');
+                    agentBadge.className = 'agent-badge';
+                    agentBadge.textContent = message.role_type;
+                    agentHeader.appendChild(agentBadge);
                 }
-            }
+                
+                // 添加头部到消息容器
+                agentMessageContainer.appendChild(agentHeader);
+                
+                // 创建消息内容
+                const agentContent = document.createElement('div');
+                agentContent.className = 'agent-content';
+                
+                // 使用marked处理消息内容中的Markdown
+                let processedContent = message.content;
+                try {
+                    if (window.marked) {
+                        processedContent = marked.parse(message.content);
+                    }
+                } catch (e) {
+                    console.error('Markdown解析失败:', e);
+                }
+                
+                agentContent.innerHTML = processedContent;
+                agentMessageContainer.appendChild(agentContent);
+                
+                // 添加消息到轮次容器
+                roundContainer.appendChild(agentMessageContainer);
+                
+                // 为每个代理消息添加导出按钮
+                addExportButtonToMessage(agentMessageContainer);
+            });
+            
+            // 添加轮次容器到聊天容器
+            chatContainer.appendChild(roundContainer);
+            
+            // 为讨论轮次添加导出按钮
+            addExportButtonToMessage(roundContainer);
         });
         
-        // 如果有待处理的人类输入
-        if (data.waiting_for_human && data.waiting_for_human.length > 0) {
-            // 显示人类输入界面
-            const humanRole = data.waiting_for_human[0];
-            showHumanInputArea(humanRole.name);
-        } else {
-            // 隐藏人类输入界面
-            document.getElementById('human-input-area').style.display = 'none';
+        // 高亮处理代码块
+        highlightCodeBlocks();
+        // 为代码块添加复制按钮
+        setupCodeBlockCopyButtons();
+        
+        // 如果需要人类输入，显示人类输入区域
+        if (data.wait_for_human) {
+            showHumanInputArea(data.human_role_name || '您');
         }
+        
+        // 滚动到底部
+        scrollToBottom();
     }
     
     // 重置聊天
@@ -3333,6 +3393,7 @@ document.addEventListener("DOMContentLoaded", function() {
             selectRole: 'Select Role',
             selectDiscussionGroup: 'Select Discussion Group',
             discussionTopic: 'Discussion Topic',
+            exportMarkdown: 'Export Chat',
             send: 'Send',
             welcomeToChat: 'Welcome to DeepGemini Chat Interface',
             chatInstructions: 'Select a chat mode and start the conversation',
@@ -3353,6 +3414,7 @@ document.addEventListener("DOMContentLoaded", function() {
             selectRole: '选择角色',
             selectDiscussionGroup: '选择讨论组',
             discussionTopic: '讨论主题',
+            exportMarkdown: '导出对话',
             send: '发送',
             welcomeToChat: '欢迎使用 DeepGemini 对话界面',
             chatInstructions: '选择聊天模式并开始对话',
@@ -3657,6 +3719,7 @@ function toggleTheme() {
 
 // 更新代码块主题
 function updateCodeBlocksTheme() {
+    console.log('更新代码块主题');
     const isDarkMode = document.body.classList.contains('dark-theme');
     const codeBlocks = document.querySelectorAll('pre code');
     
@@ -3667,6 +3730,9 @@ function updateCodeBlocksTheme() {
             block.classList.remove('dark-code');
         }
     });
+    
+    // 在主题切换后重新处理一下代码块的复制按钮
+    setTimeout(() => setupCodeBlockCopyButtons(), 0);
 }
 
 // 添加主题变化事件监听器
@@ -3680,4 +3746,725 @@ async function fetchMeetingSummary(meetingId) {
         console.log("无法获取总结：会议ID不存在");
         return;
     }
+}
+
+// 修复exportChatAsMarkdown函数
+function exportChatAsMarkdown() {
+    console.log('开始导出对话为Markdown文件');
+    
+    // 获取当前聊天模式
+    const currentMode = (typeof currentChatMode !== 'undefined') ? currentChatMode : 'single';
+    
+    // 创建Markdown文本
+    let markdownContent = `# DeepGemini 对话记录\n\n`;
+    markdownContent += `导出时间: ${new Date().toLocaleString()}\n\n`;
+    
+    // 根据不同的聊天模式添加特定信息
+    switch (currentMode) {
+        case 'single':
+            // 获取当前选择的模型
+            const modelId = singleModelSelect.value;
+            const modelConfig = window.modelConfigs?.[modelId] || {};
+            const isReasoningModel = modelConfig.type === 'reasoning';
+            
+            // 如果是reasoning模型，添加模型信息
+            if (isReasoningModel) {
+                markdownContent += `模型: ${modelConfig.name || '未知模型'} (思考型模型)\n\n`;
+            } else {
+                const modelName = modelConfig.name || '未知模型';
+                markdownContent += `模型: ${modelName}\n\n`;
+            }
+            break;
+            
+        case 'relay':
+            // 获取当前选择的接力链
+            const relayId = relayChainSelect.value;
+            const relayOption = relayChainSelect.options[relayChainSelect.selectedIndex];
+            const relayName = relayOption ? relayOption.textContent : '未知接力链';
+            markdownContent += `接力链模式: ${relayName}\n\n`;
+            break;
+            
+        case 'role':
+            // 获取当前选择的角色
+            const roleId = roleChatSelect.value;
+            const roleOption = roleChatSelect.options[roleChatSelect.selectedIndex];
+            const roleName = roleOption ? roleOption.textContent : '未知角色';
+            markdownContent += `角色对话模式: ${roleName}\n\n`;
+            break;
+            
+        case 'group':
+            // 获取当前选择的讨论组
+            const groupId = discussionGroupSelect.value;
+            const groupOption = discussionGroupSelect.options[discussionGroupSelect.selectedIndex];
+            const groupName = groupOption ? groupOption.textContent : '未知讨论组';
+            markdownContent += `讨论组模式: ${groupName}\n\n`;
+            break;
+    }
+    
+    // 获取聊天容器
+    const chatContainer = document.getElementById('chatMessages');
+    
+    // 处理讨论组模式下的特殊情况
+    if (currentMode === 'group') {
+        // 讨论组模式下，查找讨论轮次
+        const discussionRounds = chatContainer.querySelectorAll('.discussion-round');
+        
+        if (discussionRounds.length > 0) {
+            discussionRounds.forEach((round, index) => {
+                // 获取轮次标题
+                const roundTitle = round.querySelector('.discussion-round-title');
+                const title = roundTitle ? roundTitle.textContent : `讨论轮次 ${index + 1}`;
+                
+                markdownContent += `## ${title}\n\n`;
+                
+                // 获取该轮次内的所有消息
+                const agentMessages = round.querySelectorAll('.agent-message');
+                agentMessages.forEach(message => {
+                    // 获取角色名称
+                    const nameEl = message.querySelector('.agent-name');
+                    const name = nameEl ? nameEl.textContent : '参与者';
+                    
+                    // 获取消息内容
+                    const contentEl = message.querySelector('.agent-content');
+                    if (!contentEl) return;
+                    
+                    // 将HTML内容转换为Markdown
+                    let content = contentEl.innerHTML;
+                    
+                    // 处理代码块
+                    const codeBlocks = contentEl.querySelectorAll('pre code');
+                    codeBlocks.forEach(block => {
+                        const language = block.className.replace('language-', '').replace('dark-code', '').trim() || '';
+                        const code = block.textContent;
+                        const codeMarkdown = `\`\`\`${language}\n${code}\n\`\`\``;
+                        
+                        // 在内容中替换代码块
+                        content = content.replace(block.parentNode.outerHTML, codeMarkdown);
+                    });
+                    
+                    // 简单处理HTML转Markdown
+                    content = content
+                        .replace(/<\/?p>/g, '\n')
+                        .replace(/<br\s*\/?>/g, '\n')
+                        .replace(/<\/?strong>/g, '**')
+                        .replace(/<\/?em>/g, '_')
+                        .replace(/<\/?code>/g, '`')
+                        .replace(/<\/?[^>]+(>|$)/g, '') // 删除其他HTML标签
+                        .trim();
+                    
+                    // 添加到Markdown文本
+                    markdownContent += `### ${name}\n\n${content}\n\n`;
+                });
+                
+                markdownContent += `---\n\n`;
+            });
+        }
+    } else {
+        // 单模型、接力链和角色对话模式的处理
+        // 获取所有消息容器
+        const messageContainers = chatContainer.querySelectorAll('.message-container');
+        
+        // 遍历消息容器
+        messageContainers.forEach(container => {
+            // 跳过欢迎消息
+            if (container.classList.contains('welcome-message')) {
+                return;
+            }
+            
+            // 获取消息角色和名称
+            const role = container.classList.contains('ai') ? 'AI' : 
+                         container.classList.contains('user') ? '用户' : 
+                         container.classList.contains('system') ? '系统' : '其他';
+                         
+            const nameElement = container.querySelector('.message-name');
+            const name = nameElement ? nameElement.textContent : role;
+            
+            // 获取消息内容
+            const contentElement = container.querySelector('.message-content');
+            if (!contentElement) return;
+            
+            // 将HTML内容转换为Markdown
+            let content = contentElement.innerHTML;
+            
+            // 处理代码块
+            const codeBlocks = contentElement.querySelectorAll('pre code');
+            codeBlocks.forEach(block => {
+                const language = block.className.replace('language-', '').replace('dark-code', '').trim() || '';
+                const code = block.textContent;
+                const codeMarkdown = `\`\`\`${language}\n${code}\n\`\`\``;
+                
+                // 在内容中替换代码块
+                content = content.replace(block.parentNode.outerHTML, codeMarkdown);
+            });
+            
+            // 简单处理HTML转Markdown
+            content = content
+                .replace(/<\/?p>/g, '\n')
+                .replace(/<br\s*\/?>/g, '\n')
+                .replace(/<\/?strong>/g, '**')
+                .replace(/<\/?em>/g, '_')
+                .replace(/<\/?code>/g, '`')
+                .replace(/<\/?[^>]+(>|$)/g, '') // 删除其他HTML标签
+                .trim();
+            
+            // 添加到Markdown文本
+            markdownContent += `## ${name}\n\n${content}\n\n`;
+            
+            // 如果是思考型模型和AI回复，添加思考过程
+            if (currentMode === 'single') {
+                const modelConfig = window.modelConfigs?.[singleModelSelect.value] || {};
+                const isReasoningModel = modelConfig.type === 'reasoning';
+                
+                if (isReasoningModel && role === 'AI') {
+                    const thinkingContent = container.querySelector('.thinking-content');
+                    if (thinkingContent && !thinkingContent.classList.contains('collapsed')) {
+                        let thinking = thinkingContent.innerHTML;
+                        
+                        // 处理思考内容中的代码块
+                        const thinkingCodeBlocks = thinkingContent.querySelectorAll('pre code');
+                        thinkingCodeBlocks.forEach(block => {
+                            const language = block.className.replace('language-', '').replace('dark-code', '').trim() || '';
+                            const code = block.textContent;
+                            const codeMarkdown = `\`\`\`${language}\n${code}\n\`\`\``;
+                            
+                            // 在思考内容中替换代码块
+                            thinking = thinking.replace(block.parentNode.outerHTML, codeMarkdown);
+                        });
+                        
+                        // 处理思考内容HTML
+                        thinking = thinking
+                            .replace(/<\/?p>/g, '\n')
+                            .replace(/<br\s*\/?>/g, '\n')
+                            .replace(/<\/?strong>/g, '**')
+                            .replace(/<\/?em>/g, '_')
+                            .replace(/<\/?code>/g, '`')
+                            .replace(/<\/?[^>]+(>|$)/g, '') // 删除其他HTML标签
+                            .trim();
+                        
+                        if (thinking) {
+                            markdownContent += `### 思考过程\n\n${thinking}\n\n---\n\n`;
+                        }
+                    }
+                }
+            }
+        });
+    }
+    
+    // 创建下载链接
+    const blob = new Blob([markdownContent], { type: 'text/markdown' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    
+    // 根据模式设置不同的文件名
+    let fileName;
+    switch (currentMode) {
+        case 'single':
+            fileName = `deepgemini-chat-${Date.now()}.md`;
+            break;
+        case 'relay':
+            fileName = `deepgemini-relay-chat-${Date.now()}.md`;
+            break;
+        case 'role':
+            fileName = `deepgemini-role-chat-${Date.now()}.md`;
+            break;
+        case 'group':
+            fileName = `deepgemini-group-discussion-${Date.now()}.md`;
+            break;
+        default:
+            fileName = `deepgemini-chat-${Date.now()}.md`;
+    }
+    
+    link.download = fileName;
+    
+    // 触发下载
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
+}
+
+// 将导出功能添加到每个AI消息
+function addExportButtonToMessage(messageContainer) {
+    // 获取当前聊天模式
+    let currentMode = 'single'; // 默认为单模型对话
+    
+    // 检查是否存在全局的currentChatMode变量
+    if (typeof currentChatMode !== 'undefined') {
+        currentMode = currentChatMode;
+    } else {
+        // 尝试从DOM确定当前模式
+        const activeModeRadio = document.querySelector('input[name="chatMode"]:checked');
+        if (activeModeRadio) {
+            currentMode = activeModeRadio.value;
+        }
+    }
+    
+    // 只有在特定情况下添加导出按钮
+    if (currentMode === 'group') {
+        // 讨论组模式 - 在讨论轮次容器和AI代理消息上添加导出按钮
+        if (!messageContainer.classList.contains('discussion-round') && 
+            !messageContainer.classList.contains('agent-message')) {
+            return;
+        }
+    } else {
+        // 其他模式(单模型、接力链、角色对话) - 只在AI消息上添加导出按钮
+        if (!messageContainer.classList.contains('ai')) {
+            return;
+        }
+    }
+    
+    // 检查是否已有导出按钮
+    if (messageContainer.querySelector('.message-export-btn')) {
+        return;
+    }
+    
+    // 创建导出按钮
+    const exportBtn = document.createElement('button');
+    exportBtn.className = 'message-export-btn';
+    exportBtn.innerHTML = '<i class="fas fa-download"></i>';
+    exportBtn.title = '导出对话';
+    
+    // 添加点击事件来导出当前对话
+    exportBtn.addEventListener('click', function(e) {
+        e.preventDefault();
+        e.stopPropagation();
+        
+        // 确保全局变量currentChatMode有效
+        if (typeof currentChatMode === 'undefined' || currentChatMode === null) {
+            // 尝试从DOM确定当前模式
+            const activeModeRadio = document.querySelector('input[name="chatMode"]:checked');
+            if (activeModeRadio) {
+                window.currentChatMode = activeModeRadio.value;
+            } else {
+                // 默认设为单模型模式
+                window.currentChatMode = 'single';
+            }
+        }
+        
+        exportChatAsMarkdown();
+    });
+    
+    // 添加到消息容器
+    messageContainer.appendChild(exportBtn);
+}
+
+// 为当前和新添加的代码块添加复制按钮
+function setupCodeBlockCopyButtons() {
+    // 获取所有没有复制按钮的代码块
+    const codeBlocks = document.querySelectorAll('pre code:not([data-copy-initialized])');
+    
+    codeBlocks.forEach(block => {
+        // 标记为已初始化
+        block.setAttribute('data-copy-initialized', 'true');
+        
+        // 添加复制按钮
+        const pre = block.parentNode;
+        
+        // 防止重复添加按钮
+        const existingButton = pre.querySelector('.code-copy-btn');
+        if (existingButton) {
+            return;
+        }
+        
+        // 创建右上角复制按钮
+        const copyButtonTop = document.createElement('button');
+        copyButtonTop.className = 'code-copy-btn';
+        copyButtonTop.innerHTML = '<i class="fas fa-copy"></i>';
+        copyButtonTop.title = '复制代码';
+        
+        // 创建右下角复制按钮
+        const copyButtonBottom = document.createElement('button');
+        copyButtonBottom.className = 'code-copy-btn-bottom';
+        copyButtonBottom.innerHTML = '<i class="fas fa-copy"></i>';
+        copyButtonBottom.title = '复制代码';
+        
+        // 创建复制代码的函数
+        const copyCode = function(e, button) {
+            e.preventDefault();
+            e.stopPropagation();
+            
+            const code = block.textContent;
+            
+            // 使用更可靠的复制方法
+            const textarea = document.createElement('textarea');
+            textarea.value = code;
+            textarea.style.position = 'fixed';  // 避免滚动到页面底部
+            document.body.appendChild(textarea);
+            textarea.select();
+            
+            try {
+                const successful = document.execCommand('copy');
+                if (successful) {
+                    // 复制成功效果
+                    const originalHTML = button.innerHTML;
+                    button.innerHTML = '<i class="fas fa-check"></i>';
+                    button.classList.add('copied');
+                    
+                    // 同时更新两个按钮状态
+                    const otherButton = button === copyButtonTop ? copyButtonBottom : copyButtonTop;
+                    otherButton.innerHTML = '<i class="fas fa-check"></i>';
+                    otherButton.classList.add('copied');
+                    
+                    setTimeout(() => {
+                        button.innerHTML = originalHTML;
+                        button.classList.remove('copied');
+                        otherButton.innerHTML = originalHTML;
+                        otherButton.classList.remove('copied');
+                    }, 1500);
+                }
+            } catch (err) {
+                console.error('无法复制代码:', err);
+                // 回退到navigator.clipboard API
+                navigator.clipboard.writeText(code).then(() => {
+                    // 复制成功效果
+                    const originalHTML = button.innerHTML;
+                    button.innerHTML = '<i class="fas fa-check"></i>';
+                    button.classList.add('copied');
+                    
+                    // 同时更新两个按钮状态
+                    const otherButton = button === copyButtonTop ? copyButtonBottom : copyButtonTop;
+                    otherButton.innerHTML = '<i class="fas fa-check"></i>';
+                    otherButton.classList.add('copied');
+                    
+                    setTimeout(() => {
+                        button.innerHTML = originalHTML;
+                        button.classList.remove('copied');
+                        otherButton.innerHTML = originalHTML;
+                        otherButton.classList.remove('copied');
+                    }, 1500);
+                });
+            } finally {
+                document.body.removeChild(textarea);
+            }
+        };
+        
+        // 添加事件监听器
+        copyButtonTop.addEventListener('click', (e) => copyCode(e, copyButtonTop));
+        copyButtonBottom.addEventListener('click', (e) => copyCode(e, copyButtonBottom));
+        
+        // 为复制按钮容器添加定位
+        if (!pre.style.position || pre.style.position === 'static') {
+            pre.style.position = 'relative';
+        }
+        
+        // 添加两个按钮到代码块
+        pre.appendChild(copyButtonTop);
+        pre.appendChild(copyButtonBottom);
+    });
+}
+
+// 添加一个MutationObserver来监听DOM变化
+document.addEventListener('DOMContentLoaded', function() {
+    // 初次运行，处理页面上已有的代码块
+    setupCodeBlockCopyButtons();
+    highlightCodeBlocks();
+    
+    // 确保导出按钮可见
+    const exportButton = document.getElementById('exportMarkdown');
+    if (exportButton) {
+        exportButton.style.display = 'flex';
+    }
+    
+    // 创建观察器实例
+    const observer = new MutationObserver(function(mutations) {
+        mutations.forEach(function(mutation) {
+            if (mutation.addedNodes && mutation.addedNodes.length > 0) {
+                // 检查新添加的节点中是否有代码块
+                setupCodeBlockCopyButtons();
+                highlightCodeBlocks();
+            }
+        });
+    });
+    
+    // 配置观察选项
+    const config = { childList: true, subtree: true };
+    
+    // 开始观察目标节点
+    observer.observe(document.body, config);
+});
+
+// 高亮代码块，但跳过思考内容中的代码块
+function highlightCodeBlocks() {
+    if (window.hljs) {
+        // 只处理不在思考内容中的代码块
+        document.querySelectorAll('pre code:not(.thinking-content pre code)').forEach((block) => {
+            // 检查是否在思考内容中
+            if (!block.closest('.thinking-content')) {
+                hljs.highlightElement(block);
+            }
+        });
+    }
+}
+
+// 将导出功能添加到每个AI消息
+function addExportButtonToMessage(messageContainer) {
+    // 检查是否是AI消息
+    if (!messageContainer.classList.contains('ai')) {
+        return;
+    }
+    
+    // 检查是否已有导出按钮
+    if (messageContainer.querySelector('.message-export-btn')) {
+        return;
+    }
+    
+    // 创建导出按钮
+    const exportBtn = document.createElement('button');
+    exportBtn.className = 'message-export-btn';
+    exportBtn.innerHTML = '<i class="fas fa-download"></i>';
+    exportBtn.title = '导出对话';
+    
+    // 添加点击事件来导出当前对话
+    exportBtn.addEventListener('click', function(e) {
+        e.preventDefault();
+        e.stopPropagation();
+        
+        // 确保全局变量currentChatMode有效
+        if (typeof currentChatMode === 'undefined') {
+            // 尝试从DOM确定当前模式
+            const activeModeRadio = document.querySelector('input[name="chatMode"]:checked');
+            if (activeModeRadio) {
+                window.currentChatMode = activeModeRadio.value;
+            } else {
+                // 默认设为单模型模式
+                window.currentChatMode = 'single';
+            }
+        }
+        
+        exportChatAsMarkdown();
+    });
+    
+    // 添加到消息容器
+    messageContainer.appendChild(exportBtn);
+}
+
+// 更新marked配置，添加语言标识，但不高亮思考内容中的代码
+function setupMarkedOptions() {
+    if (window.marked) {
+        marked.setOptions({
+            highlight: function(code, lang, info) {
+                // 检查是否应该跳过高亮
+                // 这里无法直接检测是否在思考内容中，但我们可以在CSS中覆盖这些样式
+                const language = lang || '';
+                if (language && hljs.getLanguage(language)) {
+                    return hljs.highlight(code, { language: language }).value;
+                }
+                return hljs.highlightAuto(code).value;
+            },
+            langPrefix: 'hljs language-', // 添加类前缀
+            gfm: true, // 启用GitHub风格Markdown
+            breaks: true // 启用换行符转换为<br>
+        });
+        
+        // 保存原始渲染器
+        const originalRenderer = new marked.Renderer();
+        
+        // 创建自定义渲染器来处理代码块
+        const renderer = new marked.Renderer();
+        
+        // 重写代码块渲染器
+        renderer.code = function(code, language) {
+            // 如果是HTML代码块，确保不会被渲染
+            if (language === 'html') {
+                // 对HTML代码进行转义，防止被渲染
+                const escapedCode = escapeHtml(code);
+                return `<pre><code class="language-html">${escapedCode}</code></pre>`;
+            }
+            // 在这里，我们仍然使用原始的高亮函数，但CSS将覆盖思考内容中的高亮
+            const highlightedCode = originalRenderer.code(code, language);
+            return highlightedCode;
+        };
+        
+        // 防止HTML代码块被渲染，直接显示原始HTML代码
+        renderer.html = function(html) {
+            if (html.trim().startsWith('<') && html.trim().endsWith('>')) {
+                // 对HTML代码进行转义，防止被渲染
+                return `<pre><code class="language-html">${escapeHtml(html)}</code></pre>`;
+            }
+            return originalRenderer.html(html);
+        };
+        
+        // HTML转义辅助函数
+        function escapeHtml(unsafe) {
+            return unsafe
+                .replace(/&/g, "&amp;")
+                .replace(/</g, "&lt;")
+                .replace(/>/g, "&gt;")
+                .replace(/"/g, "&quot;")
+                .replace(/'/g, "&#039;");
+        }
+        
+        marked.use({ renderer });
+    }
+}
+
+// 初始化函数
+async function init() {
+    try {
+        // 获取API密钥
+        await fetchDefaultApiKey();
+        
+        // 配置marked使用highlight.js
+        setupMarkedOptions();
+        
+        // 获取配置
+        await Promise.all([
+            loadModels(),
+            loadConfigurations(),
+            loadRoles(),
+            loadGroups()
+        ]);
+        
+        // 设置事件监听器
+        const sendButton = document.getElementById('sendButton');
+        if (sendButton) {
+            sendButton.addEventListener('click', sendMessage);
+        }
+        
+        const messageInput = document.getElementById('messageInput');
+        if (messageInput) {
+            messageInput.addEventListener('keydown', function(e) {
+            if (e.key === 'Enter' && !e.shiftKey) {
+                e.preventDefault();
+                sendMessage();
+            }
+        });
+        }
+        
+        // 监听聊天模式切换
+        const chatModeElement = document.getElementById('chatMode');
+        if (chatModeElement) {
+            chatModeElement.addEventListener('change', handleChatModeChange);
+        
+        // 初始设置活跃模式
+            setActiveChatMode(chatModeElement.value);
+        }
+        
+        // 设置讨论组选择的事件监听器
+        if (discussionGroupSelect) {
+            discussionGroupSelect.addEventListener('change', function() {
+                // 更新当前选中的讨论组ID
+                currentGroupId = this.value;
+                console.log('已选择讨论组:', currentGroupId);
+            });
+        }
+        
+        // 设置人类输入区域事件
+        const humanSendButton = document.getElementById('sendHumanInput');
+        if (humanSendButton) {
+            humanSendButton.addEventListener('click', sendHumanInput);
+        }
+        
+        const humanInputMessage = document.getElementById('humanInputMessage');
+        if (humanInputMessage) {
+            humanInputMessage.addEventListener('keydown', function(e) {
+            if (e.key === 'Enter' && !e.shiftKey) {
+                e.preventDefault();
+                sendHumanInput();
+            }
+        });
+        }
+        
+        // 设置重置按钮
+        const resetButton = document.getElementById('resetButton');
+        if (resetButton) {
+            resetButton.addEventListener('click', resetChat);
+        }
+        
+        // 隐藏加载提示
+        const loadingIndicator = document.getElementById('loadingIndicator');
+        if (loadingIndicator) {
+            loadingIndicator.style.display = 'none';
+        }
+        
+        // 设置定时器检查人类输入状态
+        setInterval(checkForHumanInput, 3000); // 每3秒检查一次
+        
+        // 不再需要全局导出按钮
+        const oldExportButton = document.getElementById('exportMarkdown');
+        if (oldExportButton) {
+            oldExportButton.remove(); // 移除旧的导出按钮
+        }
+        
+        console.log('初始化完成');
+    } catch (error) {
+        console.error('初始化失败:', error);
+        showError('初始化失败: ' + error.message);
+    }
+}
+
+// 更新思考内容而不破坏流式输出
+function updateThinkingContent(container, content) {
+    // 保存滚动状态
+    const wasScrolledToBottom = container.scrollHeight - container.clientHeight <= container.scrollTop + 5;
+    
+    // 保存用户焦点位置
+    const activeElement = document.activeElement;
+    const selection = window.getSelection();
+    const ranges = [];
+    for (let i = 0; i < selection.rangeCount; i++) {
+        ranges.push(selection.getRangeAt(i));
+    }
+    
+    // 使用安全的方式更新内容，不使用innerHTML直接替换
+    // 创建一个临时容器
+    const temp = document.createElement('div');
+    temp.style.display = 'none';
+    temp.innerHTML = marked.parse(content);
+    document.body.appendChild(temp);
+    
+    // 清空容器但保留它自己
+    while (container.firstChild) {
+        container.removeChild(container.firstChild);
+    }
+    
+    // 将解析后的内容复制到容器中
+    while (temp.firstChild) {
+        container.appendChild(temp.firstChild);
+    }
+    
+    // 移除临时容器
+    document.body.removeChild(temp);
+    
+    // 还原用户焦点
+    if (activeElement) {
+        activeElement.focus();
+        if (selection && ranges.length) {
+            selection.removeAllRanges();
+            ranges.forEach(range => selection.addRange(range));
+        }
+    }
+    
+    // 处理代码块的复制按钮
+    setupCodeBlockCopyButtons();
+    
+    // 恢复滚动位置
+    if (wasScrolledToBottom) {
+        container.scrollTop = container.scrollHeight;
+    }
+}
+
+// 在接收到AI响应时处理思考内容
+function handleThinkingContent(thinking, messageContainer) {
+    // 使用ThinkingHandler处理思考内容
+    if (thinking && thinking.trim() !== '') {
+        thinkingHandler.handleThinking(thinking, messageContainer);
+    }
+}
+
+// 处理AI回复
+async function handleAIReply(prompt, isFollowUp, messageHistory, thinking) {
+    // ... existing code ...
+    
+    // 创建AI消息容器
+    const aiMsg = document.createElement('div');
+    aiMsg.className = 'message ai-message';
+    
+    // 处理思考内容
+    if (thinking && thinking.trim() !== '') {
+        handleThinkingContent(thinking, aiMsg);
+    }
+    
+    // ... existing code ...
 }

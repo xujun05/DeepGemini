@@ -7,20 +7,22 @@
     border-radius: 12px;
     box-shadow: 0 4px 20px rgba(0, 0, 0, 0.1);
     overflow: hidden;
+    position: relative;
 }
 
 .chat-header {
     display: flex;
-    justify-content: space-between;
     align-items: center;
-    padding: 1rem 1.5rem;
+    justify-content: space-between;
+    padding: 1rem;
     border-bottom: 1px solid var(--border-color, #e9ecef);
     background-color: var(--header-bg, #f8f9fa);
 }
 
 .chat-mode-selector {
     display: flex;
-    align-items: center;
+    flex-wrap: wrap;
+    gap: 0.5rem;
 }
 
 .chat-settings {
@@ -35,9 +37,10 @@
 
 .chat-messages {
     flex: 1;
-    padding: 1.5rem;
+    padding: 1rem;
     overflow-y: auto;
     background-color: var(--chat-bg, #ffffff);
+    position: relative;
 }
 
 .welcome-message {
@@ -53,34 +56,65 @@
 
 .message-container {
     display: flex;
-    margin-bottom: 1.5rem;
+    flex-direction: column;
+    margin-bottom: 1rem;
+    width: 100%;
+    position: relative;
 }
 
-.message-container.user {
-    justify-content: flex-end;
+.message-header {
+    display: flex;
+    align-items: center;
+    margin-bottom: 0.2rem;
+    padding: 0 0.5rem;
 }
 
-.message-container.system {
+.message-avatar {
+    width: 28px;
+    height: 28px;
+    margin-right: 8px;
+    display: flex;
+    align-items: center;
     justify-content: center;
 }
 
+.text-avatar {
+    width: 28px;
+    height: 28px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 0.7rem;
+    font-weight: bold;
+}
+
+.ai-avatar {
+    background-color: var(--primary, #007bff);
+    color: #fff;
+}
+
+.user-avatar {
+    background-color: #4bbf73;
+    color: #fff;
+}
+
 .message-content {
-    max-width: 80%;
-    padding: 0.8rem 1.2rem;
-    border-radius: 12px;
-    box-shadow: 0 2px 5px rgba(0,0,0,0.05);
+    width: 100%;
+    padding: 0.8rem 1rem;
+    border-radius: 8px;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.05);
+    line-height: 1.3;
 }
 
 .message-container.user .message-content {
     background-color: var(--user-message-bg, #007bff);
     color: var(--user-message-color, #fff);
-    border-top-right-radius: 4px;
 }
 
 .message-container.ai .message-content {
     background-color: var(--ai-message-bg, #f1f3f5);
     color: var(--ai-message-color, #333);
-    border-top-left-radius: 4px;
 }
 
 .message-container.system .message-content {
@@ -89,12 +123,31 @@
     text-align: center;
     font-size: 0.85rem;
     padding: 0.4rem 1rem;
-    border-radius: 50px;
+    border-radius: 8px;
+}
+
+.message-content p {
+    margin-bottom: 0.2rem;
+    line-height: 1.3;
+}
+
+.message-content p:last-child {
+    margin-bottom: 0;
+}
+
+.message-content ul, .message-content ol {
+    margin-top: 0.2rem;
+    margin-bottom: 0.2rem;
+    padding-left: 1.5rem;
+}
+
+.message-content li {
+    margin-bottom: 0.2rem;
 }
 
 .chat-input {
     display: flex;
-    padding: 1rem 1.5rem;
+    padding: 0.8rem 1rem;
     border-top: 1px solid var(--border-color, #e9ecef);
     background-color: var(--header-bg, #f8f9fa);
 }
@@ -107,6 +160,8 @@
     border-radius: 8px;
     border: 1px solid var(--input-border, #ced4da);
     margin-right: 0.75rem;
+    background-color: var(--input-bg, #fff);
+    color: var(--input-color, #212529);
 }
 
 .chat-input button {
@@ -119,6 +174,7 @@
     margin-bottom: 1.5rem;
     border-left: 3px solid var(--agent-border, #3498db);
     padding-left: 1rem;
+    position: relative;
 }
 
 .agent-header {
@@ -258,6 +314,8 @@ body.dark-theme .chat-container {
     --system-message-bg: #505050;
     --system-message-color: #fff;
     --input-border: #404040;
+    --input-bg: #333;
+    --input-color: #e1e1e1;
     --agent-border: #0d6efd;
     --agent-name: #0d6efd;
     --agent-badge-bg: #1a3a5f;
@@ -271,6 +329,12 @@ body.dark-theme .chat-container {
 
 body.dark-theme .loading-spinner {
     background-color: rgba(30, 30, 30, 0.8);
+}
+
+body.dark-theme .chat-input textarea {
+    background-color: #333;
+    color: #e1e1e1;
+    border-color: #555;
 }
 
 /* Responsive adjustments */
@@ -302,32 +366,68 @@ body.dark-theme .loading-spinner {
 /* Code Block Styling */
 .message-content pre {
     position: relative;
-    background-color: #f5f5f5;
+    background-color: transparent;
     border-radius: 6px;
     padding: 1rem;
-    margin: 1rem 0;
+    margin: 0.8rem 0;
     overflow: auto;
+    border: 1px solid #e0e0e0;
 }
 
 .message-content pre code {
     font-family: 'SFMono-Regular', Consolas, 'Liberation Mono', Menlo, monospace;
     font-size: 0.9rem;
-    line-height: 1.5;
+    line-height: 1.4;
     color: #333;
+    background-color: transparent !important;
+    padding: 0;
 }
 
-.message-content pre code.dark-code {
-    background-color: #282c34;
-    color: #abb2bf;
+/* 优化代码高亮，确保语法高亮正常显示 */
+.hljs {
+    background-color: transparent !important;
+    padding: 0 !important;
 }
 
-/* Code Copy Button */
+/* 加强关键字颜色 */
+.hljs-keyword, .hljs-selector-tag, .hljs-subst {
+    color: #8959a8 !important;
+    font-weight: bold;
+}
+
+/* 字符串颜色 */
+.hljs-string, .hljs-regexp, .hljs-addition, .hljs-attribute, .hljs-meta .hljs-string {
+    color: #718c00 !important;
+}
+
+/* 数字颜色 */
+.hljs-number, .hljs-literal {
+    color: #f5871f !important;
+}
+
+/* 注释颜色 */
+.hljs-comment, .hljs-quote {
+    color: #8e908c !important;
+    font-style: italic;
+}
+
+/* 变量名颜色 */
+.hljs-variable, .hljs-template-variable, .hljs-tag, .hljs-name, .hljs-selector-id, .hljs-selector-class {
+    color: #c82829 !important;
+}
+
+/* 函数名颜色 */
+.hljs-title, .hljs-function, .hljs-section, .hljs-deletion {
+    color: #4271ae !important;
+}
+
+/* 代码块复制按钮 - 右上角 */
 .code-copy-btn {
     position: absolute;
     top: 0.5rem;
     right: 0.5rem;
-    width: 32px;
-    height: 32px;
+    width: 28px;
+    height: 28px;
     background-color: rgba(255, 255, 255, 0.8);
     border: none;
     border-radius: 4px;
@@ -341,41 +441,315 @@ body.dark-theme .loading-spinner {
     z-index: 10;
 }
 
-.message-content pre:hover .code-copy-btn {
+/* 代码块复制按钮 - 右下角 */
+.code-copy-btn-bottom {
+    position: absolute;
+    bottom: 0.5rem;
+    right: 0.5rem;
+    width: 28px;
+    height: 28px;
+    background-color: rgba(255, 255, 255, 0.8);
+    border: none;
+    border-radius: 4px;
+    color: #666;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    opacity: 0;
+    transition: opacity 0.2s ease, background-color 0.2s ease;
+    cursor: pointer;
+    z-index: 10;
+}
+
+.message-content pre:hover .code-copy-btn,
+.message-content pre:hover .code-copy-btn-bottom {
     opacity: 1;
 }
 
-.code-copy-btn:hover {
+.code-copy-btn:hover,
+.code-copy-btn-bottom:hover {
     background-color: rgba(255, 255, 255, 0.95);
     color: #333;
 }
 
-.code-copy-btn.copied {
+.code-copy-btn.copied,
+.code-copy-btn-bottom.copied {
     background-color: #28a745;
     color: white;
 }
 
 /* Dark Theme Code Styles */
 body.dark-theme .message-content pre {
-    background-color: #282c34;
-    border: 1px solid #444;
+    border-color: #444;
 }
 
 body.dark-theme .message-content pre code {
-    color: #abb2bf;
+    color: #e1e1e1;
 }
 
-body.dark-theme .code-copy-btn {
+/* Dark Mode 高亮颜色调整 */
+body.dark-theme .hljs-keyword, 
+body.dark-theme .hljs-selector-tag, 
+body.dark-theme .hljs-subst {
+    color: #c397d8 !important;
+}
+
+body.dark-theme .hljs-string, 
+body.dark-theme .hljs-regexp, 
+body.dark-theme .hljs-addition, 
+body.dark-theme .hljs-attribute, 
+body.dark-theme .hljs-meta .hljs-string {
+    color: #b5bd68 !important;
+}
+
+body.dark-theme .hljs-number, 
+body.dark-theme .hljs-literal {
+    color: #de935f !important;
+}
+
+body.dark-theme .hljs-comment, 
+body.dark-theme .hljs-quote {
+    color: #969896 !important;
+}
+
+body.dark-theme .hljs-variable, 
+body.dark-theme .hljs-template-variable, 
+body.dark-theme .hljs-tag, 
+body.dark-theme .hljs-name {
+    color: #cc6666 !important;
+}
+
+body.dark-theme .hljs-title, 
+body.dark-theme .hljs-function, 
+body.dark-theme .hljs-section {
+    color: #81a2be !important;
+}
+
+/* Dark Theme Code Copy Button */
+body.dark-theme .code-copy-btn,
+body.dark-theme .code-copy-btn-bottom {
     background-color: rgba(50, 50, 50, 0.8);
     color: #ddd;
 }
 
-body.dark-theme .code-copy-btn:hover {
+body.dark-theme .code-copy-btn:hover,
+body.dark-theme .code-copy-btn-bottom:hover {
     background-color: rgba(70, 70, 70, 0.95);
     color: #fff;
 }
 
-body.dark-theme .code-copy-btn.copied {
+body.dark-theme .code-copy-btn.copied,
+body.dark-theme .code-copy-btn-bottom.copied {
     background-color: #28a745;
     color: white;
+}
+
+/* 导出按钮样式 - 放在消息内部而非固定位置 */
+.message-export-btn {
+    position: absolute;
+    bottom: 8px;
+    right: 8px;
+    width: 32px;
+    height: 32px;
+    background-color: var(--header-bg, #f8f9fa);
+    border: 1px solid var(--border-color, #ced4da);
+    border-radius: 50%;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    opacity: 0;
+    transition: all 0.2s ease;
+    cursor: pointer;
+    z-index: 5;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+}
+
+.message-container.ai:hover .message-export-btn,
+.discussion-round:hover .message-export-btn,
+.agent-message:hover .message-export-btn {
+    opacity: 0.8;
+}
+
+.message-export-btn:hover {
+    opacity: 1 !important;
+    transform: scale(1.1);
+    box-shadow: 0 2px 5px rgba(0,0,0,0.2);
+}
+
+/* 讨论组中导出按钮的位置 */
+.discussion-round .message-export-btn {
+    top: 8px;
+    right: 8px;
+    bottom: auto;
+}
+
+/* 讨论组中代理消息的导出按钮位置 */
+.agent-message .message-export-btn {
+    bottom: 8px;
+    right: 8px;
+    top: auto;
+}
+
+/* 深色模式下的导出按钮样式 */
+body.dark-theme .message-export-btn {
+    background-color: #333;
+    border-color: #555;
+    color: #ddd;
+}
+
+/* 确保导出按钮在不同模式下都可见 */
+.message-container {
+    position: relative;
+}
+
+.agent-message {
+    position: relative;
+}
+
+/* 思考内容容器样式 */
+.thinking-content {
+    margin-bottom: 1rem;
+    padding: 0.5rem 1rem;
+    background-color: rgba(0, 0, 0, 0.03);
+    border-radius: 6px;
+    font-size: 0.9rem;
+    color: #555;
+    overflow-x: auto;
+    max-height: 400px;
+    overflow-y: auto;
+    border-left: 3px solid #ccc;
+    transition: max-height 0.3s ease, padding 0.3s ease, margin 0.3s ease, border-width 0.3s ease;
+    display: block;
+    position: relative;
+    -webkit-overflow-scrolling: touch;
+    scrollbar-width: thin;
+    scrollbar-color: rgba(0, 0, 0, 0.2) transparent;
+}
+
+/* 思考内容折叠状态 */
+.thinking-content.collapsed {
+    max-height: 0;
+    padding-top: 0;
+    padding-bottom: 0;
+    margin-bottom: 0;
+    border-width: 0;
+    overflow: hidden;
+}
+
+/* 确保非折叠状态下滚动条正常工作 */
+.thinking-content:not(.collapsed) {
+    overflow-y: auto !important;
+    overflow-x: auto !important;
+}
+
+/* 自定义滚动条样式 */
+.thinking-content::-webkit-scrollbar {
+    width: 6px;
+    height: 6px;
+}
+
+.thinking-content::-webkit-scrollbar-track {
+    background: transparent;
+}
+
+.thinking-content::-webkit-scrollbar-thumb {
+    background-color: rgba(0, 0, 0, 0.2);
+    border-radius: 3px;
+}
+
+/* 思考内容中的代码块不高亮，使用纯文本展示 */
+.thinking-content pre {
+    background-color: rgba(0, 0, 0, 0.05);
+    border-radius: 4px;
+    padding: 0.8rem;
+    border: none;
+    overflow-x: auto;
+    margin: 0.5rem 0;
+}
+
+.thinking-content pre code {
+    font-family: 'SFMono-Regular', Consolas, 'Liberation Mono', Menlo, monospace;
+    font-size: 0.9rem;
+    line-height: 1.4;
+    color: #333;
+    background-color: transparent !important;
+    white-space: pre-wrap;
+    padding: 0;
+    overflow-x: visible;
+    tab-size: 2;
+}
+
+/* 防止思考内容中的长内容导致布局问题 */
+.thinking-content p,
+.thinking-content code,
+.thinking-content pre,
+.thinking-content blockquote {
+    word-break: break-word;
+    overflow-wrap: break-word;
+}
+
+/* 深色模式下思考内容的样式 */
+body.dark-theme .thinking-content {
+    background-color: rgba(255, 255, 255, 0.05);
+    color: #bbb;
+    border-left-color: #555;
+}
+
+/* 深色模式下思考内容的代码块 */
+body.dark-theme .thinking-content pre {
+    background-color: rgba(255, 255, 255, 0.08);
+}
+
+body.dark-theme .thinking-content pre code {
+    color: #ccc;
+}
+
+/* 深色模式下的滚动条 */
+body.dark-theme .thinking-content::-webkit-scrollbar-thumb {
+    background-color: rgba(255, 255, 255, 0.2);
+}
+
+/* 思考内容中的纯文本代码块专用样式 */
+.thinking-code-block {
+    background-color: #f6f8fa;
+    padding: 0.8rem;
+    margin: 0.8rem 0;
+    border-radius: 4px;
+    white-space: pre;
+    overflow-x: auto;
+    font-family: 'SFMono-Regular', Consolas, 'Liberation Mono', Menlo, monospace;
+    font-size: 0.85rem;
+    line-height: 1.5;
+}
+
+.thinking-content .inline-code {
+    font-family: 'SFMono-Regular', Consolas, 'Liberation Mono', Menlo, monospace;
+    background-color: rgba(0, 0, 0, 0.05);
+    padding: 2px 4px;
+    border-radius: 3px;
+    font-size: 0.9em;
+    color: #333;
+    white-space: nowrap;
+}
+
+/* 思考内容中的代码标签样式 */
+.thinking-content .code-lt,
+.thinking-content .code-gt {
+    color: #777;
+}
+
+/* 深色模式下思考内容的代码块 */
+body.dark-theme .thinking-code-block {
+    background-color: rgba(255, 255, 255, 0.1);
+    border-color: rgba(255, 255, 255, 0.15);
+}
+
+body.dark-theme .thinking-content .inline-code {
+    background-color: rgba(255, 255, 255, 0.1);
+    color: #ddd;
+}
+
+body.dark-theme .thinking-content .code-lt,
+body.dark-theme .thinking-content .code-gt {
+    color: #999;
 } 
