@@ -649,45 +649,69 @@ document.addEventListener("DOMContentLoaded", function() {
     
     // 初始化函数
     async function init() {
+        // 初始化语言
+        updateTranslations();
+        
+        // 初始化Marked选项
+        setupMarkedOptions();
+
         try {
-            // 获取API密钥
+            // 加载默认API密钥
             await fetchDefaultApiKey();
             
-            // 配置marked使用highlight.js
-            setupMarkedOptions();
+            // 加载模型列表
+            await loadModels();
             
-            // 获取配置
-            await Promise.all([
-                loadModels(),
-                loadConfigurations(),
-                loadRoles(),
-                loadGroups()
-            ]);
+            // 加载配置
+            await loadConfigurations();
             
-            // 设置事件监听器
-            const sendButton = document.getElementById('sendButton');
-            if (sendButton) {
-                sendButton.addEventListener('click', sendMessage);
-            }
+            // 加载角色列表
+            await loadRoles();
             
-            const messageInput = document.getElementById('messageInput');
-            if (messageInput) {
-                messageInput.addEventListener('keydown', function(e) {
+            // 加载讨论组列表
+            await loadGroups();
+            
+            // 加载人类角色列表
+            await loadHumanRoles();
+            
+            // 设置初始聊天模式
+            setActiveChatMode('single');
+            
+            // 设置聊天模式切换监听
+            document.querySelectorAll('input[name="chatMode"]').forEach(radio => {
+                radio.addEventListener('change', handleChatModeChange);
+            });
+            
+            // 初始化发送消息按钮事件
+            document.getElementById('sendMessage').addEventListener('click', sendMessage);
+            
+            // 初始化发送人类输入按钮事件
+            document.getElementById('sendHumanInput').addEventListener('click', sendHumanInput);
+            
+            // 为讨论组导出按钮添加事件监听
+            document.getElementById('exportGroupChatBtn').addEventListener('click', exportGroupDiscussion);
+            
+            // 为用户消息输入框添加Enter键发送功能
+            document.getElementById('userMessage').addEventListener('keydown', function(e) {
                 if (e.key === 'Enter' && !e.shiftKey) {
                     e.preventDefault();
                     sendMessage();
                 }
             });
-            }
             
-            // 监听聊天模式切换
-            const chatModeElement = document.getElementById('chatMode');
-            if (chatModeElement) {
-                chatModeElement.addEventListener('change', handleChatModeChange);
+            // 为人类角色输入框添加Enter键发送功能
+            document.getElementById('humanInputMessage').addEventListener('keydown', function(e) {
+                if (e.key === 'Enter' && !e.shiftKey) {
+                    e.preventDefault();
+                    sendHumanInput();
+                }
+            });
             
-            // 初始设置活跃模式
-                setActiveChatMode(chatModeElement.value);
-            }
+            // 初始化高亮代码块
+            highlightCodeBlocks();
+            
+            // 初始化代码块复制按钮
+            setupCodeBlockCopyButtons();
             
             // 设置讨论组选择的事件监听器
             if (discussionGroupSelect) {
@@ -3320,8 +3344,7 @@ document.addEventListener("DOMContentLoaded", function() {
     function resetChat() {
         chatMessages.innerHTML = `
             <div class="welcome-message">
-                <h3 data-translate="welcomeToChat">欢迎使用 DeepGemini 对话界面</h3>
-                <p data-translate="chatInstructions">选择聊天模式并开始对话</p>
+                <h4 data-translate="welcomeToChat">ChatDeepGemini</h4>
             </div>
         `;
         
@@ -3416,8 +3439,8 @@ document.addEventListener("DOMContentLoaded", function() {
             discussionTopic: '讨论主题',
             exportMarkdown: '导出对话',
             send: '发送',
-            welcomeToChat: '欢迎使用 DeepGemini 对话界面',
-            chatInstructions: '选择聊天模式并开始对话',
+            ChatDeepGemini: 'ChatDeepGemini',
+            chatInstructions: '选择模式并开始对话',
             speakingAs: '正在以',
             identity: '身份发言',
             submitMessage: '提交发言'
@@ -4467,4 +4490,261 @@ async function handleAIReply(prompt, isFollowUp, messageHistory, thinking) {
     }
     
     // ... existing code ...
+}
+
+/**
+ * 导出讨论组对话为Markdown
+ * 专门针对讨论组模式优化的导出功能
+ */
+function exportGroupDiscussion() {
+    console.log('开始导出讨论组对话为Markdown文件');
+    
+    // 获取当前讨论组信息
+    const groupId = discussionGroupSelect.value;
+    const groupOption = discussionGroupSelect.options[discussionGroupSelect.selectedIndex];
+    const groupName = groupOption ? groupOption.textContent : '未知讨论组';
+    
+    // 获取讨论主题
+    const discussionTopic = document.getElementById('discussionTopic').value || '未设置主题';
+    
+    // 创建Markdown文本
+    let markdownContent = `# DeepGemini 讨论组记录\n\n`;
+    markdownContent += `导出时间: ${new Date().toLocaleString()}\n\n`;
+    markdownContent += `讨论组: ${groupName}\n\n`;
+    markdownContent += `讨论主题: ${discussionTopic}\n\n`;
+    markdownContent += `---\n\n`;
+    
+    // 获取聊天容器
+    const chatContainer = document.getElementById('chatMessages');
+    
+    // 查找讨论内容 - 首先尝试找discussion-round
+    const discussionRounds = chatContainer.querySelectorAll('.discussion-round');
+    
+    // 先检查是否有主题的显示元素
+    const topicEl = chatContainer.querySelector('.discussion-topic');
+    if (topicEl) {
+        const topicTitle = topicEl.textContent || '未识别主题';
+        markdownContent += `## ${topicTitle}\n\n`;
+    }
+    
+    let hasContent = false;
+    
+    // 如果有讨论轮次，使用轮次结构导出
+    if (discussionRounds.length > 0) {
+        hasContent = true;
+        discussionRounds.forEach((round, index) => {
+            // 获取轮次标题
+            const roundTitle = round.querySelector('.discussion-round-title');
+            const title = roundTitle ? roundTitle.textContent : `讨论轮次 ${index + 1}`;
+            
+            markdownContent += `## ${title}\n\n`;
+            
+            // 获取该轮次内的所有消息
+            const agentMessages = round.querySelectorAll('.agent-message');
+            agentMessages.forEach(message => {
+                // 获取角色名称和角色标签
+                const nameEl = message.querySelector('.agent-name');
+                const name = nameEl ? nameEl.textContent : '参与者';
+                
+                const badgeEl = message.querySelector('.agent-badge');
+                const badge = badgeEl ? badgeEl.textContent : '';
+                
+                let header = `### ${name}`;
+                if (badge) {
+                    header += ` (${badge})`;
+                }
+                
+                // 获取消息内容
+                const contentEl = message.querySelector('.agent-content');
+                if (!contentEl) return;
+                
+                // 将HTML内容转换为Markdown
+                let content = contentEl.innerHTML;
+                
+                // 处理代码块
+                const codeBlocks = contentEl.querySelectorAll('pre code');
+                codeBlocks.forEach(block => {
+                    const language = block.className.replace('language-', '').replace('dark-code', '').trim() || '';
+                    const code = block.textContent;
+                    const codeMarkdown = `\`\`\`${language}\n${code}\n\`\`\``;
+                    
+                    // 在内容中替换代码块
+                    content = content.replace(block.parentNode.outerHTML, codeMarkdown);
+                });
+                
+                // 简单处理HTML转Markdown
+                content = content
+                    .replace(/<\/?p>/g, '\n')
+                    .replace(/<br\s*\/?>/g, '\n')
+                    .replace(/<\/?strong>/g, '**')
+                    .replace(/<\/?em>/g, '_')
+                    .replace(/<\/?code>/g, '`')
+                    .replace(/<\/?[^>]+(>|$)/g, '') // 删除其他HTML标签
+                    .trim();
+                
+                // 添加到Markdown文本
+                markdownContent += `${header}\n\n${content}\n\n`;
+            });
+            
+            markdownContent += `---\n\n`;
+        });
+    } else {
+        // 如果没有轮次结构，直接查找agent-message元素
+        const agentMessages = chatContainer.querySelectorAll('.agent-message');
+        if (agentMessages.length > 0) {
+            hasContent = true;
+            markdownContent += `## 讨论内容\n\n`;
+            
+            agentMessages.forEach(message => {
+                // 检查是否在等待人类输入的状态
+                if (message.classList.contains('waiting-human')) {
+                    return; // 跳过等待状态的消息
+                }
+                
+                // 获取角色名称和角色标签
+                const nameEl = message.querySelector('.agent-name');
+                const name = nameEl ? nameEl.textContent : '参与者';
+                
+                const badgeEl = message.querySelector('.agent-badge');
+                const badge = badgeEl ? badgeEl.textContent : '';
+                
+                let header = `### ${name}`;
+                if (badge) {
+                    header += ` (${badge})`;
+                }
+                
+                // 获取消息内容
+                const contentEl = message.querySelector('.agent-content');
+                if (!contentEl) return;
+                
+                // 检查内容是否为"等待人类输入..."
+                if (contentEl.textContent.trim() === "等待人类输入...") {
+                    return; // 跳过等待人类输入的消息
+                }
+                
+                // 将HTML内容转换为Markdown
+                let content = contentEl.innerHTML;
+                
+                // 处理代码块
+                const codeBlocks = contentEl.querySelectorAll('pre code');
+                codeBlocks.forEach(block => {
+                    const language = block.className.replace('language-', '').replace('dark-code', '').trim() || '';
+                    const code = block.textContent;
+                    const codeMarkdown = `\`\`\`${language}\n${code}\n\`\`\``;
+                    
+                    // 在内容中替换代码块
+                    content = content.replace(block.parentNode.outerHTML, codeMarkdown);
+                });
+                
+                // 简单处理HTML转Markdown
+                content = content
+                    .replace(/<\/?p>/g, '\n')
+                    .replace(/<br\s*\/?>/g, '\n')
+                    .replace(/<\/?strong>/g, '**')
+                    .replace(/<\/?em>/g, '_')
+                    .replace(/<\/?code>/g, '`')
+                    .replace(/<\/?[^>]+(>|$)/g, '') // 删除其他HTML标签
+                    .trim();
+                
+                // 添加到Markdown文本
+                markdownContent += `${header}\n\n${content}\n\n`;
+            });
+            
+            markdownContent += `---\n\n`;
+        }
+    }
+    
+    // 如果没有找到任何内容，尝试导出普通消息
+    if (!hasContent) {
+        const messageContainers = chatContainer.querySelectorAll('.message-container');
+        if (messageContainers.length > 0) {
+            hasContent = true;
+            markdownContent += `## 对话内容\n\n`;
+            
+            messageContainers.forEach(container => {
+                // 跳过欢迎消息
+                if (container.classList.contains('welcome-message')) {
+                    return;
+                }
+                
+                // 获取消息角色和名称
+                const role = container.classList.contains('ai') ? 'AI' : 
+                             container.classList.contains('user') ? '用户' : 
+                             container.classList.contains('system') ? '系统' : '其他';
+                             
+                const nameElement = container.querySelector('.message-name');
+                const name = nameElement ? nameElement.textContent : role;
+                
+                // 获取消息内容
+                const contentElement = container.querySelector('.message-content');
+                if (!contentElement) return;
+                
+                // 将HTML内容转换为Markdown
+                let content = contentElement.innerHTML;
+                
+                // 处理代码块
+                const codeBlocks = contentElement.querySelectorAll('pre code');
+                codeBlocks.forEach(block => {
+                    const language = block.className.replace('language-', '').replace('dark-code', '').trim() || '';
+                    const code = block.textContent;
+                    const codeMarkdown = `\`\`\`${language}\n${code}\n\`\`\``;
+                    
+                    // 在内容中替换代码块
+                    content = content.replace(block.parentNode.outerHTML, codeMarkdown);
+                });
+                
+                // 简单处理HTML转Markdown
+                content = content
+                    .replace(/<\/?p>/g, '\n')
+                    .replace(/<br\s*\/?>/g, '\n')
+                    .replace(/<\/?strong>/g, '**')
+                    .replace(/<\/?em>/g, '_')
+                    .replace(/<\/?code>/g, '`')
+                    .replace(/<\/?[^>]+(>|$)/g, '') // 删除其他HTML标签
+                    .trim();
+                
+                // 添加到Markdown文本
+                markdownContent += `### ${name}\n\n${content}\n\n`;
+            });
+        }
+    }
+    
+    // 如果仍然没有找到任何内容
+    if (!hasContent) {
+        markdownContent += `*暂无讨论内容*\n\n`;
+    }
+    
+    // 创建下载链接
+    const blob = new Blob([markdownContent], { type: 'text/markdown' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    
+    // 设置文件名
+    const fileName = `deepgemini-discussion-${groupName.replace(/\s+/g, '-')}-${Date.now()}.md`;
+    link.download = fileName;
+    
+    // 触发下载
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
+    
+    // // 显示成功消息
+    // const successMessage = document.createElement('div');
+    // successMessage.className = 'alert alert-success alert-dismissible fade show';
+    // successMessage.role = 'alert';
+    // successMessage.innerHTML = `
+    //     <strong>导出成功!</strong> 讨论已保存为Markdown文件。
+    //     <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+    // `;
+    
+    // // 添加到页面
+    // const chatContainer2 = document.querySelector('.chat-container');
+    // chatContainer2.insertBefore(successMessage, chatContainer2.firstChild);
+    
+    // // 自动消失
+    // setTimeout(() => {
+    //     successMessage.remove();
+    // }, 3000);
 }
