@@ -774,20 +774,13 @@ document.addEventListener("DOMContentLoaded", function() {
     
     // 设置活动的聊天模式
     function setActiveChatMode(mode) {
-        currentChatMode = mode;
+        // 隐藏所有设置区域
+        document.querySelectorAll('.chat-setting-section').forEach(el => {
+            el.classList.add('d-none');
+        });
         
-        console.log('设置聊天模式:', mode);
-        
-        // 隐藏所有设置部分
-        if (settingSections) {
-            settingSections.forEach(section => {
-                section.classList.add('d-none');
-            });
-        }
-        
-        // 根据不同的模式找到对应的设置区域ID
-        let settingSectionId = null;
-        
+        // 映射模式到正确的设置区域ID
+        let settingSectionId = '';
         switch(mode) {
             case 'single':
                 settingSectionId = 'single-model-settings';
@@ -800,28 +793,67 @@ document.addEventListener("DOMContentLoaded", function() {
                 break;
             case 'group':
                 settingSectionId = 'discussion-group-settings';
+                
                 // 确保讨论组ID与选择器同步
+                const discussionGroupSelect = document.getElementById('discussionGroupSelect');
                 if (discussionGroupSelect && discussionGroupSelect.value) {
                     currentGroupId = discussionGroupSelect.value;
                     console.log('切换到讨论组模式，当前讨论组ID:', currentGroupId);
                 }
                 break;
+            default:
+                settingSectionId = 'single-model-settings';
         }
         
-        console.log('要显示的设置区域ID:', settingSectionId);
-        
-        // 显示当前模式的设置
+        // 显示选择的设置区域
         const settingSection = document.getElementById(settingSectionId);
-        
         if (settingSection) {
             settingSection.classList.remove('d-none');
-            console.log('成功显示设置区域');
+            console.log('显示设置区域:', settingSectionId);
         } else {
             console.error('未找到设置区域:', settingSectionId);
         }
         
-        // 重置聊天
+        // 重置讨论历史
         resetChat();
+        
+        // 处理讨论组模式的特殊UI
+        const normalChatInput = document.getElementById('normalChatInput');
+        const discussionTopicInput = document.getElementById('discussionTopicInput');
+        
+        if (mode === 'group') {
+            // 讨论组模式: 隐藏普通输入，显示主题输入
+            if (normalChatInput) normalChatInput.classList.add('d-none');
+            if (discussionTopicInput) discussionTopicInput.classList.remove('d-none');
+            
+            // 切换发送按钮事件
+            const startDiscussionBtn = document.getElementById('startDiscussionBtn');
+            if (startDiscussionBtn) {
+                startDiscussionBtn.onclick = function() {
+                    const topicInput = document.getElementById('discussionTopicMessage');
+                    const groupSelect = document.getElementById('discussionGroupSelect');
+                    
+                    if (groupSelect && groupSelect.value && topicInput && topicInput.value && topicInput.value.trim()) {
+                        handleGroupChat(topicInput.value.trim());
+                    } else {
+                        let errorMsg = '创建讨论失败: ';
+                        if (!groupSelect || !groupSelect.value) {
+                            errorMsg += '请选择讨论组';
+                        } else if (!topicInput || !topicInput.value || !topicInput.value.trim()) {
+                            errorMsg += '请输入讨论主题';
+                        }
+                        showError(errorMsg);
+                    }
+                };
+            }
+        } else {
+            // 其他模式: 显示普通输入，隐藏主题输入
+            if (normalChatInput) normalChatInput.classList.remove('d-none');
+            if (discussionTopicInput) discussionTopicInput.classList.add('d-none');
+        }
+        
+        // 更新当前模式
+        currentChatMode = mode;
     }
     
     // 加载模型列表
@@ -1463,7 +1495,6 @@ document.addEventListener("DOMContentLoaded", function() {
                                             console.log(`强制显示人类输入区域给 ${currentSpeaker}`);
                                             isWaitingForHumanInput = true;
                                             humanInputArea.classList.remove('d-none');
-                                            document.querySelector('.chat-input').classList.add('d-none');
                                             
                                             // 添加提示消息
                                             // addMessageToChat('system', `轮到 ${currentSpeaker} (人类角色) 发言，请输入您的发言内容`);
@@ -1966,7 +1997,7 @@ document.addEventListener("DOMContentLoaded", function() {
                 return false;
             }
             
-            if (!discussionTopic.value.trim()) {
+            if (!message || !message.trim()) {
                 showError('请输入讨论主题');
                 return false;
             }
@@ -1975,15 +2006,15 @@ document.addEventListener("DOMContentLoaded", function() {
             showLoading();
             
             // 获取API密钥
-        const apiKey = getCurrentApiKey();
-        
+            const apiKey = getCurrentApiKey();
+            
             // 清空消息区域
             chatMessages.innerHTML = '';
             
             // 添加主题头部
             const topicEl = document.createElement('div');
             topicEl.classList.add('discussion-topic');
-            topicEl.innerHTML = `<h3>讨论主题: ${discussionTopic.value.trim()}</h3>`;
+            topicEl.innerHTML = `<h3>讨论主题: ${message.trim()}</h3>`;
             chatMessages.appendChild(topicEl);
             
             // 使用OpenAI兼容API进行流式请求
@@ -1995,7 +2026,7 @@ document.addEventListener("DOMContentLoaded", function() {
                     },
                     body: JSON.stringify({
                     model: `group-${currentGroupId}`,
-                    messages: [{ role: 'user', content: discussionTopic.value.trim() }],
+                    messages: [{ role: 'user', content: message.trim() }],
                     stream: true
                     })
                 });
@@ -2151,7 +2182,6 @@ document.addEventListener("DOMContentLoaded", function() {
                                             console.log(`强制显示人类输入区域给 ${currentSpeaker}`);
                                             isWaitingForHumanInput = true;
                                             humanInputArea.classList.remove('d-none');
-                                            document.querySelector('.chat-input').classList.add('d-none');
                                             
                                             // 添加提示消息
                                             // addMessageToChat('system', `轮到 ${currentSpeaker} (人类角色) 发言，请输入您的发言内容`);
@@ -2798,7 +2828,15 @@ document.addEventListener("DOMContentLoaded", function() {
                 // 重置等待状态
             isWaitingForHumanInput = false;
                 humanInputArea.classList.add('d-none');
-                document.querySelector('.chat-input').classList.remove('d-none');
+                
+                // 根据当前模式决定是否显示其他输入区域
+                if (currentChatMode === 'group') {
+                    // 讨论组模式下，不需要显示任何输入区域
+                    console.log('讨论组模式：人类发言失败，不显示额外输入区域');
+                } else {
+                    // 非讨论组模式下，显示普通聊天输入区域
+                    document.querySelector('.chat-input').classList.remove('d-none');
+                }
                 
                 return;
             }
@@ -2838,7 +2876,18 @@ document.addEventListener("DOMContentLoaded", function() {
 
             // 隐藏人类输入区域，显示普通聊天输入区域
             humanInputArea.classList.add('d-none');
-            document.querySelector('.chat-input').classList.remove('d-none');
+
+            // 根据当前模式决定是否显示其他输入区域
+            if (currentChatMode === 'group') {
+                // 讨论组模式下，不需要显示任何输入区域
+                console.log('讨论组模式：人类发言失败，不显示额外输入区域');
+            } else {
+                // 非讨论组模式下，显示普通聊天输入区域
+                const normalChatInput = document.getElementById('normalChatInput');
+                if (normalChatInput) {
+                    normalChatInput.classList.remove('d-none');
+                }
+            }
 
             // 删除所有与等待人类输入相关的临时消息
             console.log("正在清理所有与人类输入相关的UI元素");
@@ -3181,6 +3230,18 @@ document.addEventListener("DOMContentLoaded", function() {
     
     // 添加消息到聊天界面
     function addMessageToChat(role, content, speakerName = null) {
+        // 确保content是字符串类型
+        if (content === null || content === undefined) {
+            content = "";
+        } else if (typeof content !== 'string') {
+            try {
+                content = String(content);
+            } catch (e) {
+                console.error('无法将内容转换为字符串:', e);
+                content = "消息内容格式错误";
+            }
+        }
+        
         // 创建一个唯一标识符
         const messageId = `message-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
         
@@ -3218,8 +3279,13 @@ document.addEventListener("DOMContentLoaded", function() {
         const messageContent = document.createElement('div');
         messageContent.classList.add('message-content');
         
-        // 使用markdown渲染内容，使得代码和格式更好看
-        messageContent.innerHTML = marked.parse(content);
+        // 使用try-catch包裹markdown解析，避免解析错误
+        try {
+            messageContent.innerHTML = marked.parse(content);
+        } catch (e) {
+            console.error('Markdown解析失败:', e);
+            messageContent.textContent = content; // 直接显示原始内容作为后备
+        }
         
         // 使用统一的代码块处理函数
         setTimeout(() => {
@@ -3299,17 +3365,31 @@ document.addEventListener("DOMContentLoaded", function() {
                 const agentContent = document.createElement('div');
                 agentContent.className = 'agent-content';
                 
+                // 确保消息内容是字符串
+                let messageContent = message.content;
+                if (messageContent === null || messageContent === undefined) {
+                    messageContent = "";
+                } else if (typeof messageContent !== 'string') {
+                    try {
+                        messageContent = String(messageContent);
+                    } catch (e) {
+                        console.error('无法将内容转换为字符串:', e);
+                        messageContent = "消息内容格式错误";
+                    }
+                }
+                
                 // 使用marked处理消息内容中的Markdown
-                let processedContent = message.content;
                 try {
                     if (window.marked) {
-                        processedContent = marked.parse(message.content);
+                        agentContent.innerHTML = marked.parse(messageContent);
+                    } else {
+                        agentContent.textContent = messageContent;
                     }
                 } catch (e) {
                     console.error('Markdown解析失败:', e);
+                    agentContent.textContent = messageContent; // 直接显示原始内容作为后备
                 }
                 
-                agentContent.innerHTML = processedContent;
                 agentMessageContainer.appendChild(agentContent);
                 
                 // 添加消息到轮次容器
@@ -3365,7 +3445,20 @@ document.addEventListener("DOMContentLoaded", function() {
         
         // 隐藏人类输入区域
         humanInputArea.classList.add('d-none');
-        document.querySelector('.chat-input').classList.remove('d-none');
+        
+        // 根据当前模式显示正确的输入区域
+        const normalChatInput = document.getElementById('normalChatInput');
+        const discussionTopicInput = document.getElementById('discussionTopicInput');
+        
+        if (currentChatMode === 'group') {
+            // 讨论组模式: 显示主题输入区
+            if (normalChatInput) normalChatInput.classList.add('d-none');
+            if (discussionTopicInput) discussionTopicInput.classList.remove('d-none');
+        } else {
+            // 其他模式: 显示普通输入区
+            if (normalChatInput) normalChatInput.classList.remove('d-none');
+            if (discussionTopicInput) discussionTopicInput.classList.add('d-none');
+        }
     }
     
     // 显示错误消息
@@ -3642,11 +3735,20 @@ document.addEventListener("DOMContentLoaded", function() {
             console.error("找不到 humanInputArea 元素");
         }
         
-        const chatInputElem = document.querySelector('.chat-input');
-        if (chatInputElem) {
-            chatInputElem.classList.add('d-none');
+        // 在讨论组模式下，隐藏主题输入区域
+        if (currentChatMode === 'group') {
+            const discussionTopicInput = document.getElementById('discussionTopicInput');
+            if (discussionTopicInput) {
+                discussionTopicInput.classList.add('d-none');
+            }
         } else {
-            console.error("找不到 .chat-input 元素");
+            // 非讨论组模式下，隐藏普通聊天输入
+            const chatInputElem = document.getElementById('normalChatInput');
+            if (chatInputElem) {
+                chatInputElem.classList.add('d-none');
+            } else {
+                console.error("找不到 normalChatInput 元素");
+            }
         }
         
         // 首先移除所有现有的人类输入状态指示器
@@ -4299,9 +4401,22 @@ function setupMarkedOptions() {
             return highlightedCode;
         };
         
-        // 防止HTML代码块被渲染，直接显示原始HTML代码
+        // 重写html渲染器，以确保HTML代码不被误渲染
         renderer.html = function(html) {
-            if (html.trim().startsWith('<') && html.trim().endsWith('>')) {
+            // 确保html参数是字符串类型
+            if (html === null || html === undefined) {
+                html = '';
+            } else if (typeof html !== 'string') {
+                try {
+                    html = String(html);
+                } catch (e) {
+                    console.error('无法将HTML内容转换为字符串:', e);
+                    html = '';
+                }
+            }
+            
+            // 继续处理现在一定是字符串的html参数
+            if (html.trim && html.trim().startsWith('<') && html.trim().endsWith('>')) {
                 // 对HTML代码进行转义，防止被渲染
                 return `<pre><code class="language-html">${escapeHtml(html)}</code></pre>`;
             }
@@ -4505,7 +4620,17 @@ function exportGroupDiscussion() {
     const groupName = groupOption ? groupOption.textContent : '未知讨论组';
     
     // 获取讨论主题
-    const discussionTopic = document.getElementById('discussionTopic').value || '未设置主题';
+    let discussionTopic = '未设置主题';
+    const topicElement = document.getElementById('discussionTopic');
+    if (topicElement && topicElement.value) {
+        discussionTopic = topicElement.value;
+    } else {
+        // 如果没有找到discussionTopic元素或其值为空，尝试从页面中的讨论主题元素获取
+        const topicEl = document.querySelector('.discussion-topic');
+        if (topicEl) {
+            discussionTopic = topicEl.textContent || '未设置主题';
+        }
+    }
     
     // 创建Markdown文本
     let markdownContent = `# DeepGemini 讨论组记录\n\n`;
@@ -4517,9 +4642,6 @@ function exportGroupDiscussion() {
     // 获取聊天容器
     const chatContainer = document.getElementById('chatMessages');
     
-    // 查找讨论内容 - 首先尝试找discussion-round
-    const discussionRounds = chatContainer.querySelectorAll('.discussion-round');
-    
     // 先检查是否有主题的显示元素
     const topicEl = chatContainer.querySelector('.discussion-topic');
     if (topicEl) {
@@ -4528,78 +4650,31 @@ function exportGroupDiscussion() {
     }
     
     let hasContent = false;
+    let messagesForExport = [];
     
-    // 如果有讨论轮次，使用轮次结构导出
+    // 新方法：按DOM顺序收集所有消息
+    
+    // 1. 首先检查讨论轮次结构
+    const discussionRounds = chatContainer.querySelectorAll('.discussion-round');
     if (discussionRounds.length > 0) {
         hasContent = true;
-        discussionRounds.forEach((round, index) => {
+        // 对于每个讨论轮次
+        discussionRounds.forEach((round, roundIndex) => {
             // 获取轮次标题
             const roundTitle = round.querySelector('.discussion-round-title');
-            const title = roundTitle ? roundTitle.textContent : `讨论轮次 ${index + 1}`;
+            const title = roundTitle ? roundTitle.textContent : `讨论轮次 ${roundIndex + 1}`;
             
-            markdownContent += `## ${title}\n\n`;
+            // 添加轮次信息
+            messagesForExport.push({
+                type: 'round-title',
+                title: title,
+                roundIndex: roundIndex
+            });
             
             // 获取该轮次内的所有消息
             const agentMessages = round.querySelectorAll('.agent-message');
             agentMessages.forEach(message => {
-                // 获取角色名称和角色标签
-                const nameEl = message.querySelector('.agent-name');
-                const name = nameEl ? nameEl.textContent : '参与者';
-                
-                const badgeEl = message.querySelector('.agent-badge');
-                const badge = badgeEl ? badgeEl.textContent : '';
-                
-                let header = `### ${name}`;
-                if (badge) {
-                    header += ` (${badge})`;
-                }
-                
-                // 获取消息内容
-                const contentEl = message.querySelector('.agent-content');
-                if (!contentEl) return;
-                
-                // 将HTML内容转换为Markdown
-                let content = contentEl.innerHTML;
-                
-                // 处理代码块
-                const codeBlocks = contentEl.querySelectorAll('pre code');
-                codeBlocks.forEach(block => {
-                    const language = block.className.replace('language-', '').replace('dark-code', '').trim() || '';
-                    const code = block.textContent;
-                    const codeMarkdown = `\`\`\`${language}\n${code}\n\`\`\``;
-                    
-                    // 在内容中替换代码块
-                    content = content.replace(block.parentNode.outerHTML, codeMarkdown);
-                });
-                
-                // 简单处理HTML转Markdown
-                content = content
-                    .replace(/<\/?p>/g, '\n')
-                    .replace(/<br\s*\/?>/g, '\n')
-                    .replace(/<\/?strong>/g, '**')
-                    .replace(/<\/?em>/g, '_')
-                    .replace(/<\/?code>/g, '`')
-                    .replace(/<\/?[^>]+(>|$)/g, '') // 删除其他HTML标签
-                    .trim();
-                
-                // 添加到Markdown文本
-                markdownContent += `${header}\n\n${content}\n\n`;
-            });
-            
-            markdownContent += `---\n\n`;
-        });
-    } else {
-        // 如果没有轮次结构，直接查找agent-message元素
-        const agentMessages = chatContainer.querySelectorAll('.agent-message');
-        if (agentMessages.length > 0) {
-            hasContent = true;
-            markdownContent += `## 讨论内容\n\n`;
-            
-            agentMessages.forEach(message => {
-                // 检查是否在等待人类输入的状态
-                if (message.classList.contains('waiting-human')) {
-                    return; // 跳过等待状态的消息
-                }
+                if (message.classList.contains('waiting-human')) return; // 跳过等待状态
                 
                 // 获取角色名称和角色标签
                 const nameEl = message.querySelector('.agent-name');
@@ -4607,111 +4682,181 @@ function exportGroupDiscussion() {
                 
                 const badgeEl = message.querySelector('.agent-badge');
                 const badge = badgeEl ? badgeEl.textContent : '';
-                
-                let header = `### ${name}`;
-                if (badge) {
-                    header += ` (${badge})`;
-                }
                 
                 // 获取消息内容
                 const contentEl = message.querySelector('.agent-content');
                 if (!contentEl) return;
                 
                 // 检查内容是否为"等待人类输入..."
-                if (contentEl.textContent.trim() === "等待人类输入...") {
-                    return; // 跳过等待人类输入的消息
-                }
+                if (contentEl.textContent.trim() === "等待人类输入...") return;
                 
-                // 将HTML内容转换为Markdown
-                let content = contentEl.innerHTML;
-                
-                // 处理代码块
-                const codeBlocks = contentEl.querySelectorAll('pre code');
-                codeBlocks.forEach(block => {
-                    const language = block.className.replace('language-', '').replace('dark-code', '').trim() || '';
-                    const code = block.textContent;
-                    const codeMarkdown = `\`\`\`${language}\n${code}\n\`\`\``;
-                    
-                    // 在内容中替换代码块
-                    content = content.replace(block.parentNode.outerHTML, codeMarkdown);
+                // 将消息添加到数组
+                messagesForExport.push({
+                    type: 'agent',
+                    name: name,
+                    badge: badge,
+                    content: contentEl.innerHTML,
+                    element: message,
+                    roundIndex: roundIndex
                 });
-                
-                // 简单处理HTML转Markdown
-                content = content
-                    .replace(/<\/?p>/g, '\n')
-                    .replace(/<br\s*\/?>/g, '\n')
-                    .replace(/<\/?strong>/g, '**')
-                    .replace(/<\/?em>/g, '_')
-                    .replace(/<\/?code>/g, '`')
-                    .replace(/<\/?[^>]+(>|$)/g, '') // 删除其他HTML标签
-                    .trim();
-                
-                // 添加到Markdown文本
-                markdownContent += `${header}\n\n${content}\n\n`;
             });
             
-            markdownContent += `---\n\n`;
-        }
-    }
-    
-    // 如果没有找到任何内容，尝试导出普通消息
-    if (!hasContent) {
-        const messageContainers = chatContainer.querySelectorAll('.message-container');
-        if (messageContainers.length > 0) {
+            // 添加轮次分隔符
+            messagesForExport.push({
+                type: 'separator',
+                roundIndex: roundIndex
+            });
+        });
+    } else {
+        // 2. 如果没有轮次结构，收集独立的agent-message
+        const agentMessages = chatContainer.querySelectorAll('.agent-message');
+        if (agentMessages.length > 0) {
             hasContent = true;
-            markdownContent += `## 对话内容\n\n`;
-            
-            messageContainers.forEach(container => {
-                // 跳过欢迎消息
-                if (container.classList.contains('welcome-message')) {
-                    return;
-                }
+            agentMessages.forEach((message, index) => {
+                if (message.classList.contains('waiting-human')) return; // 跳过等待状态
                 
-                // 获取消息角色和名称
-                const role = container.classList.contains('ai') ? 'AI' : 
-                             container.classList.contains('user') ? '用户' : 
-                             container.classList.contains('system') ? '系统' : '其他';
-                             
-                const nameElement = container.querySelector('.message-name');
-                const name = nameElement ? nameElement.textContent : role;
+                // 获取角色名称和角色标签
+                const nameEl = message.querySelector('.agent-name');
+                const name = nameEl ? nameEl.textContent : '参与者';
+                
+                const badgeEl = message.querySelector('.agent-badge');
+                const badge = badgeEl ? badgeEl.textContent : '';
                 
                 // 获取消息内容
-                const contentElement = container.querySelector('.message-content');
-                if (!contentElement) return;
+                const contentEl = message.querySelector('.agent-content');
+                if (!contentEl) return;
                 
-                // 将HTML内容转换为Markdown
-                let content = contentElement.innerHTML;
+                // 检查内容是否为"等待人类输入..."
+                if (contentEl.textContent.trim() === "等待人类输入...") return;
                 
-                // 处理代码块
-                const codeBlocks = contentElement.querySelectorAll('pre code');
-                codeBlocks.forEach(block => {
-                    const language = block.className.replace('language-', '').replace('dark-code', '').trim() || '';
-                    const code = block.textContent;
-                    const codeMarkdown = `\`\`\`${language}\n${code}\n\`\`\``;
-                    
-                    // 在内容中替换代码块
-                    content = content.replace(block.parentNode.outerHTML, codeMarkdown);
+                // 将消息添加到数组
+                messagesForExport.push({
+                    type: 'agent',
+                    name: name,
+                    badge: badge,
+                    content: contentEl.innerHTML,
+                    element: message,
+                    index: index
                 });
-                
-                // 简单处理HTML转Markdown
-                content = content
-                    .replace(/<\/?p>/g, '\n')
-                    .replace(/<br\s*\/?>/g, '\n')
-                    .replace(/<\/?strong>/g, '**')
-                    .replace(/<\/?em>/g, '_')
-                    .replace(/<\/?code>/g, '`')
-                    .replace(/<\/?[^>]+(>|$)/g, '') // 删除其他HTML标签
-                    .trim();
-                
-                // 添加到Markdown文本
-                markdownContent += `### ${name}\n\n${content}\n\n`;
             });
         }
     }
     
-    // 如果仍然没有找到任何内容
-    if (!hasContent) {
+    // 3. 收集普通的message-container消息（包括用户消息）
+    const messageContainers = chatContainer.querySelectorAll('.message-container');
+    if (messageContainers.length > 0) {
+        hasContent = true;
+        messageContainers.forEach((container, index) => {
+            // 跳过欢迎消息
+            if (container.classList.contains('welcome-message')) return;
+            
+            // 获取消息角色和名称
+            const role = container.classList.contains('ai') ? 'AI' : 
+                        container.classList.contains('user') ? '用户' : 
+                        container.classList.contains('system') ? '系统' : '其他';
+                        
+            const nameElement = container.querySelector('.message-name');
+            const name = nameElement ? nameElement.textContent : role;
+            
+            // 获取消息内容
+            const contentElement = container.querySelector('.message-content');
+            if (!contentElement) return;
+            
+            // 将消息添加到数组
+            messagesForExport.push({
+                type: 'message',
+                role: role,
+                name: name,
+                content: contentElement.innerHTML,
+                element: container,
+                index: index
+            });
+        });
+    }
+    
+    // 如果没有任何内容，添加说明
+    if (!hasContent || messagesForExport.length === 0) {
         markdownContent += `*暂无讨论内容*\n\n`;
+    } else {
+        // 按照DOM顺序排序消息
+        // 使用compareDocumentPosition API来比较元素在DOM中的位置
+        messagesForExport.sort((a, b) => {
+            // 如果是轮次标题或分隔符，按轮次索引排序
+            if ((a.type === 'round-title' || a.type === 'separator') && 
+                (b.type === 'round-title' || b.type === 'separator')) {
+                return a.roundIndex - b.roundIndex;
+            }
+            
+            // 轮次标题始终排在其轮次的消息之前
+            if (a.type === 'round-title' && a.roundIndex === b.roundIndex) {
+                return -1;
+            }
+            
+            // 轮次分隔符始终排在其轮次的消息之后
+            if (a.type === 'separator' && a.roundIndex === b.roundIndex) {
+                return 1;
+            }
+            
+            // 如果没有DOM元素，则按索引排序
+            if (!a.element || !b.element) {
+                if (a.roundIndex !== undefined && b.roundIndex !== undefined) {
+                    return a.roundIndex - b.roundIndex;
+                }
+                return (a.index || 0) - (b.index || 0);
+            }
+            
+            // 使用compareDocumentPosition比较DOM位置
+            const position = a.element.compareDocumentPosition(b.element);
+            
+            // 检查是否前后关系
+            if (position & Node.DOCUMENT_POSITION_FOLLOWING) {
+                return -1; // a在b之前
+            }
+            if (position & Node.DOCUMENT_POSITION_PRECEDING) {
+                return 1;  // a在b之后
+            }
+            return 0; // 相同位置（不太可能发生）
+        });
+        
+        // 添加统一的讨论内容标题
+        markdownContent += `## 讨论内容\n\n`;
+        
+        // 处理排序后的消息
+        let currentRoundIndex = -1;
+        messagesForExport.forEach(msg => {
+            switch (msg.type) {
+                case 'round-title':
+                    markdownContent += `### ${msg.title}\n\n`;
+                    currentRoundIndex = msg.roundIndex;
+                    break;
+                    
+                case 'separator':
+                    markdownContent += `---\n\n`;
+                    break;
+                    
+                case 'agent':
+                    let header = `#### ${msg.name}`;
+                    if (msg.badge) {
+                        header += ` (${msg.badge})`;
+                    }
+                    
+                    // 处理消息内容
+                    let content = processContentToMarkdown(msg.content);
+                    
+                    // 添加到Markdown文本
+                    markdownContent += `${header}\n\n${content}\n\n`;
+                    break;
+                    
+                case 'message':
+                    let msgHeader = `#### ${msg.name}`;
+                    // 处理消息内容
+                    let msgContent = processContentToMarkdown(msg.content);
+                    
+                    // 添加到Markdown文本
+                    markdownContent += `${msgHeader}\n\n${msgContent}\n\n`;
+                    break;
+            }
+        });
     }
     
     // 创建下载链接
@@ -4729,22 +4874,36 @@ function exportGroupDiscussion() {
     link.click();
     document.body.removeChild(link);
     URL.revokeObjectURL(url);
+}
+
+// 辅助函数：将HTML内容转换为Markdown
+function processContentToMarkdown(htmlContent) {
+    let content = htmlContent;
     
-    // // 显示成功消息
-    // const successMessage = document.createElement('div');
-    // successMessage.className = 'alert alert-success alert-dismissible fade show';
-    // successMessage.role = 'alert';
-    // successMessage.innerHTML = `
-    //     <strong>导出成功!</strong> 讨论已保存为Markdown文件。
-    //     <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
-    // `;
+    // 创建一个临时div来处理HTML内容
+    const tempDiv = document.createElement('div');
+    tempDiv.innerHTML = content;
     
-    // // 添加到页面
-    // const chatContainer2 = document.querySelector('.chat-container');
-    // chatContainer2.insertBefore(successMessage, chatContainer2.firstChild);
+    // 处理代码块
+    const codeBlocks = tempDiv.querySelectorAll('pre code');
+    codeBlocks.forEach(block => {
+        const language = block.className.replace('language-', '').replace('dark-code', '').trim() || '';
+        const code = block.textContent;
+        const codeMarkdown = `\`\`\`${language}\n${code}\n\`\`\``;
+        
+        // 在内容中替换代码块
+        content = content.replace(block.parentNode.outerHTML, codeMarkdown);
+    });
     
-    // // 自动消失
-    // setTimeout(() => {
-    //     successMessage.remove();
-    // }, 3000);
+    // 简单处理HTML转Markdown
+    content = content
+        .replace(/<\/?p>/g, '\n')
+        .replace(/<br\s*\/?>/g, '\n')
+        .replace(/<\/?strong>/g, '**')
+        .replace(/<\/?em>/g, '_')
+        .replace(/<\/?code>/g, '`')
+        .replace(/<\/?[^>]+(>|$)/g, '') // 删除其他HTML标签
+        .trim();
+        
+    return content;
 }

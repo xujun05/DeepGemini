@@ -1526,3 +1526,7 @@ body.dark-theme {
     border-top: 1px solid #495057;
     color: #adb5bd;
 }
+
+.dark-theme #addRoleModal .form-text {
+    color: #ced4da !important;
+}

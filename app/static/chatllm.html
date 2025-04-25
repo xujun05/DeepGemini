@@ -194,16 +194,12 @@
 
                     <!-- Discussion Group Settings -->
                     <div class="chat-setting-section d-none" id="discussion-group-settings">
-                        <div class="form-group">
-                            <label data-translate="selectDiscussionGroup">选择讨论组</label>
-                            <select class="form-select" id="discussionGroupSelect"></select>
-                        </div>
-                        <div class="form-group mt-3 d-flex align-items-center">
-                            <div class="flex-grow-1 me-2">
-                                <label data-translate="discussionTopic">讨论主题</label>
-                                <input type="text" class="form-control" id="discussionTopic" placeholder="输入讨论主题">
+                        <div class="form-group d-flex align-items-center justify-content-between">
+                            <div class="flex-grow-1">
+                                <label data-translate="selectDiscussionGroup">选择讨论组</label>
+                                <select class="form-select" id="discussionGroupSelect"></select>
                             </div>
-                            <div class="export-btn-wrapper mt-4">
+                            <div class="ms-3 export-btn-wrapper">
                                 <button id="exportGroupChatBtn" class="btn btn-outline-secondary" title="导出讨论为Markdown">
                                     <i class="fas fa-file-export"></i> <span data-translate="exportDiscussion">导出讨论</span>
                                 </button>
@@ -234,10 +230,16 @@
                     </div>
                 </div>
 
-                <!-- Chat Input -->
-                <div class="chat-input">
+                <!-- Chat Input (隐藏在讨论组模式) -->
+                <div class="chat-input" id="normalChatInput">
                     <textarea class="form-control" id="userMessage" placeholder="输入消息..."></textarea>
                     <button class="btn btn-primary" id="sendMessage" data-translate="send">发送</button>
+                </div>
+                
+                <!-- 讨论组主题发送区域 (只在讨论组模式显示) -->
+                <div class="chat-input d-none" id="discussionTopicInput">
+                    <textarea class="form-control" id="discussionTopicMessage" placeholder="输入讨论主题..."></textarea>
+                    <button class="btn btn-primary" id="startDiscussionBtn" data-translate="startDiscussion">开始讨论</button>
                 </div>
             </div>
         </div>

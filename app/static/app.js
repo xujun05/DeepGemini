@@ -1821,8 +1821,8 @@ async function saveApiKey() {
 
 // 添加成功提示函数
 function showSuccess(message) {
-    // 你可以使用更好的提示系统，这里暂时使用 alert
-    alert(message);
+    // 使用showToast函数显示成功消息
+    showToast('success', message);
 }
 
 async function deleteApiKey(keyId) {
@@ -2630,7 +2630,19 @@ function showToast(type, message) {
     const toastContainer = document.getElementById('toastContainer');
     
     const toast = document.createElement('div');
-    toast.className = `toast align-items-center text-white bg-${type === 'success' ? 'success' : 'danger'} border-0`;
+    // 根据类型设置颜色
+    let bgColor = 'bg-danger';
+    if (type === 'success') {
+        bgColor = 'bg-success';
+        // 添加绿色样式
+        toast.style.backgroundColor = '#28a745';
+    } else if (type === 'warning') {
+        bgColor = 'bg-warning text-dark';
+    } else if (type === 'error') {
+        bgColor = 'bg-danger';
+    }
+    
+    toast.className = `toast align-items-center text-white ${bgColor} border-0`;
     toast.setAttribute('role', 'alert');
     toast.setAttribute('aria-live', 'assertive');
     toast.setAttribute('aria-atomic', 'true');
