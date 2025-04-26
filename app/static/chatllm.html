@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>DeepGemini - ChatLLM 🌟</title>
+    <title>DeepGemini - ChatLLM </title>
     <link rel="icon" type="image/x-icon" href="favicon.ico">
     <link rel="shortcut icon" type="image/x-icon" href="favicon.ico">
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
@@ -11,6 +11,13 @@
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
     <link href="styles.css" rel="stylesheet">
     <link href="css/chatllm.css" rel="stylesheet">
+    <script>
+        window.MathJax = {
+          tex: { inlineMath: [['$', '$'], ['\\(', '\\)']] },
+          svg: { fontCache: 'global' }
+        };
+      </script>
+      <script src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js"></script>
     <style>
         /* 消息名称样式 */
         .message-name {
@@ -84,7 +91,7 @@
             <i class="fas fa-chevron-left"></i>
         </button>
         <div class="sidebar-header">
-            <h3>DeepGemini 🌟</h3>
+            <h3>DeepGemini </h3>
         </div>
         <ul class="sidebar-menu">
             <li data-page="models">
@@ -146,9 +153,9 @@
             <div class="chat-container">
                 <!-- Chat Interface Header -->
                 <div class="chat-header">
-                    <div class="chat-header-title">
+                    <!-- <div class="chat-header-title">
                         <h2 data-translate="chatInterface">对话界面</h2>
-                    </div>
+                    </div> -->
                     <div class="chat-mode-selector">
                         <div class="btn-group" role="group">
                             <input type="radio" class="btn-check" name="chatMode" id="singleModel" value="single" autocomplete="off" checked>
@@ -163,6 +170,8 @@
                             <input type="radio" class="btn-check" name="chatMode" id="discussionGroup" value="group" autocomplete="off">
                             <label class="btn btn-outline-primary" for="discussionGroup" data-translate="discussionGroup">讨论组</label>
                         </div>
+                    </div>
+                    <div class="chat-header-actions-group-mode d-none" id="discussion-export-wrapper">
                     </div>
                 </div>
 
@@ -199,11 +208,6 @@
                                 <label data-translate="selectDiscussionGroup">选择讨论组</label>
                                 <select class="form-select" id="discussionGroupSelect"></select>
                             </div>
-                            <div class="ms-3 export-btn-wrapper">
-                                <button id="exportGroupChatBtn" class="btn btn-outline-secondary" title="导出讨论为Markdown">
-                                    <i class="fas fa-file-export"></i> <span data-translate="exportDiscussion">导出讨论</span>
-                                </button>
-                            </div>
                         </div>
                     </div>
                 </div>
@@ -213,6 +217,8 @@
                     <div class="welcome-message">
                         <h4 data-translate="welcomeToChat">ChatDeepGemini</h4>
                     </div>
+                    <!-- 会议总结消息容器，确保会议总结内容和导出按钮都插入这里 -->
+                    <div id="meeting-summary-container" style="position:relative;"></div>
                 </div>
 
                 <!-- Discussion Group Participant Input (Only shown in Discussion Group mode when human input needed) -->
@@ -237,8 +243,8 @@
                 </div>
                 
                 <!-- 讨论组主题发送区域 (只在讨论组模式显示) -->
-                <div class="chat-input d-none" id="discussionTopicInput">
-                    <textarea class="form-control" id="discussionTopicMessage" placeholder="输入讨论主题..."></textarea>
+                <div class="chat-input d-none d-flex align-items-center gap-2" id="discussionTopicInput">
+                    <textarea class="form-control flex-grow-1" id="discussionTopicMessage" placeholder="输入讨论主题..."></textarea>
                     <button class="btn btn-primary" id="startDiscussionBtn" data-translate="startDiscussion">开始讨论</button>
                 </div>
             </div>
@@ -279,5 +285,23 @@
     <script src="app.js"></script>
     <script src="js/thinking.js"></script>
     <script src="js/chatllm.js"></script>
+    <script>
+      // 所有Markdown渲染后自动调用MathJax
+      function renderMathInChat() {
+        if (window.MathJax && window.MathJax.typesetPromise) {
+          MathJax.typesetPromise();
+        }
+      }
+      // 监听聊天消息区域变动，自动渲染数学公式
+      document.addEventListener('DOMContentLoaded', function() {
+        const chatMessages = document.getElementById('chatMessages');
+        if (chatMessages) {
+          const observer = new MutationObserver(function() {
+            renderMathInChat();
+          });
+          observer.observe(chatMessages, { childList: true, subtree: true });
+        }
+      });
+    </script>
 </body>
 </html>

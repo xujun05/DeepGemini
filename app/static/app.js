@@ -179,11 +179,12 @@ const translations = {
         selectDiscussionGroup: 'Select Discussion Group',
         discussionTopic: 'Discussion Topic',
         send: 'Send',
-        welcomeToChat: 'Welcome to DeepGemini Chat Interface',
+        welcomeToChat: 'ChatDeepGemini',
         chatInstructions: 'Select a chat mode and start the conversation',
         speakingAs: 'Speaking as ',
         identity: '',
-        submitMessage: 'Submit Message'
+        submitMessage: 'Submit Message',
+        startDiscussion: 'Start Discussion'
     },
     zh: {
         modelManagement: '模型管理',
@@ -336,7 +337,7 @@ const translations = {
         isHumanHint: "勾选此项表示这是一个由人类控制的角色，在讨论过程中需要用户输入",
         hostRole: "宿主角色",
         noHostRole: "无（独立角色）",
-        hostRoleHint: "选择此人类将寄生的AI角色，人类将替代该AI发言",
+        hostRoleHint: "选择此人类将寄生的AI角色，人类将替代该AI发言(beta)",
         humanInput: "人类输入",
         submitMessage: "提交消息",
         waitingForInput: "等待您的输入...",
@@ -355,11 +356,12 @@ const translations = {
         selectDiscussionGroup: '选择讨论组',
         discussionTopic: '讨论主题',
         send: '发送',
-        welcomeToChat: '欢迎使用 DeepGemini 对话界面',
+        welcomeToChat: 'ChatDeepGemini',
         chatInstructions: '选择聊天模式并开始对话',
         speakingAs: '正在以',
         identity: '身份发言',
-        submitMessage: '提交发言'
+        submitMessage: '提交发言',
+        startDiscussion: '开始讨论'
     }
 };
 
@@ -1432,96 +1434,6 @@ document.querySelectorAll('.sidebar-menu li').forEach(item => {
     });
 });
 
-// Add circular workflow visualization
-function updateWorkflowVisualization(config) {
-    const container = document.getElementById('workflowCircle');
-    const steps = config.steps;
-    const centerX = 250;
-    const centerY = 250;
-    const radius = 180;
-
-    // Clear previous visualization
-    container.innerHTML = '';
-
-    // Add steps
-    steps.forEach((step, index) => {
-        const angle = (index / steps.length) * 2 * Math.PI - Math.PI / 2;
-        const x = centerX + radius * Math.cos(angle);
-        const y = centerY + radius * Math.sin(angle);
-
-        const stepEl = document.createElement('div');
-        stepEl.className = `workflow-step ${step.step_type}`;
-        stepEl.style.left = `${x - 70}px`;
-        stepEl.style.top = `${y - 70}px`;
-        
-        // 获取关联的模型信息
-        const model = models.find(m => m.id === step.model_id);
-        const modelName = model ? model.name : 'Unknown Model';
-        
-        stepEl.innerHTML = `
-            <div class="step-content">
-                <div class="step-number">${index + 1}</div>
-                <div class="step-type">${step.step_type}</div>
-                <div class="step-model">${modelName}</div>
-            </div>
-        `;
-
-        // 添加悬停提示
-        stepEl.title = `Step ${index + 1}\nType: ${step.step_type}\nModel: ${modelName}`;
-
-        container.appendChild(stepEl);
-
-        // Add connector if not last step
-        if (index < steps.length - 1) {
-            const nextAngle = ((index + 1) / steps.length) * 2 * Math.PI - Math.PI / 2;
-            const nextX = centerX + radius * Math.cos(nextAngle);
-            const nextY = centerY + radius * Math.sin(nextAngle);
-
-            const connector = document.createElement('div');
-            connector.className = 'workflow-connector';
-            const length = Math.sqrt(Math.pow(nextX - x, 2) + Math.pow(nextY - y, 2));
-            const angle = Math.atan2(nextY - y, nextX - x);
-
-            connector.style.width = `${length}px`;
-            connector.style.left = `${x}px`;
-            connector.style.top = `${y}px`;
-            connector.style.transform = `rotate(${angle}rad)`;
-
-            container.appendChild(connector);
-        }
-    });
-}
-
-// 添加新的可视化展示函数
-function showWorkflowVisualization(configId) {
-    const config = configurations.find(c => c.id === configId);
-    if (!config) {
-        showError('Configuration not found');
-        return;
-    }
-
-    // 清空并更新可视化
-    const container = document.getElementById('workflowCircle');
-    container.innerHTML = '';
-    updateWorkflowVisualization(config);
-
-    // 显示模态框
-    const modal = new bootstrap.Modal(document.getElementById('workflowVisualizationModal'));
-    modal.show();
-}
-
-// Sidebar toggle
-function toggleSidebar() {
-    const sidebar = document.querySelector('.sidebar');
-    const mainContent = document.querySelector('.main-content');
-    const toggleBtn = document.querySelector('.sidebar-toggle i');
-    
-    sidebar.classList.toggle('collapsed');
-    mainContent.classList.toggle('expanded');
-    toggleBtn.classList.toggle('fa-chevron-left');
-    toggleBtn.classList.toggle('fa-chevron-right');
-}
-
 // Language change
 function changeLanguage(lang) {
     // 保存语言偏好
@@ -2024,6 +1936,8 @@ function loadRoles() {
                 data = []; // 提供默认空数组
             }
             
+            console.log('获取到的角色数据:', data);
+            
             const rolesContainer = document.getElementById('rolesList');
             if (!rolesContainer) {
                 console.log('未找到rolesList元素，可能在当前页面不存在');
@@ -2163,7 +2077,6 @@ function openAddRoleModal() {
     modal.show();
 }
 
-// 修复saveRole函数，恢复被删除的代码
 function saveRole() {
     const form = document.getElementById('addRoleForm');
     const formData = new FormData(form);
@@ -2222,11 +2135,11 @@ function saveRole() {
             // 重新加载角色
             loadRoles();
             
-            showToast(roleId ? '角色更新成功' : '角色添加成功', 'success');
+            showSuccess(roleId ? '角色更新成功' : '角色添加成功', 'success');
         })
         .catch(error => {
             console.error(roleId ? '更新角色失败:' : '添加角色失败:', error);
-            showToast(roleId ? '更新角色失败' : '添加角色失败', 'error');
+            showSuccess(roleId ? '角色更新失败' : '角色添加失败', 'error');
         });
 }
 
@@ -2387,47 +2300,47 @@ function loadGroups() {
 }
 
 function loadRolesForGroups() {
-    return fetchAPI('roles', 'GET')
-        .then(data => {
-            // 添加数据格式检查
-            if (!Array.isArray(data)) {
-                console.log('角色数据格式不正确:', data);
-                data = []; // 提供默认空数组
-            }
+    return fetchAPI('roles')
+    .then(roles => {
+        const container = document.getElementById('roleCheckboxes');
+        if (!container) {
+            console.log('未找到roleCheckboxes元素，可能在当前页面不存在');
+            return data; // 提前返回，避免null引用
+        }
+        
+        container.innerHTML = '';
+        
+        roles.forEach(role => {
+            const div = document.createElement('div');
+            div.className = 'form-check me-3 mb-2';
             
-            const container = document.getElementById('roleCheckboxes');
-            if (!container) {
-                console.log('未找到roleCheckboxes元素，可能在当前页面不存在');
-                return data; // 提前返回，避免null引用
-            }
+            const checkbox = document.createElement('input');
+            checkbox.type = 'checkbox';
+            checkbox.className = 'form-check-input';
+            checkbox.name = 'role_ids';
+            checkbox.value = role.id;
+            checkbox.id = `role_${role.id}`;
             
-            container.innerHTML = '';
+            const label = document.createElement('label');
+            label.className = 'form-check-label';
+            label.htmlFor = `role_${role.id}`;
+            label.textContent = role.name;
             
-            if (data.length === 0) {
-                container.innerHTML = '<div class="alert alert-warning">没有可选角色，请先创建角色</div>';
-                return data;
-            }
-            
-            data.forEach(role => {
-                const div = document.createElement('div');
-                div.className = 'form-check me-3 mb-2';
-                div.innerHTML = `
-                    <input class="form-check-input" type="checkbox" name="role_ids" value="${role.id}" id="role-${role.id}">
-                    <label class="form-check-label" for="role-${role.id}">${role.name}</label>
-                `;
-                container.appendChild(div);
-            });
-            
-            return data;
-        })
-        .catch(error => {
-            console.error('获取角色失败:', error);
-            const container = document.getElementById('roleCheckboxes');
-            if (container) {
-                container.innerHTML = '<div class="alert alert-danger">获取角色失败，请稍后重试</div>';
-            }
-            return [];
+            div.appendChild(checkbox);
+            div.appendChild(label);
+            container.appendChild(div);
         });
+        
+        return roles;
+    })
+    .catch(error => {
+        console.error('获取角色失败:', error);
+        const container = document.getElementById('roleCheckboxes');
+        if (container) {
+            container.innerHTML = '<div class="alert alert-danger">获取角色失败，请稍后重试</div>';
+        }
+        return [];
+    });
 }
 
 function getModeDisplayName(mode) {
@@ -2876,14 +2789,17 @@ function setupHumanRoleToggle() {
 }
 
 // 加载寄生角色列表
-function loadHostRoles() {
+function loadHostRoles(selectedId = null) {
     const hostRoleSelect = document.querySelector('select[name="host_role_id"]');
     if (!hostRoleSelect) return Promise.reject('无法找到寄生角色选择器');
     
-    // 清除现有选项（保留第一个"无"选项）
-    const firstOption = hostRoleSelect.querySelector('option:first-child');
+    // 清空所有选项并添加默认“无”选项
     hostRoleSelect.innerHTML = '';
-    hostRoleSelect.appendChild(firstOption);
+    const defaultOption = document.createElement('option');
+    defaultOption.value = '';
+    defaultOption.setAttribute('data-translate', 'noHostRole');
+    defaultOption.textContent = translations[getCurrentLanguage()].noHostRole;
+    hostRoleSelect.appendChild(defaultOption);
     
     // 获取所有角色
     return fetchAPI('roles')
@@ -2898,6 +2814,10 @@ function loadHostRoles() {
                 option.textContent = role.name;
                 hostRoleSelect.appendChild(option);
             });
+            
+            if (selectedId) {
+                hostRoleSelect.value = selectedId;
+            }
             
             return roles;
         })
@@ -3149,4 +3069,92 @@ function submitHumanMessage(meetingId, isInterruption) {
         messageTextarea.disabled = false;
         messageTextarea.focus();
     });
+}
+
+// editRole函数重构人类角色切换逻辑
+function editRole(roleId) {
+    // 获取角色详情
+    fetchAPI(`roles/${roleId}`, 'GET')
+        .then(role => {
+            // 填充表单
+            const form = document.getElementById('addRoleForm');
+            
+            // 重置表单，确保清除所有旧值
+            form.reset();
+            
+            // 移除可能存在的旧ID字段
+            const existingIdField = form.querySelector('input[name="id"]');
+            if (existingIdField) {
+                existingIdField.remove();
+            }
+            
+            // 填充表单字段
+            form.elements['name'].value = role.name;
+            form.elements['description'].value = role.description || '';
+            form.elements['personality'].value = role.personality || '';
+            form.elements['skills'].value = (role.skills || []).join(', ');
+            form.elements['system_prompt'].value = role.system_prompt || '';
+            
+            // 加载模型选项
+            loadModelsForRoles().then(() => {
+                form.elements['model_id'].value = role.model_id;
+            });
+            
+            form.elements['parameters'].value = JSON.stringify(role.parameters || {}, null, 2);
+            
+            // 添加角色ID到表单
+            const hiddenInput = document.createElement('input');
+            hiddenInput.type = 'hidden';
+            hiddenInput.name = 'id';
+            hiddenInput.value = roleId;
+            form.appendChild(hiddenInput);
+            
+            // 设置人类角色相关字段
+            const isHumanCheckbox = document.getElementById('isHuman');
+            if (isHumanCheckbox) {
+                isHumanCheckbox.checked = role.is_human || false;
+                
+                // 如果是人类角色，隐藏模型和参数部分，显示寄生角色选择
+                if (isHumanCheckbox.checked) {
+                    const modelSection = document.getElementById('modelSection');
+                    const parametersSection = document.getElementById('parametersSection');
+                    const hostRoleSection = document.getElementById('hostRoleSection');
+                    
+                    modelSection.style.display = 'none';
+                    parametersSection.style.display = 'none';
+                    hostRoleSection.style.display = 'block';
+                    
+                    // 移除model_id的required属性，使其可选
+                    const modelSelect = document.querySelector('select[name="model_id"]');
+                    if (modelSelect) {
+                        modelSelect.removeAttribute('required');
+                    }
+                    
+                    // 加载所有可寄生的AI角色
+                    loadHostRoles(role.host_role_id);
+                } else {
+                    // 如果不是人类角色，显示模型和参数部分，隐藏寄生角色选择
+                    const modelSection = document.getElementById('modelSection');
+                    const parametersSection = document.getElementById('parametersSection');
+                    const hostRoleSection = document.getElementById('hostRoleSection');
+                    
+                    modelSection.style.display = 'block';
+                    parametersSection.style.display = 'block';
+                    hostRoleSection.style.display = 'none';
+                    
+                    // 恢复model_id的required属性
+                    const modelSelect = document.querySelector('select[name="model_id"]');
+                    if (modelSelect) {
+                        modelSelect.setAttribute('required', '');
+                    }
+                }
+            }
+            
+            // 显示模态框
+            new bootstrap.Modal(document.getElementById('addRoleModal')).show();
+        })
+        .catch(error => {
+            console.error('获取角色详情失败:', error);
+            showToast('获取角色详情失败', 'error');
+        });
 }

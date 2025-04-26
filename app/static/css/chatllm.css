@@ -13,16 +13,27 @@
 .chat-header {
     display: flex;
     align-items: center;
-    justify-content: space-between;
+    justify-content: center;
+    flex-wrap: wrap;
     padding: 1rem;
     border-bottom: 1px solid var(--border-color, #e9ecef);
     background-color: var(--header-bg, #f8f9fa);
 }
 
+.chat-header-title {
+    margin-right: 1.5rem;
+}
+
 .chat-mode-selector {
     display: flex;
-    flex-wrap: wrap;
-    gap: 0.5rem;
+    justify-content: center;
+    flex: 1;
+}
+
+.chat-mode-selector .btn-group {
+    display: flex;
+    justify-content: center;
+    width: auto;
 }
 
 .chat-settings {
@@ -341,25 +352,35 @@ body.dark-theme .chat-input textarea {
 @media (max-width: 768px) {
     .chat-header {
         flex-direction: column;
-        align-items: flex-start;
+        align-items: stretch;
     }
-    
+    .chat-header-title {
+        margin-right: 0;
+        margin-bottom: 0.5rem;
+    }
     .chat-mode-selector {
         margin-top: 1rem;
         width: 100%;
     }
-    
     .btn-group {
         width: 100%;
         display: flex;
     }
-    
     .btn-group .btn {
         flex: 1;
     }
-    
     .message-content {
         max-width: 90%;
+    }
+}
+
+@media (max-width: 768px) {
+    .chat-header-actions-group-mode {
+        margin-left: 0.5rem;
+    }
+    .btn-export-discussion {
+        padding: 0.4em 1em;
+        font-size: 0.95rem;
     }
 }
 
@@ -606,6 +627,45 @@ body.dark-theme .message-export-btn {
     position: relative;
 }
 
+/* 会议总结导出按钮定位 */
+#meeting-summary-container {
+    position: relative;
+}
+
+#meeting-summary-container .btn-export-discussion-icon {
+    position: absolute;
+    right: 16px;
+    bottom: 16px;
+    z-index: 10;
+}
+
+/* 讨论组导出按钮样式 */
+.export-btn-wrapper {
+    display: flex;
+    align-items: center;
+}
+
+#exportGroupChatBtn {
+    transition: all 0.2s ease;
+    border-radius: 6px;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+}
+
+#exportGroupChatBtn:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 3px 6px rgba(0,0,0,0.15);
+}
+
+body.dark-theme #exportGroupChatBtn {
+    color: #e1e1e1;
+    border-color: #555;
+    background-color: #333;
+}
+
+body.dark-theme #exportGroupChatBtn:hover {
+    background-color: #444;
+} 
+
 /* 思考内容容器样式 */
 .thinking-content {
     margin-bottom: 1rem;
@@ -754,29 +814,48 @@ body.dark-theme .thinking-content .code-gt {
     color: #999;
 } 
 
-/* 讨论组导出按钮样式 */
-.export-btn-wrapper {
+.agent-message.summary-message {
+    position: relative;
+}
+
+.agent-message.summary-message .btn-export-discussion-icon {
+    position: absolute;
+    right: 16px;
+    bottom: 16px;
+    z-index: 10;
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 0.2s, background 0.2s, box-shadow 0.2s, color 0.2s;
+    background: rgba(255,255,255,0.18);
+    border: none;
+    border-radius: 50%;
+    width: 40px;
+    height: 40px;
     display: flex;
     align-items: center;
+    justify-content: center;
+    color: #4285f4;
+    box-shadow: 0 2px 8px rgba(76, 110, 245, 0.10);
+    backdrop-filter: blur(7px);
+    font-size: 1.25rem;
 }
 
-#exportGroupChatBtn {
-    transition: all 0.2s ease;
-    border-radius: 6px;
-    box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+.agent-message.summary-message:hover .btn-export-discussion-icon {
+    opacity: 1;
+    pointer-events: auto;
+    background: rgba(255,255,255,0.38);
+    color: #1a73e8;
+    box-shadow: 0 4px 16px rgba(76, 110, 245, 0.16);
 }
 
-#exportGroupChatBtn:hover {
-    transform: translateY(-2px);
-    box-shadow: 0 3px 6px rgba(0,0,0,0.15);
+body.dark-theme .agent-message.summary-message .btn-export-discussion-icon {
+    background: rgba(30,32,38,0.14);
+    color: #8ab4f8;
+    box-shadow: 0 2px 8px rgba(30, 32, 38, 0.12);
 }
 
-body.dark-theme #exportGroupChatBtn {
-    color: #e1e1e1;
-    border-color: #555;
-    background-color: #333;
+body.dark-theme .agent-message.summary-message:hover .btn-export-discussion-icon {
+    background: rgba(30,32,38,0.32);
+    color: #e8eaed;
+    box-shadow: 0 4px 16px rgba(30, 32, 38, 0.22);
 }
-
-body.dark-theme #exportGroupChatBtn:hover {
-    background-color: #444;
-} 

@@ -158,7 +158,7 @@ class MultiStepModelCollaboration:
                 # 只有执行模型或最后一步的推理模型才输出 content
                 if step_type == "execution" or is_last_step:
                     delta["content"] = content
-                
+                # logger.debug(f"delta: {delta}")
                 # 生成流式响应
                 response = {
                     "id": chat_id,
@@ -267,9 +267,10 @@ class MultiStepModelCollaboration:
         last_message = new_messages[-1]
         
         prefix = "reasoning" if step_type == "execution" else "previous step"
+        # 模型接力提示词
         prompt = f"""
         Here's the {prefix} result:\n{previous_result}\n\n
-        Based on this, please provide your response:
+        Based on this, please provide your response in a new line:
         """
         
         if last_message.get("role") == "user":
