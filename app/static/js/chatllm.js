@@ -3714,23 +3714,20 @@ async function fetchMeetingSummary(meetingId) {
 // 修复exportChatAsMarkdown函数
 function exportChatAsMarkdown() {
     console.log('开始导出对话为Markdown文件');
-    
-    // 获取当前聊天模式
-    const currentMode = (typeof currentChatMode !== 'undefined') ? currentChatMode : 'single';
-    
-    // 创建Markdown文本
+    const checkedRadio = document.querySelector('input[name="chatMode"]:checked');
+    if (checkedRadio) {
+        currentChatMode = checkedRadio.value;
+    }
+    const currentMode = currentChatMode || 'single';
     let markdownContent = `# DeepGemini 对话记录\n\n`;
     markdownContent += `导出时间: ${new Date().toLocaleString()}\n\n`;
+    console.log(`当前模式: ${currentMode}`);
     
-    // 根据不同的聊天模式添加特定信息
     switch (currentMode) {
         case 'single':
-            // 获取当前选择的模型
             const modelId = singleModelSelect.value;
             const modelConfig = window.modelConfigs?.[modelId] || {};
             const isReasoningModel = modelConfig.type === 'reasoning';
-            
-            // 如果是reasoning模型，添加模型信息
             if (isReasoningModel) {
                 markdownContent += `模型: ${modelConfig.name || '未知模型'} (思考型模型)\n\n`;
             } else {
@@ -3738,75 +3735,92 @@ function exportChatAsMarkdown() {
                 markdownContent += `模型: ${modelName}\n\n`;
             }
             break;
-            
         case 'relay':
-            // 获取当前选择的接力链
             const relayId = relayChainSelect.value;
             const relayOption = relayChainSelect.options[relayChainSelect.selectedIndex];
             const relayName = relayOption ? relayOption.textContent : '未知接力链';
             markdownContent += `接力链模式: ${relayName}\n\n`;
             break;
-            
         case 'role':
-            // 获取当前选择的角色
             const roleId = roleChatSelect.value;
             const roleOption = roleChatSelect.options[roleChatSelect.selectedIndex];
             const roleName = roleOption ? roleOption.textContent : '未知角色';
             markdownContent += `角色对话模式: ${roleName}\n\n`;
             break;
-            
-        case 'group':
-            // 获取当前选择的讨论组
-            const groupId = discussionGroupSelect.value;
-            const groupOption = discussionGroupSelect.options[discussionGroupSelect.selectedIndex];
-            const groupName = groupOption ? groupOption.textContent : '未知讨论组';
-            markdownContent += `讨论组模式: ${groupName}\n\n`;
-            break;
     }
-    
-    // 获取聊天容器
+
     const chatContainer = document.getElementById('chatMessages');
-    
-    // 处理讨论组模式下的特殊情况
-    if (currentMode === 'group') {
-        // 讨论组模式下，查找讨论轮次
-        const discussionRounds = chatContainer.querySelectorAll('.discussion-round');
-        
-        if (discussionRounds.length > 0) {
-            discussionRounds.forEach((round, index) => {
-                // 获取轮次标题
-                const roundTitle = round.querySelector('.discussion-round-title');
-                const title = roundTitle ? roundTitle.textContent : `讨论轮次 ${index + 1}`;
-                
-                markdownContent += `## ${title}\n\n`;
-                
-                // 获取该轮次内的所有消息
-                const agentMessages = round.querySelectorAll('.agent-message');
-                agentMessages.forEach(message => {
-                    // 获取角色名称
-                    const nameEl = message.querySelector('.agent-name');
-                    const name = nameEl ? nameEl.textContent : '参与者';
-                    
-                    // 获取消息内容
-                    const contentEl = message.querySelector('.agent-content');
-                    if (!contentEl) return;
-                    
-                    // 将HTML内容转换为Markdown
-                    let content = contentEl.innerHTML;
-                    
-                    // 处理代码块
-                    const codeBlocks = contentEl.querySelectorAll('pre code');
-                    codeBlocks.forEach(block => {
-                        const language = block.className.replace('language-', '').replace('dark-code', '').trim() || '';
-                        const code = block.textContent;
-                        const codeMarkdown = `\`\`\`${language}\n${code}\n\`\`\``;
-                        
-                        // 在内容中替换代码块
-                        content = content.replace(block.parentNode.outerHTML, codeMarkdown);
+    const messageContainers = chatContainer.querySelectorAll('.message-container');
+    messageContainers.forEach(container => {
+        if (container.classList.contains('welcome-message')) return;
+        const role = container.classList.contains('ai') ? 'AI' :
+                     container.classList.contains('user') ? '用户' :
+                     container.classList.contains('system') ? '系统' : '其他';
+        const nameElement = container.querySelector('.message-name');
+        const name = nameElement ? nameElement.textContent : role;
+        const contentElement = container.querySelector('.message-content');
+        if (!contentElement) return;
+
+        let content = contentElement.innerHTML;
+
+        // 1. 处理所有代码块，优先用 innerText 读取原始内容
+        const codeBlocks = contentElement.querySelectorAll('pre code');
+        let codeBlockMap = {};
+        let codeBlockIdx = 0;
+        codeBlocks.forEach(block => {
+            let language = '';
+            const langMatch = block.className.match(/language-([\w\d]+)/);
+            if (langMatch) language = langMatch[1];
+            const code = block.innerText || block.textContent;
+            const placeholder = `__CODE_BLOCK_${codeBlockIdx}__`;
+            codeBlockMap[placeholder] = `\`\`\`${language}\n${code}\n\`\`\``;
+            // 替换原有 HTML 代码块为占位符
+            const blockHtml = block.parentNode.outerHTML;
+            content = content.replace(blockHtml, placeholder);
+            codeBlockIdx++;
+        });
+
+        // 2. 处理其他 HTML 标签为 Markdown
+        content = content
+            .replace(/<\/?p>/g, '\n')
+            .replace(/<br\s*\/?>/g, '\n')
+            .replace(/<\/?strong>/g, '**')
+            .replace(/<\/?em>/g, '_')
+            .replace(/<\/?code>/g, '`')
+            .replace(/<\/?[^>]+(>|$)/g, '') // 删除其他HTML标签
+            .trim();
+
+        // 3. 恢复代码块内容
+        Object.keys(codeBlockMap).forEach(placeholder => {
+            content = content.replace(placeholder, codeBlockMap[placeholder]);
+        });
+
+        markdownContent += `## ${name}\n\n${content}\n\n`;
+
+        // 思考型模型
+        if (currentMode === 'single') {
+            const modelConfig = window.modelConfigs?.[singleModelSelect.value] || {};
+            const isReasoningModel = modelConfig.type === 'reasoning';
+            if (isReasoningModel && role === 'AI') {
+                const thinkingContent = container.querySelector('.thinking-content');
+                if (thinkingContent && !thinkingContent.classList.contains('collapsed')) {
+                    let thinking = thinkingContent.innerHTML;
+                    // 处理思考内容中的代码块
+                    const thinkingCodeBlocks = thinkingContent.querySelectorAll('pre code');
+                    let thinkingCodeBlockMap = {};
+                    let thinkingCodeBlockIdx = 0;
+                    thinkingCodeBlocks.forEach(block => {
+                        let language = '';
+                        const langMatch = block.className.match(/language-([\w\d]+)/);
+                        if (langMatch) language = langMatch[1];
+                        const code = block.innerText || block.textContent;
+                        const placeholder = `__THINKING_CODE_BLOCK_${thinkingCodeBlockIdx}__`;
+                        thinkingCodeBlockMap[placeholder] = `\`\`\`${language}\n${code}\n\`\`\``;
+                        const blockHtml = block.parentNode.outerHTML;
+                        thinking = thinking.replace(blockHtml, placeholder);
+                        thinkingCodeBlockIdx++;
                     });
-                    
-                    // 简单处理HTML转Markdown
-                    content = content
+                    thinking = thinking
                         .replace(/<\/?p>/g, '\n')
                         .replace(/<br\s*\/?>/g, '\n')
                         .replace(/<\/?strong>/g, '**')
@@ -3814,112 +3828,21 @@ function exportChatAsMarkdown() {
                         .replace(/<\/?code>/g, '`')
                         .replace(/<\/?[^>]+(>|$)/g, '') // 删除其他HTML标签
                         .trim();
-                    
-                    // 添加到Markdown文本
-                    markdownContent += `### ${name}\n\n${content}\n\n`;
-                });
-                
-                markdownContent += `---\n\n`;
-            });
-        }
-    } else {
-        // 单模型、接力链和角色对话模式的处理
-        // 获取所有消息容器
-        const messageContainers = chatContainer.querySelectorAll('.message-container');
-        
-        // 遍历消息容器
-        messageContainers.forEach(container => {
-            // 跳过欢迎消息
-            if (container.classList.contains('welcome-message')) {
-                return;
-            }
-            
-            // 获取消息角色和名称
-            const role = container.classList.contains('ai') ? 'AI' : 
-                         container.classList.contains('user') ? '用户' : 
-                         container.classList.contains('system') ? '系统' : '其他';
-                         
-            const nameElement = container.querySelector('.message-name');
-            const name = nameElement ? nameElement.textContent : role;
-            
-            // 获取消息内容
-            const contentElement = container.querySelector('.message-content');
-            if (!contentElement) return;
-            
-            // 将HTML内容转换为Markdown
-            let content = contentElement.innerHTML;
-            
-            // 处理代码块
-            const codeBlocks = contentElement.querySelectorAll('pre code');
-            codeBlocks.forEach(block => {
-                const language = block.className.replace('language-', '').replace('dark-code', '').trim() || '';
-                const code = block.textContent;
-                const codeMarkdown = `\`\`\`${language}\n${code}\n\`\`\``;
-                
-                // 在内容中替换代码块
-                content = content.replace(block.parentNode.outerHTML, codeMarkdown);
-            });
-            
-            // 简单处理HTML转Markdown
-            content = content
-                .replace(/<\/?p>/g, '\n')
-                .replace(/<br\s*\/?>/g, '\n')
-                .replace(/<\/?strong>/g, '**')
-                .replace(/<\/?em>/g, '_')
-                .replace(/<\/?code>/g, '`')
-                .replace(/<\/?[^>]+(>|$)/g, '') // 删除其他HTML标签
-                .trim();
-            
-            // 添加到Markdown文本
-            markdownContent += `## ${name}\n\n${content}\n\n`;
-            
-            // 如果是思考型模型和AI回复，添加思考过程
-            if (currentMode === 'single') {
-                const modelConfig = window.modelConfigs?.[singleModelSelect.value] || {};
-                const isReasoningModel = modelConfig.type === 'reasoning';
-                
-                if (isReasoningModel && role === 'AI') {
-                    const thinkingContent = container.querySelector('.thinking-content');
-                    if (thinkingContent && !thinkingContent.classList.contains('collapsed')) {
-                        let thinking = thinkingContent.innerHTML;
-                        
-                        // 处理思考内容中的代码块
-                        const thinkingCodeBlocks = thinkingContent.querySelectorAll('pre code');
-                        thinkingCodeBlocks.forEach(block => {
-                            const language = block.className.replace('language-', '').replace('dark-code', '').trim() || '';
-                            const code = block.textContent;
-                            const codeMarkdown = `\`\`\`${language}\n${code}\n\`\`\``;
-                            
-                            // 在思考内容中替换代码块
-                            thinking = thinking.replace(block.parentNode.outerHTML, codeMarkdown);
-                        });
-                        
-                        // 处理思考内容HTML
-                        thinking = thinking
-                            .replace(/<\/?p>/g, '\n')
-                            .replace(/<br\s*\/?>/g, '\n')
-                            .replace(/<\/?strong>/g, '**')
-                            .replace(/<\/?em>/g, '_')
-                            .replace(/<\/?code>/g, '`')
-                            .replace(/<\/?[^>]+(>|$)/g, '') // 删除其他HTML标签
-                            .trim();
-                        
-                        if (thinking) {
-                            markdownContent += `### 思考过程\n\n${thinking}\n\n---\n\n`;
-                        }
+                    Object.keys(thinkingCodeBlockMap).forEach(placeholder => {
+                        thinking = thinking.replace(placeholder, thinkingCodeBlockMap[placeholder]);
+                    });
+                    if (thinking) {
+                        markdownContent += `### 思考过程\n\n${thinking}\n\n---\n\n`;
                     }
                 }
             }
-        });
-    }
-    
-    // 创建下载链接
+        }
+    });
+
     const blob = new Blob([markdownContent], { type: 'text/markdown' });
     const url = URL.createObjectURL(blob);
     const link = document.createElement('a');
     link.href = url;
-    
-    // 根据模式设置不同的文件名
     let fileName;
     switch (currentMode) {
         case 'single':
@@ -3937,10 +3860,7 @@ function exportChatAsMarkdown() {
         default:
             fileName = `deepgemini-chat-${Date.now()}.md`;
     }
-    
     link.download = fileName;
-    
-    // 触发下载
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
@@ -4764,4 +4684,18 @@ function processContentToMarkdown(htmlContent) {
         .trim();
         
     return content;
+}
+
+// 侧边栏展开/收起功能
+function toggleSidebar() {
+    const sidebar = document.querySelector('.sidebar');
+    if (sidebar) {
+        sidebar.classList.toggle('collapsed');
+        // 可选：切换图标方向
+        const toggleIcon = sidebar.querySelector('.sidebar-toggle i');
+        if (toggleIcon) {
+            toggleIcon.classList.toggle('fa-chevron-left');
+            toggleIcon.classList.toggle('fa-chevron-right');
+        }
+    }
 }
