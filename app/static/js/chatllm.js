@@ -1763,79 +1763,79 @@ document.addEventListener("DOMContentLoaded", function() {
             // 记录当前使用的讨论组ID
             console.log('开始讨论组对话，当前选中的讨论组ID:', currentGroupId);
             console.log('讨论组选择器当前值:', discussionGroupSelect.value);
-            
+    
             // 确保讨论组ID与选择器一致
             if (currentGroupId !== discussionGroupSelect.value) {
                 console.log('检测到讨论组ID不一致，更新为当前选择的值');
                 currentGroupId = discussionGroupSelect.value;
             }
-            
+    
             if (!currentGroupId) {
                 showError('请先选择讨论组');
                 return false;
             }
-            
+    
             if (!message || !message.trim()) {
                 showError('请输入讨论主题');
                 return false;
             }
-            
+    
             // 显示加载状态
             showLoading();
-            
+    
             // 获取API密钥
             const apiKey = getCurrentApiKey();
-            
+    
             // 清空消息区域
             chatMessages.innerHTML = '';
-            
+    
             // 添加主题头部
             const topicEl = document.createElement('div');
             topicEl.classList.add('discussion-topic');
             topicEl.innerHTML = `<h3>讨论主题: ${message.trim()}</h3>`;
             chatMessages.appendChild(topicEl);
-            
+    
             // 使用OpenAI兼容API进行流式请求
             const response = await fetch('/v1/chat/completions', {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json',
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
                     'Authorization': `${apiKey}`
-                    },
-                    body: JSON.stringify({
+                },
+                body: JSON.stringify({
                     model: `group-${currentGroupId}`,
                     messages: [{ role: 'user', content: message.trim() }],
                     stream: true
-                    })
-                });
-                
+                })
+            });
+    
             if (!response.ok) {
                 throw new Error(`讨论创建失败: ${response.status} ${response.statusText}`);
             }
-            
+    
             // 获取会议ID - 从响应头中提取
             const meetingIdHeader = response.headers.get('X-Meeting-Id');
             if (meetingIdHeader) {
                 currentMeetingId = meetingIdHeader;
                 console.log("从响应头获取到会议ID:", currentMeetingId);
-                
+    
                 // 加载该会议中的人类角色
                 await loadHumanRoles();
             }
-            
+    
             // 处理SSE流式响应
             const reader = response.body.getReader();
             const decoder = new TextDecoder();
-            
+    
             let currentSpeaker = null;
             let speakerContent = '';
             let speakerThinkingContent = '';
             let speakerContainer = null;
             let speakerContentElement = null;
             let speakerThinkingContainer = null;
-            
+    
             let hasSpecialFormat = false; // 跟踪是否检测到特殊格式
-            
+    
             while (true) {
                 const { done, value } = await reader.read();
                 if (done) {
@@ -1849,7 +1849,7 @@ document.addEventListener("DOMContentLoaded", function() {
                                     'Authorization': `${apiKey}`
                                 }
                             });
-                            
+    
                             if (statusResponse.ok) {
                                 const statusData = await statusResponse.json();
                                 if (statusData.status === "已结束") {
@@ -1866,10 +1866,10 @@ document.addEventListener("DOMContentLoaded", function() {
                     }
                     break;
                 }
-                
+    
                 const chunk = decoder.decode(value, { stream: true });
                 const lines = chunk.split('\n');
-                
+    
                 for (const line of lines) {
                     // 从第一个数据块中提取会议ID（如果响应头中没有）
                     if (!currentMeetingId && line.includes("meeting_id")) {
@@ -1878,7 +1878,7 @@ document.addEventListener("DOMContentLoaded", function() {
                             if (match && match[1]) {
                                 currentMeetingId = match[1];
                                 console.log("从响应内容中提取到会议ID:", currentMeetingId);
-                                
+    
                                 // 加载该会议中的人类角色
                                 await loadHumanRoles();
                             }
@@ -1886,24 +1886,24 @@ document.addEventListener("DOMContentLoaded", function() {
                             console.error("提取会议ID时出错:", e);
                         }
                     }
-                    
+    
                     if (line.startsWith('data: ') && line !== 'data: [DONE]') {
                         try {
                             // 解析SSE数据
                             const data = JSON.parse(line.substring(6));
-                            
+    
                             // 检查是否有内容更新
                             if (data.choices && data.choices.length > 0 && data.choices[0].delta) {
                                 const delta = data.choices[0].delta;
                                 const content = delta.content || '';
                                 const reasoningContent = delta.reasoning_content || '';
-                                
+    
                                 // 检查是否有新发言人标记 "### 名称 发言："
                                 const speakerMatch = content.match(/###\s+(.+?)\s+发言：/);
-                                
+    
                                 if (speakerMatch) {
                                     hasSpecialFormat = true; // 标记检测到特殊格式
-                                    
+    
                                     // 如果有之前的发言者，保存之前的内容
                                     if (currentSpeaker && speakerContent.trim()) {
                                         // 添加内容到UI
@@ -1914,129 +1914,116 @@ document.addEventListener("DOMContentLoaded", function() {
                                             }
                                         }
                                     }
-                                    
+    
                                     // 新发言人开始
                                     currentSpeaker = speakerMatch[1];
                                     speakerContent = '';
                                     speakerThinkingContent = '';
-                                    
+    
                                     // 检查是否是人类角色
                                     const isHumanRole = humanRoles.some(role => role.name === currentSpeaker);
-                                    
-                                    // 如果是人类角色，提前检查是否需要等待输入
+    
                                     if (isHumanRole) {
                                         console.log(`检测到人类角色 ${currentSpeaker} 即将发言`);
-                                        
-                                        // 创建新的发言容器，但标记为等待状态
+                                        // 统一调用 showWaitingForHumanInput
+                                        showWaitingForHumanInput(currentSpeaker);
+    
+                                        // 创建新的发言容器，但隐藏不显示
                                         speakerContainer = document.createElement('div');
-                                        speakerContainer.classList.add('agent-message', 'human-message', 'waiting-human');
-                                        
+                                        speakerContainer.classList.add('agent-message', 'human-message', 'waiting-human', 'd-none');
+    
                                         const speakerHeader = document.createElement('div');
                                         speakerHeader.classList.add('agent-header');
-                                        
+    
                                         const speakerNameElement = document.createElement('div');
                                         speakerNameElement.classList.add('agent-name');
                                         speakerNameElement.textContent = currentSpeaker;
-                                        
+    
                                         const speakerBadge = document.createElement('div');
                                         speakerBadge.classList.add('agent-badge', 'human-badge');
                                         speakerBadge.textContent = '人类';
-                                        
+    
                                         speakerHeader.appendChild(speakerNameElement);
                                         speakerHeader.appendChild(speakerBadge);
-                                        
+    
                                         speakerContentElement = document.createElement('div');
                                         speakerContentElement.classList.add('agent-content');
                                         speakerContentElement.textContent = "等待人类输入...";
-                                        
+    
                                         speakerContainer.appendChild(speakerHeader);
                                         speakerContainer.appendChild(speakerContentElement);
-                                        
+    
                                         chatMessages.appendChild(speakerContainer);
-                                        
-                                        // 立即检查人类输入
-                                        humanRoleName.textContent = currentSpeaker;
+    
+                                        // 检查人类输入（如果有额外逻辑）
                                         await checkForHumanInput();
-                                        
-                                        // 如果仍然未显示人类输入区域，则强制显示
-                                        if (humanInputArea.classList.contains('d-none')) {
-                                            console.log(`强制显示人类输入区域给 ${currentSpeaker}`);
-                                            isWaitingForHumanInput = true;
-                                            humanInputArea.classList.remove('d-none');
-                                            
-                                            // 添加提示消息
-                                            // addMessageToChat('system', `轮到 ${currentSpeaker} (人类角色) 发言，请输入您的发言内容`);
-                                            
-                                            // 聚焦到输入框
-                                            humanInputMessage.focus();
-                                        }
                                     } else {
                                         // 创建新的发言容器
                                         speakerContainer = document.createElement('div');
                                         speakerContainer.classList.add('agent-message');
                                         speakerContainer.style.display = 'flex';
                                         speakerContainer.style.flexDirection = 'column';
-                                        
+    
                                         const speakerHeader = document.createElement('div');
                                         speakerHeader.classList.add('agent-header');
-                                        
+    
                                         const speakerNameElement = document.createElement('div');
                                         speakerNameElement.classList.add('agent-name');
                                         speakerNameElement.textContent = currentSpeaker;
-                                        
+    
                                         const speakerBadge = document.createElement('div');
                                         speakerBadge.classList.add('agent-badge');
                                         speakerBadge.textContent = 'AI';
-                                        
+    
                                         speakerHeader.appendChild(speakerNameElement);
                                         speakerHeader.appendChild(speakerBadge);
-                                        
+    
                                         // 创建思考内容容器（先创建）
                                         speakerThinkingContainer = document.createElement('div');
                                         speakerThinkingContainer.classList.add('thinking-container');
                                         speakerThinkingContainer.style.display = 'none'; // 默认隐藏
                                         speakerThinkingContainer.style.width = '100%';
-                                        
+    
                                         const thinkingHeader = document.createElement('div');
                                         thinkingHeader.classList.add('thinking-header');
                                         thinkingHeader.innerHTML = '<span class="thinking-toggle-icon">▼</span>查看思考过程';
-                                        
+    
                                         const thinkingContent = document.createElement('div');
                                         thinkingContent.classList.add('thinking-content');
-                                        
+    
                                         // 默认折叠
                                         thinkingHeader.querySelector('.thinking-toggle-icon').classList.add('collapsed');
                                         thinkingContent.classList.add('collapsed');
-                                        
+    
                                         // 添加切换折叠功能
                                         thinkingHeader.addEventListener('click', () => {
                                             const icon = thinkingHeader.querySelector('.thinking-toggle-icon');
                                             icon.classList.toggle('collapsed');
                                             thinkingContent.classList.toggle('collapsed');
                                         });
-                                        
+    
                                         speakerThinkingContainer.appendChild(thinkingHeader);
                                         speakerThinkingContainer.appendChild(thinkingContent);
-                                        
+    
                                         // 创建内容元素（后创建）
                                         speakerContentElement = document.createElement('div');
                                         speakerContentElement.classList.add('agent-content');
                                         speakerContentElement.style.width = '100%';
-                                        
+    
                                         // 先添加思考容器再添加内容（思考在上，回答在下）
                                         speakerContainer.appendChild(speakerHeader);
                                         speakerContainer.appendChild(speakerThinkingContainer);
                                         speakerContainer.appendChild(speakerContentElement);
-                                        
+    
                                         chatMessages.appendChild(speakerContainer);
                                     }
-                                } 
+                                }
                                 // 检查是否有会议结束和总结标记
                                 else if (content.includes("## 会议结束") || content.includes("会议总结") || content.includes("## 会议总结")) {
                                     hasSpecialFormat = true; // 标记检测到特殊格式
-                                    
+    
                                     console.log("检测到会议结束或总结标记: ", content);
-                                    
+    
                                     // 如果有之前的发言者，保存之前的内容
                                     if (currentSpeaker && speakerContent.trim()) {
                                         // 添加内容到UI
@@ -2047,11 +2034,11 @@ document.addEventListener("DOMContentLoaded", function() {
                                             }
                                         }
                                     }
-                                    
+    
                                     // 创建总结发言人
                                     currentSpeaker = "总结";
                                     speakerContent = content;  // 先添加当前delta到内容中
-                                    
+    
                                     // 查找已经存在的总结消息
                                     const existingSummaries = document.querySelectorAll('.summary-message');
                                     if (existingSummaries.length > 0) {
@@ -2064,7 +2051,7 @@ document.addEventListener("DOMContentLoaded", function() {
                                             speakerContentElement.style.width = '100%';
                                             speakerContainer.appendChild(speakerContentElement);
                                         }
-                                        
+    
                                         insertExportButtonToSummary();
                                         console.log("使用已存在的总结容器");
                                     } else {
@@ -2073,53 +2060,53 @@ document.addEventListener("DOMContentLoaded", function() {
                                         speakerContainer.classList.add('agent-message', 'summary-message');
                                         speakerContainer.style.display = 'flex';
                                         speakerContainer.style.flexDirection = 'column';
-                                        
+    
                                         const speakerHeader = document.createElement('div');
                                         speakerHeader.classList.add('agent-header');
-                                        
+    
                                         const speakerNameElement = document.createElement('div');
                                         speakerNameElement.classList.add('agent-name');
                                         speakerNameElement.textContent = "会议总结";
-                                        
+    
                                         const speakerBadge = document.createElement('div');
                                         speakerBadge.classList.add('agent-badge');
                                         speakerBadge.textContent = 'AI';
-                                        
+    
                                         speakerHeader.appendChild(speakerNameElement);
                                         speakerHeader.appendChild(speakerBadge);
-                                        
+    
                                         speakerContentElement = document.createElement('div');
                                         speakerContentElement.classList.add('agent-content');
                                         speakerContentElement.style.width = '100%';
-                                        
+    
                                         speakerContainer.appendChild(speakerHeader);
                                         speakerContainer.appendChild(speakerContentElement);
-                                        
+    
                                         chatMessages.appendChild(speakerContainer);
-                                        
-                                        insertExportButtonToSummary();  
-                                        
+    
+                                        insertExportButtonToSummary();
+    
                                         console.log("创建了新的总结容器");
                                     }
-                                    
+    
                                     // 确保总结标题显示在顶部
                                     speakerContentElement.innerHTML = marked.parse(speakerContent);
                                     if (window.MathJax && window.MathJax.typesetPromise) {
                                         MathJax.typesetPromise([speakerContentElement]);
                                     }
-                                    
+    
                                     // 清除检查人类输入的定时器
                                     if (humanCheckInterval) {
                                         clearInterval(humanCheckInterval);
                                         humanCheckInterval = null;
                                     }
-                                    
+    
                                     // 设置会议为已结束状态
                                     if (currentMeetingId) {
                                         console.log("会议已结束，清除会议ID");
                                         currentMeetingId = null;
                                     }
-                                    
+    
                                     // 滚动到底部
                                     scrollToBottom();
                                 }
@@ -2127,7 +2114,7 @@ document.addEventListener("DOMContentLoaded", function() {
                                 else if (currentSpeaker === "总结") {
                                     console.log("正在累积总结内容: " + content.substring(0, 30) + (content.length > 30 ? "..." : ""));
                                     speakerContent += content;
-                                    
+    
                                     // 更新总结内容
                                     if (speakerContentElement) {
                                         speakerContentElement.innerHTML = marked.parse(speakerContent);
@@ -2137,28 +2124,30 @@ document.addEventListener("DOMContentLoaded", function() {
                                         // 滚动到底部
                                         scrollToBottom();
                                     }
-                                } 
+                                }
                                 // 检查"等待人类输入"标记
                                 else if (content.includes("等待人类输入") || content.includes("waiting for human input")) {
                                     hasSpecialFormat = true; // 标记检测到特殊格式
-                                    
+    
                                     console.log("检测到等待人类输入的提示");
+                                    // 统一调用 showWaitingForHumanInput
+                                    showWaitingForHumanInput(currentSpeaker);
                                     // 立即检查人类输入状态
                                     await checkForHumanInput();
-                                } 
+                                }
                                 // 处理思考内容
                                 else if (reasoningContent) {
                                     hasThinkingContent = true;
-                                    
+    
                                     if (currentSpeaker) {
                                         // 处理特定发言人的思考内容
                                         speakerThinkingContent += reasoningContent;
-                                        
+    
                                         // 更新思考内容
                                         if (speakerThinkingContainer) {
                                             // 显示思考容器
                                             speakerThinkingContainer.style.display = 'block';
-                                            
+    
                                             const thinkingContentElement = speakerThinkingContainer.querySelector('.thinking-content');
                                             if (thinkingContentElement) {
                                                 thinkingContentElement.innerHTML = marked.parse(speakerThinkingContent);
@@ -2174,7 +2163,7 @@ document.addEventListener("DOMContentLoaded", function() {
                                         if (window.MathJax && window.MathJax.typesetPromise) {
                                             MathJax.typesetPromise([thinkingContent]);
                                         }
-                                        
+    
                                         // 显示思考容器
                                         thinkingContainer.style.display = 'block';
                                     }
@@ -2200,7 +2189,7 @@ document.addEventListener("DOMContentLoaded", function() {
                                         }
                                     }
                                 }
-                                
+    
                                 // 滚动到底部
                                 scrollToBottom();
                             }
@@ -2209,97 +2198,29 @@ document.addEventListener("DOMContentLoaded", function() {
                         }
                     } else if (line === 'data: [DONE]') {
                         console.log('讨论完成');
-                        
+    
                         // 清理定时刷新
                         if (window.refreshTimer) {
                             clearTimeout(window.refreshTimer);
                             window.refreshTimer = null;
                             console.log("已清理会议刷新定时器");
                         }
-                        
+    
                         // 流结束后，检查一次是否需要人类输入
                         await checkForHumanInput();
                     }
                 }
             }
-            
+    
             // 隐藏加载状态
             hideLoading();
-            
+    
             return true;
         } catch (error) {
             console.error('创建讨论失败:', error);
             hideLoading();
             showError(`创建讨论失败: ${error.message}`);
             return false;
-        }
-    }
-    
-    // 执行一轮会议讨论
-    async function executeMeetingRound() {
-            if (!currentMeetingId) {
-            console.log("没有活跃的会议ID，无法执行讨论轮次");
-                return;
-            }
-        
-        // 如果正在等待人类输入，不执行新的轮次
-        if (isWaitingForHumanInput) {
-            console.log("正在等待人类输入，暂停讨论轮次");
-            return;
-        }
-        
-        try {
-            console.log(`执行讨论轮次: meeting_id=${currentMeetingId}`);
-            
-            // 获取API密钥
-            const apiKey = getCurrentApiKey();
-            
-            // 显示加载状态
-            showLoading();
-            
-            // 调用API执行一轮讨论
-            const response = await fetch(`/api/meeting/discussions/${currentMeetingId}/round`, {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                    'Authorization': `${apiKey}`
-                }
-            });
-            
-            if (!response.ok) {
-                if (response.status === 404) {
-                    console.error("执行讨论轮次失败: 会议不存在");
-                    currentMeetingId = null;
-                    showError("会议已结束或不存在");
-                    return;
-                }
-                
-                const errorText = await response.text();
-                console.error(`执行讨论轮次失败: ${response.status} ${errorText}`);
-                return;
-            }
-            
-            const data = await response.json();
-            console.log('讨论轮次结果:', data);
-            
-            // 检查是否需要等待人类输入
-            if (data.status === "等待人类输入" || data.waiting_for_human_input) {
-                console.log(`会议暂停，等待人类${data.waiting_for_human_input || ''}输入`);
-                // 禁止自动触发下一轮，等待人类输入
-                return;
-            }
-            
-            // 刷新会议状态
-            if (window.refreshTimer) {
-                clearTimeout(window.refreshTimer);
-            }
-            window.refreshTimer = setTimeout(refreshDiscussion, 1000);
-            
-        } catch (error) {
-            console.error('执行讨论轮次时出错:', error);
-            showError(`执行讨论失败: ${error.message}`);
-        } finally {
-            hideLoading();
         }
     }
     
@@ -2870,7 +2791,7 @@ document.addEventListener("DOMContentLoaded", function() {
                                     }
                                     // 当已经在显示总结内容时，继续累积总结内容
                                     else if (currentSpeaker === "总结") {
-                                        console.log("正在累积总结内容: " + delta.substring(0, 30) + (delta.length > 30 ? "..." : ""));
+                                        // console.log("正在累积总结内容: " + delta.substring(0, 30) + (delta.length > 30 ? "..." : ""));
                                         speakerContent += delta;
                                         
                                         // 更新总结内容
@@ -3405,51 +3326,6 @@ document.addEventListener("DOMContentLoaded", function() {
     // 获取当前API密钥
     function getCurrentApiKey() {
         return localStorage.getItem('api_key') || defaultApiKey;
-    }
-    
-    // 刷新会议消息
-    async function refreshMessages() {
-        try {
-            // 确保会议ID存在
-            if (!currentMeetingId) {
-                console.error('无法刷新消息：没有活跃的会议');
-                return;
-            }
-            
-            // 获取API密钥
-            const apiKey = getCurrentApiKey();
-            
-            // 获取更新的讨论消息
-            const messagesResponse = await fetch(`/api/meeting/discussions/${currentMeetingId}/messages`, {
-                headers: {
-                    'Authorization': `${apiKey}` // 添加API密钥到请求头
-                }
-            });
-            
-            // 处理响应状态
-            if (!messagesResponse.ok) {
-                // 当状态码不是2xx时
-                if (messagesResponse.status === 401) {
-                    throw new Error('API密钥无效或未提供，请检查您的API密钥设置');
-                } else if (messagesResponse.status === 404) {
-                    // 会议不存在，重置会议ID
-                    currentMeetingId = null;
-                    throw new Error('会议不存在，请重新创建讨论');
-                } else {
-                    throw new Error(`获取讨论消息失败: ${messagesResponse.status} ${messagesResponse.statusText}`);
-                }
-            }
-            
-            const messagesData = await messagesResponse.json();
-            
-            // 更新聊天界面
-            updateDiscussionChat(messagesData);
-            
-            return messagesData;
-        } catch (error) {
-            console.error('刷新消息失败:', error);
-            return null;
-        }
     }
     
     // 刷新讨论状态，获取最新消息
@@ -4074,7 +3950,7 @@ function highlightCodeBlocks() {
         document.querySelectorAll('pre code:not(.thinking-content pre code)').forEach((block) => {
             // 检查是否在思考内容中
             if (!block.closest('.thinking-content')) {
-                hljs.highlightElement(block);
+                // hljs.highlightElement(block);
             }
         });
     }
@@ -4122,43 +3998,56 @@ function addExportButtonToMessage(messageContainer) {
     messageContainer.appendChild(exportBtn);
 }
 
-// 更新marked配置，添加语言标识，但不高亮思考内容中的代码
+// 更新marked配置，添加语言标识
 function setupMarkedOptions() {
     if (window.marked) {
         marked.setOptions({
             highlight: function(code, lang, info) {
-                // 检查是否应该跳过高亮
-                // 这里无法直接检测是否在思考内容中，但我们可以在CSS中覆盖这些样式
                 const language = lang || '';
                 if (language && hljs.getLanguage(language)) {
                     return hljs.highlight(code, { language: language }).value;
                 }
                 return hljs.highlightAuto(code).value;
             },
-            langPrefix: 'hljs language-', // 添加类前缀
-            gfm: true, // 启用GitHub风格Markdown
-            breaks: true // 启用换行符转换为<br>
+            langPrefix: 'hljs language-',
+            gfm: true,
+            breaks: true
         });
-        
+
         // 保存原始渲染器
         const originalRenderer = new marked.Renderer();
-        
+
         // 创建自定义渲染器来处理代码块
         const renderer = new marked.Renderer();
-        
+
         // 重写代码块渲染器
         renderer.code = function(code, language) {
-            // 如果是HTML代码块，确保不会被渲染
-            if (language === 'html') {
-                // 对HTML代码进行转义，防止被渲染
-                const escapedCode = escapeHtml(code);
-                return `<pre><code class="language-html">${escapedCode}</code></pre>`;
+            // 兼容 marked 传入的对象类型
+            if (typeof code === 'object' && code !== null) {
+                code = typeof code.text === 'string' ? code.text
+                     : typeof code.raw === 'string' ? code.raw
+                     : '';
+                language = language || code.lang || '';
             }
-            // 在这里，我们仍然使用原始的高亮函数，但CSS将覆盖思考内容中的高亮
-            const highlightedCode = originalRenderer.code(code, language);
-            return highlightedCode;
+            if (typeof code !== 'string') {
+                return `<pre><code class="hljs language-${language||''}"></code></pre>`;
+            }
+            let highlighted = '';
+            // 只在 language 有效且已注册时才用指定语言，否则用自动检测
+            if (window.hljs && typeof language === 'string' && language && window.hljs.getLanguage && window.hljs.getLanguage(language)) {
+                highlighted = window.hljs.highlight(code, { language }).value;
+            } else if (window.hljs && window.hljs.highlightAuto) {
+                highlighted = window.hljs.highlightAuto(code).value;
+                language = ''; // 避免 class="language-undefined"
+            } else {
+                highlighted = code.replace(/[<>&]/g, s => (
+                    s === '<' ? '&lt;' : s === '>' ? '&gt;' : '&amp;'
+                ));
+                language = '';
+            }
+            return `<pre><code class="hljs language-${language||''}">${highlighted}</code></pre>`;
         };
-        
+
         // 重写html渲染器，以确保HTML代码不被误渲染
         renderer.html = function(html) {
             // 确保html参数是字符串类型
@@ -4172,7 +4061,7 @@ function setupMarkedOptions() {
                     html = '';
                 }
             }
-            
+
             // 继续处理现在一定是字符串的html参数
             if (html.trim && html.trim().startsWith('<') && html.trim().endsWith('>')) {
                 // 对HTML代码进行转义，防止被渲染
@@ -4180,7 +4069,7 @@ function setupMarkedOptions() {
             }
             return originalRenderer.html(html);
         };
-        
+
         // HTML转义辅助函数
         function escapeHtml(unsafe) {
             return unsafe
@@ -4190,105 +4079,11 @@ function setupMarkedOptions() {
                 .replace(/"/g, "&quot;")
                 .replace(/'/g, "&#039;");
         }
-        
+
         marked.use({ renderer });
     }
 }
 
-// 初始化函数
-async function init() {
-    try {
-        // 获取API密钥
-        await fetchDefaultApiKey();
-        
-        // 配置marked使用highlight.js
-        setupMarkedOptions();
-        
-        // 获取配置
-        await Promise.all([
-            loadModels(),
-            loadConfigurations(),
-            loadRoles(),
-            loadGroups()
-        ]);
-        
-        // 设置事件监听器
-        const sendButton = document.getElementById('sendButton');
-        if (sendButton) {
-            sendButton.addEventListener('click', sendMessage);
-        }
-        
-        const messageInput = document.getElementById('messageInput');
-        if (messageInput) {
-            messageInput.addEventListener('keydown', function(e) {
-            if (e.key === 'Enter' && !e.shiftKey) {
-                e.preventDefault();
-                sendMessage();
-            }
-        });
-        }
-        
-        // 监听聊天模式切换
-        const chatModeElement = document.getElementById('chatMode');
-        if (chatModeElement) {
-            chatModeElement.addEventListener('change', handleChatModeChange);
-        
-        // 初始设置活跃模式
-            setActiveChatMode(chatModeElement.value);
-        }
-        
-        // 设置讨论组选择的事件监听器
-        if (discussionGroupSelect) {
-            discussionGroupSelect.addEventListener('change', function() {
-                // 更新当前选中的讨论组ID
-                currentGroupId = this.value;
-                console.log('已选择讨论组:', currentGroupId);
-            });
-        }
-        
-        // 设置人类输入区域事件
-        const humanSendButton = document.getElementById('sendHumanInput');
-        if (humanSendButton) {
-            humanSendButton.addEventListener('click', sendHumanInput);
-        }
-        
-        const humanInputMessage = document.getElementById('humanInputMessage');
-        if (humanInputMessage) {
-            humanInputMessage.addEventListener('keydown', function(e) {
-            if (e.key === 'Enter' && !e.shiftKey) {
-                e.preventDefault();
-                sendHumanInput();
-            }
-        });
-        }
-        
-        // 设置重置按钮
-        const resetButton = document.getElementById('resetButton');
-        if (resetButton) {
-            resetButton.addEventListener('click', resetChat);
-        }
-        
-        // 隐藏加载提示
-        const loadingIndicator = document.getElementById('loadingIndicator');
-        if (loadingIndicator) {
-            loadingIndicator.style.display = 'none';
-        }
-        
-        // 设置定时器检查人类输入状态
-        setInterval(checkForHumanInput, 3000); // 每3秒检查一次
-        
-        // 不再需要全局导出按钮
-        const oldExportButton = document.getElementById('exportMarkdown');
-        if (oldExportButton) {
-            oldExportButton.remove(); // 移除旧的导出按钮
-        }
-        
-        console.log('初始化完成');
-    } catch (error) {
-        console.error('初始化失败:', error);
-        showError('初始化失败: ' + error.message);
-    }
-}
 
 // 更新思考内容而不破坏流式输出
 function updateThinkingContent(container, content) {
@@ -4352,21 +4147,6 @@ function handleThinkingContent(thinking, messageContainer) {
     }
 }
 
-// 处理AI回复
-async function handleAIReply(prompt, isFollowUp, messageHistory, thinking) {
-    // ... existing code ...
-    
-    // 创建AI消息容器
-    const aiMsg = document.createElement('div');
-    aiMsg.className = 'message ai-message';
-    
-    // 处理思考内容
-    if (thinking && thinking.trim() !== '') {
-        handleThinkingContent(thinking, aiMsg);
-    }
-    
-    // ... existing code ...
-}
 
 /**
  * 导出讨论组对话为Markdown

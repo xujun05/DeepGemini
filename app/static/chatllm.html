@@ -13,11 +13,21 @@
     <link href="css/chatllm.css" rel="stylesheet">
     <script>
         window.MathJax = {
-          tex: { inlineMath: [['$', '$'], ['\\(', '\\)']] },
+          tex: {
+            inlineMath: [['$', '$'], ['\\(', '\\)']],
+            displayMath: [['$$', '$$'], ['\\[', '\\]']],
+            processEscapes: true,
+            processEnvironments: true,
+            tags: 'ams'
+          },
+          options: {
+            skipHtmlTags: ['script', 'noscript', 'style', 'textarea', 'pre', 'code', 'a', 'tips'],
+            ignoreHtmlClass: 'not_math'
+          },
           svg: { fontCache: 'global' }
         };
-      </script>
-      <script src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js"></script>
+    </script>
+    <script src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js"></script>
     <style>
         /* 消息名称样式 */
         .message-name {
@@ -83,6 +93,18 @@
             }
         }
     </style>
+    <!-- Highlight.js 代码高亮库，必须在自定义JS前加载 -->
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/highlight.js@11.9.0/styles/github.min.css">
+    <script src="js/highlight.min.js"></script>
+    <!-- marked.js 依赖 -->
+    <script src="js/marked.min.js"></script>
+    <script>
+      document.addEventListener('DOMContentLoaded', function() {
+        if (window.hljs) {
+          hljs.highlightAll();
+        }
+      });
+    </script>
 </head>
 <body>
     <!-- Sidebar -->
@@ -256,29 +278,7 @@
     </div>
 
     <!-- Scripts -->
-    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
-    <!-- 添加highlight.js用于代码高亮 -->
-    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/highlight.js@11.7.0/styles/github.min.css">
-    <script src="https://cdn.jsdelivr.net/npm/highlight.js@11.7.0/lib/core.min.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/highlight.js@11.7.0/lib/highlight.min.js"></script>
-    <!-- 常见编程语言支持 -->
-    <script src="https://cdn.jsdelivr.net/npm/highlight.js@11.7.0/lib/languages/javascript.min.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/highlight.js@11.7.0/lib/languages/python.min.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/highlight.js@11.7.0/lib/languages/java.min.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/highlight.js@11.7.0/lib/languages/cpp.min.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/highlight.js@11.7.0/lib/languages/csharp.min.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/highlight.js@11.7.0/lib/languages/php.min.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/highlight.js@11.7.0/lib/languages/go.min.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/highlight.js@11.7.0/lib/languages/ruby.min.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/highlight.js@11.7.0/lib/languages/rust.min.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/highlight.js@11.7.0/lib/languages/swift.min.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/highlight.js@11.7.0/lib/languages/typescript.min.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/highlight.js@11.7.0/lib/languages/xml.min.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/highlight.js@11.7.0/lib/languages/sql.min.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/highlight.js@11.7.0/lib/languages/bash.min.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/highlight.js@11.7.0/lib/languages/yaml.min.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/highlight.js@11.7.0/lib/languages/json.min.js"></script>
+    <script src="js/bootstrap.bundle.min.js"></script>
     <script src="app.js"></script>
     <script src="js/thinking.js"></script>
     <script src="js/chatllm.js"></script>
