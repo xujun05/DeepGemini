@@ -1141,6 +1141,7 @@ document.addEventListener("DOMContentLoaded", function() {
                                     fullContent += delta.content;
                                     messageContent.innerHTML = marked.parse(fullContent);
                                     // 主动 typeset 并打标记，防止 observer 再次重复渲染
+                                    console.log('messageContent', messageContent);
                                     processMathJax(messageContent);
                                 }
                                 
@@ -3948,70 +3949,94 @@ function addExportButtonToMessage(messageContainer) {
 // 更新marked配置，添加语言标识
 function setupMarkedOptions() {
     if (window.marked) {
-        // 数学公式占位符映射
+        // 数学公式占位符映射（全局作用域）
         const mathMap = {};
         let mathId = 0;
 
-        // 公式保护正则 - 优化正则表达式模式
+        // 公式保护正则
         const displayMathRegex = /\$\$([\s\S]+?)\$\$/g;
         const latexBlockRegex = /\\\[([\s\S]+?)\\\]/g;
-        const inlineMathRegex = /\$([^\$\n]+?)\$/g; // 修改：避免跨行匹配
-        const bracketBlockRegex = /^\s*\[([\s\S]+?)\]\s*$/gm; 
+        const inlineMathRegex = /\$([^\$\n]+?)\$/g; // 避免跨行匹配
+        const bracketBlockRegex = /^\s*\[([\s\S]+?)\]\s*$/gm;
         const bracketInlineRegex = /\[([^\[\]\n]+?)\]/g;
+        const latexInlineRegex = /\\\((.+?)\\\)/g;
 
         // 添加安全检查，防止无限递归
         let processingCount = 0;
-        const MAX_PROCESSING = 1000; // 设置最大处理次数
+        const MAX_PROCESSING = 10000;
 
         function protectMath(src) {
             if (typeof src !== 'string') {
                 console.error('protectMath接收到非字符串输入:', src);
                 return '';
             }
-            
-            // 重置处理计数
+
+            // 1. 先保护所有代码块和行内代码
+            const codeMap = {};
+            let codeId = 0;
+            // ```多行代码块```
+            src = src.replace(/```[\s\S]*?```/g, (m) => {
+                const key = `@@CODE_BLOCK_${codeId++}@@`;
+                codeMap[key] = m;
+                return key;
+            });
+            // <pre>...</pre> 代码块
+            src = src.replace(/<pre[\s\S]*?<\/pre>/gi, (m) => {
+                const key = `@@CODE_BLOCK_${codeId++}@@`;
+                codeMap[key] = m;
+                return key;
+            });
+            // 行内代码 `...`
+            src = src.replace(/`[^`\n]+`/g, (m) => {
+                const key = `@@CODE_INLINE_${codeId++}@@`;
+                codeMap[key] = m;
+                return key;
+            });
+
+            // 2. 只对非代码部分做数学公式保护
             processingCount = 0;
-            
-            // 块公式：$$ ... $$
+
             src = src.replace(displayMathRegex, (m, p1) => {
                 if (++processingCount > MAX_PROCESSING) return m;
                 const key = `@@MATH_BLOCK_${mathId++}@@`;
                 mathMap[key] = `$$${p1}$$`;
                 return key;
             });
-            
-            // 块公式：\[ ... \]
             src = src.replace(latexBlockRegex, (m, p1) => {
                 if (++processingCount > MAX_PROCESSING) return m;
                 const key = `@@MATH_BLOCK_${mathId++}@@`;
                 mathMap[key] = `\\[${p1}\\]`;
                 return key;
             });
-            
-            // 独占一行的 [ ... ]
             src = src.replace(bracketBlockRegex, (m, p1) => {
                 if (++processingCount > MAX_PROCESSING) return m;
                 const key = `@@MATH_BLOCK_${mathId++}@@`;
                 mathMap[key] = `$$${p1}$$`;
                 return key;
             });
-            
-            // 行内公式：$...$（避免多次匹配同一内容）
             src = src.replace(inlineMathRegex, (m, p1) => {
                 if (++processingCount > MAX_PROCESSING) return m;
                 const key = `@@MATH_INLINE_${mathId++}@@`;
                 mathMap[key] = `\\(${p1}\\)`;
                 return key;
             });
-            
-            // 行内公式：[ ... ]（非独占行）
             src = src.replace(bracketInlineRegex, (m, p1) => {
                 if (++processingCount > MAX_PROCESSING) return m;
                 const key = `@@MATH_INLINE_${mathId++}@@`;
                 mathMap[key] = `\\(${p1}\\)`;
                 return key;
             });
-            
+            src = src.replace(latexInlineRegex, (m, p1) => {
+                if (++processingCount > MAX_PROCESSING) return m;
+                const key = `@@MATH_INLINE_${mathId++}@@`;
+                mathMap[key] = `\\(${p1}\\)`;
+                return key;
+            });
+
+            // 3. 还原所有代码块和行内代码
+            for (const key in codeMap) {
+                src = src.replace(key, codeMap[key]);
+            }
 
             return src;
         }
@@ -4022,42 +4047,41 @@ function setupMarkedOptions() {
                 console.error('restoreMath接收到非字符串输入:', html);
                 return '';
             }
-            
+
             // 限制替换次数，防止无限循环
             processingCount = 0;
-            
+
             for (const key in mathMap) {
                 // 安全检查
                 if (++processingCount > MAX_PROCESSING) {
                     console.warn('数学公式还原次数超过上限，强制中断');
                     break;
                 }
-                
+
                 // 使用字符串方法替代正则，避免潜在的灾难性回溯
                 let pos = 0;
                 let result = '';
                 let nextPos;
-                
+
                 while ((nextPos = html.indexOf(key, pos)) !== -1 && processingCount <= MAX_PROCESSING) {
                     result += html.substring(pos, nextPos) + mathMap[key];
                     pos = nextPos + key.length;
                     processingCount++;
                 }
-                
+
                 if (pos > 0) {
                     result += html.substring(pos);
                     html = result;
                 }
             }
-            
+
             return html;
         }
 
-        // 设置marked选项，移除多余的console.log
+        // 设置marked选项
         marked.setOptions({
             highlight: function(code, lang) {
                 if (!code) return '';
-                
                 const language = lang && typeof lang === 'string' ? lang : '';
                 if (language && hljs && hljs.getLanguage && hljs.getLanguage(language)) {
                     try {
@@ -4085,21 +4109,18 @@ function setupMarkedOptions() {
 
         renderer.code = function(code, language) {
             if (!code) return '<pre><code></code></pre>';
-            
             if (typeof code === 'object' && code !== null) {
                 code = typeof code.text === 'string' ? code.text
-                     : typeof code.raw === 'string' ? code.raw
-                     : '';
+                    : typeof code.raw === 'string' ? code.raw
+                    : '';
                 language = language || code.lang || '';
             }
-            
             if (typeof code !== 'string') {
                 return `<pre><code class="hljs language-${language||''}"></code></pre>`;
             }
-            
             let highlighted = '';
             try {
-                if (window.hljs && typeof language === 'string' && language && 
+                if (window.hljs && typeof language === 'string' && language &&
                     window.hljs.getLanguage && window.hljs.getLanguage(language)) {
                     highlighted = window.hljs.highlight(code, { language }).value;
                 } else if (window.hljs && window.hljs.highlightAuto) {
@@ -4114,7 +4135,6 @@ function setupMarkedOptions() {
                 highlighted = escapeHtml(code);
                 language = '';
             }
-            
             return `<pre><code class="hljs language-${language||''}">${highlighted}</code></pre>`;
         };
 
@@ -4145,12 +4165,10 @@ function setupMarkedOptions() {
                     html = '';
                 }
             }
-            
             // 检查是否是HTML标签
             if (html.trim && html.trim().startsWith('<') && html.trim().endsWith('>')) {
                 return `<pre><code class="language-html">${escapeHtml(html)}</code></pre>`;
             }
-            
             return originalRenderer.html(html);
         };
 
@@ -4162,13 +4180,13 @@ function setupMarkedOptions() {
             // 每次渲染前清空映射
             for (const k in mathMap) delete mathMap[k];
             mathId = 0;
-            
+
             // 输入安全检查
             if (typeof src !== 'string') {
                 console.error('marked.parse接收到非字符串输入:', src);
                 return '';
             }
-            
+
             try {
                 // 保护公式
                 const protectedSrc = protectMath(src);
