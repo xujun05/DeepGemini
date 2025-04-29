@@ -1140,9 +1140,8 @@ document.addEventListener("DOMContentLoaded", function() {
                                 if (delta.content) {
                                     fullContent += delta.content;
                                     messageContent.innerHTML = marked.parse(fullContent);
-                                    if (window.MathJax && window.MathJax.typesetPromise) {
-                                        MathJax.typesetPromise([messageContent]);
-                                    }
+                                    // 主动 typeset 并打标记，防止 observer 再次重复渲染
+                                    processMathJax(messageContent);
                                 }
                                 
                                 // 处理思考内容，但只在reasoning模型中显示
@@ -1258,9 +1257,7 @@ document.addEventListener("DOMContentLoaded", function() {
                         const messageContent = document.createElement('div');
                         messageContent.classList.add('message-content');
                         messageContent.innerHTML = marked.parse(aiMessage);
-                        if (window.MathJax && window.MathJax.typesetPromise) {
-                            MathJax.typesetPromise([messageContent]);
-                        }
+                        processMathJax(messageContent);
                         
                         // 先添加思考再添加内容（思考在上，回答在下）
                         thinkingContainer.appendChild(thinkingHeader);
@@ -1437,19 +1434,14 @@ document.addEventListener("DOMContentLoaded", function() {
                                             const thinkingContentElement = speakerThinkingContainer.querySelector('.thinking-content');
                                             if (thinkingContentElement) {
                                                 thinkingContentElement.innerHTML = marked.parse(speakerThinkingContent);
-                                                if (window.MathJax && window.MathJax.typesetPromise) {
-                                                    MathJax.typesetPromise([thinkingContentElement]);
-                                                }
+                                                processMathJax(thinkingContentElement);
                                             }
                                         }
                                     } else {
                                         // 处理通用思考内容
                                         thinkingContentText += reasoningContent;
                                         thinkingContent.innerHTML = marked.parse(thinkingContentText);
-                                        if (window.MathJax && window.MathJax.typesetPromise) {
-                                            MathJax.typesetPromise([thinkingContent]);
-                                        }
-                                        
+                                        processMathJax(thinkingContent);
                                         // 显示思考容器
                                         thinkingContainer.style.display = 'block';
                                     }
@@ -1462,16 +1454,12 @@ document.addEventListener("DOMContentLoaded", function() {
                                             speakerContent += content;
                                             if (speakerContentElement) {
                                                 speakerContentElement.innerHTML = marked.parse(speakerContent);
-                                                if (window.MathJax && window.MathJax.typesetPromise) {
-                                                    MathJax.typesetPromise([speakerContentElement]);
-                                                }
+                                                processMathJax(speakerContentElement);
                                             }
                                         } else {
                                             fullContent += content;
                                             messageContent.innerHTML = marked.parse(fullContent);
-                                            if (window.MathJax && window.MathJax.typesetPromise) {
-                                                MathJax.typesetPromise([messageContent]);
-                                            }
+                                            processMathJax(messageContent);
                                         }
                                     }
                                 }
@@ -1611,9 +1599,8 @@ document.addEventListener("DOMContentLoaded", function() {
                                 if (delta.content) {
                                     fullContent += delta.content;
                                     messageContent.innerHTML = marked.parse(fullContent);
-                                    if (window.MathJax && window.MathJax.typesetPromise) {
-                                        MathJax.typesetPromise([messageContent]);
-                                    }
+                                    processMathJax(messageContent);
+                                    
                                 }
                                 
                                 // 处理思考内容
@@ -1621,9 +1608,7 @@ document.addEventListener("DOMContentLoaded", function() {
                                     hasThinkingContent = true;
                                     thinkingContentText += delta.reasoning_content || '';
                                     thinkingContent.innerHTML = marked.parse(thinkingContentText);
-                                    if (window.MathJax && window.MathJax.typesetPromise) {
-                                        MathJax.typesetPromise([thinkingContent]);
-                                    }
+                                    processMathJax(thinkingContent);
                                     
                                     // 如果是第一次出现思考内容，添加思考容器到DOM
                                     if (!messageContainer.contains(thinkingContainer)) {
@@ -1727,9 +1712,7 @@ document.addEventListener("DOMContentLoaded", function() {
                         const messageContent = document.createElement('div');
                         messageContent.classList.add('message-content');
                         messageContent.innerHTML = marked.parse(aiMessage);
-                        if (window.MathJax && window.MathJax.typesetPromise) {
-                            MathJax.typesetPromise([messageContent]);
-                        }
+                        processMathJax(messageContent);
                         
                         // 先添加思考再添加内容（思考在上，回答在下）
                         thinkingContainer.appendChild(thinkingHeader);
@@ -1909,9 +1892,7 @@ document.addEventListener("DOMContentLoaded", function() {
                                         // 添加内容到UI
                                         if (speakerContentElement) {
                                             speakerContentElement.innerHTML = marked.parse(speakerContent);
-                                            if (window.MathJax && window.MathJax.typesetPromise) {
-                                                MathJax.typesetPromise([speakerContentElement]);
-                                            }
+                                            processMathJax(speakerContentElement);
                                         }
                                     }
     
@@ -2029,9 +2010,7 @@ document.addEventListener("DOMContentLoaded", function() {
                                         // 添加内容到UI
                                         if (speakerContentElement) {
                                             speakerContentElement.innerHTML = marked.parse(speakerContent);
-                                            if (window.MathJax && window.MathJax.typesetPromise) {
-                                                MathJax.typesetPromise([speakerContentElement]);
-                                            }
+                                            processMathJax(speakerContentElement);
                                         }
                                     }
     
@@ -2091,10 +2070,7 @@ document.addEventListener("DOMContentLoaded", function() {
     
                                     // 确保总结标题显示在顶部
                                     speakerContentElement.innerHTML = marked.parse(speakerContent);
-                                    if (window.MathJax && window.MathJax.typesetPromise) {
-                                        MathJax.typesetPromise([speakerContentElement]);
-                                    }
-    
+                                    processMathJax(speakerContentElement);
                                     // 清除检查人类输入的定时器
                                     if (humanCheckInterval) {
                                         clearInterval(humanCheckInterval);
@@ -2118,9 +2094,7 @@ document.addEventListener("DOMContentLoaded", function() {
                                     // 更新总结内容
                                     if (speakerContentElement) {
                                         speakerContentElement.innerHTML = marked.parse(speakerContent);
-                                        if (window.MathJax && window.MathJax.typesetPromise) {
-                                            MathJax.typesetPromise([speakerContentElement]);
-                                        }
+                                        processMathJax(speakerContentElement);
                                         // 滚动到底部
                                         scrollToBottom();
                                     }
@@ -2151,19 +2125,14 @@ document.addEventListener("DOMContentLoaded", function() {
                                             const thinkingContentElement = speakerThinkingContainer.querySelector('.thinking-content');
                                             if (thinkingContentElement) {
                                                 thinkingContentElement.innerHTML = marked.parse(speakerThinkingContent);
-                                                if (window.MathJax && window.MathJax.typesetPromise) {
-                                                    MathJax.typesetPromise([thinkingContentElement]);
-                                                }
+                                                processMathJax(thinkingContentElement);
                                             }
                                         }
                                     } else {
                                         // 处理通用思考内容
                                         thinkingContentText += reasoningContent;
                                         thinkingContent.innerHTML = marked.parse(thinkingContentText);
-                                        if (window.MathJax && window.MathJax.typesetPromise) {
-                                            MathJax.typesetPromise([thinkingContent]);
-                                        }
-    
+                                        processMathJax(thinkingContent);
                                         // 显示思考容器
                                         thinkingContainer.style.display = 'block';
                                     }
@@ -2176,16 +2145,12 @@ document.addEventListener("DOMContentLoaded", function() {
                                             speakerContent += content;
                                             if (speakerContentElement) {
                                                 speakerContentElement.innerHTML = marked.parse(speakerContent);
-                                                if (window.MathJax && window.MathJax.typesetPromise) {
-                                                    MathJax.typesetPromise([speakerContentElement]);
-                                                }
+                                                processMathJax(speakerContentElement);
                                             }
                                         } else {
                                             fullContent += content;
                                             messageContent.innerHTML = marked.parse(fullContent);
-                                            if (window.MathJax && window.MathJax.typesetPromise) {
-                                                MathJax.typesetPromise([messageContent]);
-                                            }
+                                            processMathJax(messageContent);
                                         }
                                     }
                                 }
@@ -2712,9 +2677,7 @@ document.addEventListener("DOMContentLoaded", function() {
                                             // 添加内容到UI
                                             if (speakerContentElement) {
                                                 speakerContentElement.innerHTML = marked.parse(speakerContent);
-                                                if (window.MathJax && window.MathJax.typesetPromise) {
-                                                    MathJax.typesetPromise([speakerContentElement]);
-                                                }
+                                                processMathJax(speakerContentElement);
                                             }
                                         }
                                         
@@ -2769,9 +2732,7 @@ document.addEventListener("DOMContentLoaded", function() {
                                         
                                         // 确保总结标题显示在顶部
                                         speakerContentElement.innerHTML = marked.parse(speakerContent);
-                                        if (window.MathJax && window.MathJax.typesetPromise) {
-                                            MathJax.typesetPromise([speakerContentElement]);
-                                        }
+                                        processMathJax(speakerContentElement);
                                         
                                         // 清除检查人类输入的定时器
                                         if (humanCheckInterval) {
@@ -2797,9 +2758,7 @@ document.addEventListener("DOMContentLoaded", function() {
                                         // 更新总结内容
                                         if (speakerContentElement) {
                                             speakerContentElement.innerHTML = marked.parse(speakerContent);
-                                            if (window.MathJax && window.MathJax.typesetPromise) {
-                                                MathJax.typesetPromise([speakerContentElement]);
-                                            }
+                                            processMathJax(speakerContentElement);
                                             // 滚动到底部
                                             scrollToBottom();
                                         }
@@ -2815,9 +2774,7 @@ document.addEventListener("DOMContentLoaded", function() {
                                             // 添加内容到UI
                                             if (speakerContentElement) {
                                                 speakerContentElement.innerHTML = marked.parse(speakerContent);
-                                                if (window.MathJax && window.MathJax.typesetPromise) {
-                                                    MathJax.typesetPromise([speakerContentElement]);
-                                                }
+                                                processMathJax(speakerContentElement);
                                             }
                                         }
                                         
@@ -2880,9 +2837,7 @@ document.addEventListener("DOMContentLoaded", function() {
                                                     // 移除可能包含的等待人类输入文本
                                                     const cleanContent = speakerContent.replace(/\[WAITING_FOR_HUMAN_INPUT:.*?\]/g, '').trim();
                                                     speakerContentElement.innerHTML = marked.parse(cleanContent);
-                                                    if (window.MathJax && window.MathJax.typesetPromise) {
-                                                        MathJax.typesetPromise([speakerContentElement]);
-                                                    }
+                                                    processMathJax(speakerContentElement);
                                                 }
                                             }
                                             
@@ -2912,9 +2867,7 @@ document.addEventListener("DOMContentLoaded", function() {
                                                 // 移除等待人类输入的提示
                                                 const cleanContent = speakerContent.replace(/等待人类角色\s+(.+?)\s+输入/g, '').trim();
                                                 speakerContentElement.innerHTML = marked.parse(cleanContent);
-                                                if (window.MathJax && window.MathJax.typesetPromise) {
-                                                    MathJax.typesetPromise([speakerContentElement]);
-                                                }
+                                                processMathJax(speakerContentElement);
                                             }
                                             
                                             // 使用改进的方法显示等待状态，确保不会覆盖之前的消息
@@ -2929,9 +2882,7 @@ document.addEventListener("DOMContentLoaded", function() {
                                         // 仅当有当前发言者容器时才更新UI
                                         if (speakerContentElement) {
                                             speakerContentElement.innerHTML = marked.parse(speakerContent);
-                                            if (window.MathJax && window.MathJax.typesetPromise) {
-                                                MathJax.typesetPromise([speakerContentElement]);
-                                            }
+                                            processMathJax(speakerContentElement);
                                             scrollToBottom();
                                         }
                                     }
@@ -3035,9 +2986,7 @@ document.addEventListener("DOMContentLoaded", function() {
         // 使用try-catch包裹markdown解析，避免解析错误
         try {
             messageContent.innerHTML = marked.parse(content);
-            if (window.MathJax && window.MathJax.typesetPromise) {
-                MathJax.typesetPromise([messageContent]);
-            }
+            processMathJax(messageContent);
         } catch (e) {
             console.error('Markdown解析失败:', e);
             messageContent.textContent = content; // 直接显示原始内容作为后备
@@ -3138,9 +3087,7 @@ document.addEventListener("DOMContentLoaded", function() {
                 try {
                     if (window.marked) {
                         agentContent.innerHTML = marked.parse(messageContent);
-                        if (window.MathJax && window.MathJax.typesetPromise) {
-                            MathJax.typesetPromise([agentContent]);
-                        }
+                        processMathJax(agentContent);
                     } else {
                         agentContent.textContent = messageContent;
                     }
@@ -4001,56 +3948,193 @@ function addExportButtonToMessage(messageContainer) {
 // 更新marked配置，添加语言标识
 function setupMarkedOptions() {
     if (window.marked) {
-        marked.setOptions({
-            highlight: function(code, lang, info) {
-                const language = lang || '';
-                if (language && hljs.getLanguage(language)) {
-                    return hljs.highlight(code, { language: language }).value;
+        // 数学公式占位符映射
+        const mathMap = {};
+        let mathId = 0;
+
+        // 公式保护正则 - 优化正则表达式模式
+        const displayMathRegex = /\$\$([\s\S]+?)\$\$/g;
+        const latexBlockRegex = /\\\[([\s\S]+?)\\\]/g;
+        const inlineMathRegex = /\$([^\$\n]+?)\$/g; // 修改：避免跨行匹配
+        const bracketBlockRegex = /^\s*\[([\s\S]+?)\]\s*$/gm; 
+        const bracketInlineRegex = /\[([^\[\]\n]+?)\]/g;
+
+        // 添加安全检查，防止无限递归
+        let processingCount = 0;
+        const MAX_PROCESSING = 1000; // 设置最大处理次数
+
+        function protectMath(src) {
+            if (typeof src !== 'string') {
+                console.error('protectMath接收到非字符串输入:', src);
+                return '';
+            }
+            
+            // 重置处理计数
+            processingCount = 0;
+            
+            // 块公式：$$ ... $$
+            src = src.replace(displayMathRegex, (m, p1) => {
+                if (++processingCount > MAX_PROCESSING) return m;
+                const key = `@@MATH_BLOCK_${mathId++}@@`;
+                mathMap[key] = `$$${p1}$$`;
+                return key;
+            });
+            
+            // 块公式：\[ ... \]
+            src = src.replace(latexBlockRegex, (m, p1) => {
+                if (++processingCount > MAX_PROCESSING) return m;
+                const key = `@@MATH_BLOCK_${mathId++}@@`;
+                mathMap[key] = `\\[${p1}\\]`;
+                return key;
+            });
+            
+            // 独占一行的 [ ... ]
+            src = src.replace(bracketBlockRegex, (m, p1) => {
+                if (++processingCount > MAX_PROCESSING) return m;
+                const key = `@@MATH_BLOCK_${mathId++}@@`;
+                mathMap[key] = `$$${p1}$$`;
+                return key;
+            });
+            
+            // 行内公式：$...$（避免多次匹配同一内容）
+            src = src.replace(inlineMathRegex, (m, p1) => {
+                if (++processingCount > MAX_PROCESSING) return m;
+                const key = `@@MATH_INLINE_${mathId++}@@`;
+                mathMap[key] = `\\(${p1}\\)`;
+                return key;
+            });
+            
+            // 行内公式：[ ... ]（非独占行）
+            src = src.replace(bracketInlineRegex, (m, p1) => {
+                if (++processingCount > MAX_PROCESSING) return m;
+                const key = `@@MATH_INLINE_${mathId++}@@`;
+                mathMap[key] = `\\(${p1}\\)`;
+                return key;
+            });
+            
+
+            return src;
+        }
+
+        // 还原函数：将占位符还原为公式（添加安全保护）
+        function restoreMath(html) {
+            if (typeof html !== 'string') {
+                console.error('restoreMath接收到非字符串输入:', html);
+                return '';
+            }
+            
+            // 限制替换次数，防止无限循环
+            processingCount = 0;
+            
+            for (const key in mathMap) {
+                // 安全检查
+                if (++processingCount > MAX_PROCESSING) {
+                    console.warn('数学公式还原次数超过上限，强制中断');
+                    break;
                 }
-                return hljs.highlightAuto(code).value;
+                
+                // 使用字符串方法替代正则，避免潜在的灾难性回溯
+                let pos = 0;
+                let result = '';
+                let nextPos;
+                
+                while ((nextPos = html.indexOf(key, pos)) !== -1 && processingCount <= MAX_PROCESSING) {
+                    result += html.substring(pos, nextPos) + mathMap[key];
+                    pos = nextPos + key.length;
+                    processingCount++;
+                }
+                
+                if (pos > 0) {
+                    result += html.substring(pos);
+                    html = result;
+                }
+            }
+            
+            return html;
+        }
+
+        // 设置marked选项，移除多余的console.log
+        marked.setOptions({
+            highlight: function(code, lang) {
+                if (!code) return '';
+                
+                const language = lang && typeof lang === 'string' ? lang : '';
+                if (language && hljs && hljs.getLanguage && hljs.getLanguage(language)) {
+                    try {
+                        return hljs.highlight(code, { language: language }).value;
+                    } catch (e) {
+                        console.error('语法高亮出错:', e);
+                    }
+                }
+                return hljs && hljs.highlightAuto ? hljs.highlightAuto(code).value : code;
             },
             langPrefix: 'hljs language-',
             gfm: true,
-            breaks: true
+            breaks: true,
+            walkTokens: function(token) {
+                // 只处理文本类型的token
+                if ((token.type === 'paragraph' || token.type === 'text') && typeof token.text === 'string') {
+                    token.text = protectMath(token.text);
+                }
+            }
         });
 
-        // 保存原始渲染器
+        // 创建自定义渲染器
         const originalRenderer = new marked.Renderer();
-
-        // 创建自定义渲染器来处理代码块
         const renderer = new marked.Renderer();
 
-        // 重写代码块渲染器
         renderer.code = function(code, language) {
-            // 兼容 marked 传入的对象类型
+            if (!code) return '<pre><code></code></pre>';
+            
             if (typeof code === 'object' && code !== null) {
                 code = typeof code.text === 'string' ? code.text
                      : typeof code.raw === 'string' ? code.raw
                      : '';
                 language = language || code.lang || '';
             }
+            
             if (typeof code !== 'string') {
                 return `<pre><code class="hljs language-${language||''}"></code></pre>`;
             }
+            
             let highlighted = '';
-            // 只在 language 有效且已注册时才用指定语言，否则用自动检测
-            if (window.hljs && typeof language === 'string' && language && window.hljs.getLanguage && window.hljs.getLanguage(language)) {
-                highlighted = window.hljs.highlight(code, { language }).value;
-            } else if (window.hljs && window.hljs.highlightAuto) {
-                highlighted = window.hljs.highlightAuto(code).value;
-                language = ''; // 避免 class="language-undefined"
-            } else {
-                highlighted = code.replace(/[<>&]/g, s => (
-                    s === '<' ? '&lt;' : s === '>' ? '&gt;' : '&amp;'
-                ));
+            try {
+                if (window.hljs && typeof language === 'string' && language && 
+                    window.hljs.getLanguage && window.hljs.getLanguage(language)) {
+                    highlighted = window.hljs.highlight(code, { language }).value;
+                } else if (window.hljs && window.hljs.highlightAuto) {
+                    highlighted = window.hljs.highlightAuto(code).value;
+                    language = '';
+                } else {
+                    highlighted = escapeHtml(code);
+                    language = '';
+                }
+            } catch (e) {
+                console.error('代码高亮出错:', e);
+                highlighted = escapeHtml(code);
                 language = '';
             }
+            
             return `<pre><code class="hljs language-${language||''}">${highlighted}</code></pre>`;
         };
 
-        // 重写html渲染器，以确保HTML代码不被误渲染
+        function escapeHtml(unsafe) {
+            if (typeof unsafe !== 'string') {
+                try {
+                    unsafe = String(unsafe);
+                } catch (e) {
+                    return '';
+                }
+            }
+            return unsafe
+                .replace(/&/g, "&amp;")
+                .replace(/</g, "&lt;")
+                .replace(/>/g, "&gt;")
+                .replace(/"/g, "&quot;")
+                .replace(/'/g, "&#039;");
+        }
+
         renderer.html = function(html) {
-            // 确保html参数是字符串类型
             if (html === null || html === undefined) {
                 html = '';
             } else if (typeof html !== 'string') {
@@ -4061,26 +4145,44 @@ function setupMarkedOptions() {
                     html = '';
                 }
             }
-
-            // 继续处理现在一定是字符串的html参数
+            
+            // 检查是否是HTML标签
             if (html.trim && html.trim().startsWith('<') && html.trim().endsWith('>')) {
-                // 对HTML代码进行转义，防止被渲染
                 return `<pre><code class="language-html">${escapeHtml(html)}</code></pre>`;
             }
+            
             return originalRenderer.html(html);
         };
 
-        // HTML转义辅助函数
-        function escapeHtml(unsafe) {
-            return unsafe
-                .replace(/&/g, "&amp;")
-                .replace(/</g, "&lt;")
-                .replace(/>/g, "&gt;")
-                .replace(/"/g, "&quot;")
-                .replace(/'/g, "&#039;");
-        }
-
         marked.use({ renderer });
+
+        // 用于还原公式的全局钩子
+        const oldParse = marked.parse;
+        marked.parse = function(src, ...args) {
+            // 每次渲染前清空映射
+            for (const k in mathMap) delete mathMap[k];
+            mathId = 0;
+            
+            // 输入安全检查
+            if (typeof src !== 'string') {
+                console.error('marked.parse接收到非字符串输入:', src);
+                return '';
+            }
+            
+            try {
+                // 保护公式
+                const protectedSrc = protectMath(src);
+                // marked 渲染
+                let html = oldParse.call(marked, protectedSrc, ...args);
+                // 还原公式
+                html = restoreMath(html);
+                return html;
+            } catch (e) {
+                console.error('Markdown解析错误:', e);
+                // 出错时返回原始内容，确保不会完全失败
+                return escapeHtml(src);
+            }
+        };
     }
 }
 
@@ -4103,9 +4205,6 @@ function updateThinkingContent(container, content) {
     const temp = document.createElement('div');
     temp.style.display = 'none';
     temp.innerHTML = marked.parse(content);
-    if (window.MathJax && window.MathJax.typesetPromise) {
-        MathJax.typesetPromise([temp]);
-    }
     document.body.appendChild(temp);
     
     // 清空容器但保留它自己
@@ -4477,5 +4576,17 @@ function toggleSidebar() {
             toggleIcon.classList.toggle('fa-chevron-left');
             toggleIcon.classList.toggle('fa-chevron-right');
         }
+    }
+}
+
+//
+function processMathJax(messageContent) {
+    if (window.MathJax && window.MathJax.typesetPromise) {
+        if (window.MathJax.typesetClear) {
+            window.MathJax.typesetClear([messageContent]);
+        }
+        window.MathJax.typesetPromise([messageContent]).then(() => {
+            messageContent.setAttribute('data-mathjax-processed', 'true');
+        });
     }
 }

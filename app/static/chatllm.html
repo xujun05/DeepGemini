@@ -282,23 +282,5 @@
     <script src="app.js"></script>
     <script src="js/thinking.js"></script>
     <script src="js/chatllm.js"></script>
-    <script>
-      // 所有Markdown渲染后自动调用MathJax
-      function renderMathInChat() {
-        if (window.MathJax && window.MathJax.typesetPromise) {
-          MathJax.typesetPromise();
-        }
-      }
-      // 监听聊天消息区域变动，自动渲染数学公式
-      document.addEventListener('DOMContentLoaded', function() {
-        const chatMessages = document.getElementById('chatMessages');
-        if (chatMessages) {
-          const observer = new MutationObserver(function() {
-            renderMathInChat();
-          });
-          observer.observe(chatMessages, { childList: true, subtree: true });
-        }
-      });
-    </script>
 </body>
 </html>
