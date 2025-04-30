@@ -1141,7 +1141,7 @@ document.addEventListener("DOMContentLoaded", function() {
                                     fullContent += delta.content;
                                     messageContent.innerHTML = marked.parse(fullContent);
                                     // 主动 typeset 并打标记，防止 observer 再次重复渲染
-                                    console.log('messageContent', messageContent);
+                                    // console.log('messageContent', messageContent);
                                     processMathJax(messageContent);
                                 }
                                 

@@ -277,15 +277,15 @@ const translations = {
         string: '字符串',
         number: '数字',
         boolean: '布尔值',
-        summaryModel: '摘要模型',
+        summaryModel: '总结模型',
         useDefaultModel: '使用默认模型',
-        customSummaryPrompt: '自定义摘要提示（可选）',
+        customSummaryPrompt: '自定义总结提示（可选）',
         summaryPromptTip: '您可以使用占位符如 {topic}, {history_text}, {meeting_topic}',
-        summaryModelHint: '选择用于生成会议摘要的模型，留空则使用系统默认模型',
+        summaryModelHint: '选择用于生成会议总结的模型，留空则使用系统默认模型',
         insertTemplate: '插入模板',
         promptTemplateCopied: '模板已插入文本框',
         maxRounds: '最大讨论轮数',
-        maxRoundsHint: '设置AI代理之间的最大讨论轮数，每个代理在每轮中发言一次',
+        maxRoundsHint: '设置AI角色之间的最大讨论轮数，每个角色在每轮中发言一次',
         
         // 角色管理相关翻译
         roleManagement: '角色管理',
@@ -393,6 +393,30 @@ document.addEventListener('DOMContentLoaded', function() {
         darkModeText.textContent = savedLang === 'zh' ? '日间模式' : 'Light Mode';
     }
 
+    // 检查URL参数，处理从其他页面的导航
+    const urlParams = new URLSearchParams(window.location.search);
+    const pageParam = urlParams.get('page');
+    if (pageParam) {
+        // 找到对应的菜单项并激活它
+        const menuItem = document.querySelector(`.sidebar-menu li[data-page="${pageParam}"]`);
+        if (menuItem) {
+            // 移除所有菜单项的active类
+            document.querySelectorAll('.sidebar-menu li').forEach(item => item.classList.remove('active'));
+            // 添加active类到目标菜单项
+            menuItem.classList.add('active');
+            
+            // 显示对应的页面
+            const pageId = pageParam + '-page';
+            document.querySelectorAll('.content-page').forEach(page => {
+                page.classList.add('d-none');
+            });
+            const targetPage = document.getElementById(pageId);
+            if (targetPage) {
+                targetPage.classList.remove('d-none');
+            }
+        }
+    }
+
     // 角色和讨论组初始化
     loadRoles();
     loadGroups();
@@ -401,11 +425,6 @@ document.addEventListener('DOMContentLoaded', function() {
     document.querySelector('[data-action="addGroup"]')?.addEventListener('click', openAddGroupModal);
     document.querySelector('[data-page="groups"] button')?.addEventListener('click', openAddGroupModal);
     
-    // 确保使用的是openAddGroupModal，不是showAddGroupModal
-    // window.showAddGroupModal = function() {
-    //     console.warn('showAddGroupModal被调用，请修改为使用openAddGroupModal');
-    //     return openAddGroupModal();
-    // };
 
     // 工具配置显示控制
     document.getElementById('enableTools')?.addEventListener('change', function() {
@@ -427,15 +446,6 @@ document.addEventListener('DOMContentLoaded', function() {
     
     // 设置人类角色切换事件
     setupHumanRoleToggle();
-    
-    // 检查当前页面是否是会议页面
-    if (window.location.pathname.includes('discussion.html')) {
-        console.log('检测到会议页面，初始化人类参与功能');
-        // 延迟一下以确保页面元素都已加载
-        setTimeout(() => {
-            setupHumanParticipation();
-        }, 1000);
-    }
 });
 
 // API calls
