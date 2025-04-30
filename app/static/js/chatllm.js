@@ -638,13 +638,29 @@ document.addEventListener("DOMContentLoaded", function() {
         sendHumanInputBtn.addEventListener('click', sendHumanInput);
     }
     
+    // 移除所有现有的事件监听器，确保不会重复绑定
     if (humanInputMessage) {
-        humanInputMessage.addEventListener('keydown', e => {
+        const existingListener = humanInputMessage._keydownListener;
+        if (existingListener) {
+            humanInputMessage.removeEventListener('keydown', existingListener);
+        }
+        
+        // 创建新的事件监听器并保存引用
+        humanInputMessage._keydownListener = e => {
             if (e.key === 'Enter' && !e.shiftKey) {
                 e.preventDefault();
+                // 阻止事件冒泡
+                e.stopPropagation();
+                // 调用发送函数
                 sendHumanInput();
+                // 重置等待状态
+                isWaitingForHumanInput = false;
+                waitingForHumanName = null;
             }
-        });
+        };
+        
+        // 添加新的事件监听器
+        humanInputMessage.addEventListener('keydown', humanInputMessage._keydownListener);
     }
     
     // 初始化函数
@@ -700,12 +716,27 @@ document.addEventListener("DOMContentLoaded", function() {
             });
             
             // 为人类角色输入框添加Enter键发送功能
-            document.getElementById('humanInputMessage').addEventListener('keydown', function(e) {
-                if (e.key === 'Enter' && !e.shiftKey) {
-                    e.preventDefault();
-                    sendHumanInput();
+            const humanInputMsg = document.getElementById('humanInputMessage');
+            if (humanInputMsg) {
+                // 移除现有的事件监听器
+                if (humanInputMsg._keydownListener) {
+                    humanInputMsg.removeEventListener('keydown', humanInputMsg._keydownListener);
                 }
-            });
+                
+                // 创建新的事件监听器并保存引用
+                humanInputMsg._keydownListener = function(e) {
+                    if (e.key === 'Enter' && !e.shiftKey) {
+                        e.preventDefault();
+                        e.stopPropagation();
+                        sendHumanInput();
+                        isWaitingForHumanInput = false;
+                        waitingForHumanName = null;
+                    }
+                };
+                
+                // 添加新的事件监听器
+                humanInputMsg.addEventListener('keydown', humanInputMsg._keydownListener);
+            }
             
             // 初始化高亮代码块
             highlightCodeBlocks();
@@ -730,12 +761,24 @@ document.addEventListener("DOMContentLoaded", function() {
             
             const humanInputMessage = document.getElementById('humanInputMessage');
             if (humanInputMessage) {
-                humanInputMessage.addEventListener('keydown', function(e) {
-                if (e.key === 'Enter' && !e.shiftKey) {
-                    e.preventDefault();
-                    sendHumanInput();
+                // 移除现有的事件监听器
+                if (humanInputMessage._keydownListener) {
+                    humanInputMessage.removeEventListener('keydown', humanInputMessage._keydownListener);
                 }
-            });
+                
+                // 创建新的事件监听器并保存引用
+                humanInputMessage._keydownListener = function(e) {
+                    if (e.key === 'Enter' && !e.shiftKey) {
+                        e.preventDefault();
+                        e.stopPropagation();
+                        sendHumanInput();
+                        isWaitingForHumanInput = false;
+                        waitingForHumanName = null;
+                    }
+                };
+                
+                // 添加新的事件监听器
+                humanInputMessage.addEventListener('keydown', humanInputMessage._keydownListener);
             }
             
             // 设置重置按钮
@@ -751,6 +794,7 @@ document.addEventListener("DOMContentLoaded", function() {
             }
             
             // 设置定时器检查人类输入状态
+            window.humanInputProcessed = false; // 初始化人类输入处理标记
             setInterval(checkForHumanInput, 3000); // 每3秒检查一次
             
             // 不再需要全局导出按钮
@@ -2148,11 +2192,7 @@ document.addEventListener("DOMContentLoaded", function() {
                                                 speakerContentElement.innerHTML = marked.parse(speakerContent);
                                                 processMathJax(speakerContentElement);
                                             }
-                                        } else {
-                                            fullContent += content;
-                                            messageContent.innerHTML = marked.parse(fullContent);
-                                            processMathJax(messageContent);
-                                        }
+                                        } 
                                     }
                                 }
     
@@ -2231,6 +2271,14 @@ document.addEventListener("DOMContentLoaded", function() {
      * 检查当前是否需要人类输入（在讨论组中）
      */
     async function checkForHumanInput() {
+        // 如果刚刚处理过人类输入，重置标记并跳过本次检查
+        if (window.humanInputProcessed) {
+            console.log('检测到人类输入刚刚被处理，跳过本次检查');
+            window.humanInputProcessed = false;
+            isWaitingForHumanInput = false;
+            waitingForHumanName = null;
+            return;
+        }
         // 检查是否为讨论组模式
         const isDiscussionMode = currentChatMode === 'group';
         
@@ -2412,8 +2460,24 @@ document.addEventListener("DOMContentLoaded", function() {
         console.log(`等待人类角色"${roleName}"输入，会议暂停，使用委托方法`);
     }
     
+    // 防止重复提交的标志
+    let isSubmitting = false;
+    
     // 发送人类输入
     async function sendHumanInput() {
+        // 防止重复提交
+        if (isSubmitting) {
+            console.log('已经在提交中，忽略重复请求');
+            return;
+        }
+        
+        // 设置提交标志
+        isSubmitting = true;
+        
+        // 设置超时，确保即使出错也会重置标志
+        setTimeout(() => {
+            isSubmitting = false;
+        }, 2000); // 2秒后重置
         // 获取DOM元素
         const humanInputMessage = document.getElementById('humanInputMessage');
         const humanInputSubmit = document.getElementById('sendHumanInput');
@@ -2553,10 +2617,37 @@ document.addEventListener("DOMContentLoaded", function() {
                 
                 // 当处理人类输入后会议直接结束，主动请求获取总结
                 console.log("会议已结束，主动请求获取总结内容");
-                // 在短暂延迟后请求总结（给后端时间生成总结）
-                setTimeout(() => {
-                    fetchMeetingSummary(currentMeetingId);
-                }, 1500);
+                
+                // 检查是否已经在获取总结
+                if (!window.isFetchingSummary) {
+                    window.isFetchingSummary = true;
+                    
+                    // 清除之前的定时器
+                    if (window.pendingSummaryTimer) {
+                        clearTimeout(window.pendingSummaryTimer);
+                    }
+                    
+                    // 在短暂延迟后请求总结（给后端时间生成总结）
+                    window.pendingSummaryTimer = setTimeout(() => {
+                        // 防止多次调用获取总结函数
+                        if (typeof fetchMeetingSummary === 'function') {
+                            // 在调用前检查是否已经有总结元素
+                            const existingSummaries = document.querySelectorAll('.summary-message');
+                            if (existingSummaries.length === 0) {
+                                console.log('开始获取会议总结');
+                                fetchMeetingSummary(currentMeetingId);
+                            } else {
+                                console.log('总结已存在，跳过获取');
+                            }
+                        }
+                        
+                        // 总结获取完成后重置标志
+                        setTimeout(() => {
+                            window.isFetchingSummary = false;
+                            window.pendingSummaryTimer = null;
+                        }, 3000);
+                    }, 2000);
+                }
             }
             
             // 清空输入框
@@ -2564,9 +2655,23 @@ document.addEventListener("DOMContentLoaded", function() {
             
             console.log(`===== 发送人类输入成功，开始清理等待状态 - 角色: ${roleName} =====`);
 
-            // 重置等待状态
+            // 重置等待状态 - 确保状态完全重置
             isWaitingForHumanInput = false;
             waitingForHumanName = null; // 重置当前等待的人类角色名称
+            
+            // 强制重置状态，确保后续消息不会被错误地视为人类消息
+            window.humanInputProcessed = true; // 添加标记表示人类输入已处理
+            
+            // 清除所有定时器，防止多次请求
+            if (window.pendingSummaryTimer) {
+                clearTimeout(window.pendingSummaryTimer);
+                window.pendingSummaryTimer = null;
+            }
+            
+            // 重置提交标志
+            setTimeout(() => {
+                isSubmitting = false;
+            }, 500);
 
             // 隐藏人类输入区域，显示普通聊天输入区域
             humanInputArea.classList.add('d-none');
