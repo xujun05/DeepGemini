@@ -43,8 +43,22 @@ class BrainstormingMode(BaseMeetingMode):
     def determine_speaking_order(self, agents: List[Dict[str, Any]], 
                                 current_round: int) -> List[str]:
         """确定发言顺序"""
-        # 每轮随机打乱顺序
+        # 获取所有代理名称
         agent_names = [agent["name"] for agent in agents]
+        
+        # 如果设置了自定义发言顺序，则使用自定义顺序
+        if self.custom_speaking_order:
+            # 验证自定义顺序中的所有名称都在代理列表中
+            valid_names = [name for name in self.custom_speaking_order if name in agent_names]
+            
+            # 添加自定义顺序中没有的代理（可能是后来添加的）
+            for name in agent_names:
+                if name not in valid_names:
+                    valid_names.append(name)
+                    
+            return valid_names
+        
+        # 否则使用默认的随机顺序
         random.shuffle(agent_names)
         return agent_names
     

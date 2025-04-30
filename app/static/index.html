@@ -625,6 +625,18 @@
                                 设置AI智能体之间的最大讨论轮数，每轮每个智能体会发言一次
                             </small>
                         </div>
+                        
+                        <div class="mb-3" id="customSpeakingOrderSection">
+                            <label class="form-label" data-translate="customSpeakingOrder">自定义发言顺序</label>
+                            <div class="custom-speaking-order-container">
+                                <div id="customSpeakingOrderList" class="mb-2 sortable-list">
+                                    <!-- 角色将在这里动态添加 -->
+                                </div>
+                                <small class="form-text text-muted" data-translate="customSpeakingOrderHint">
+                                    拖动角色卡片调整发言顺序。此设置仅适用于普通讨论、头脑风暴、角色扮演和SWOT分析模式。
+                                </small>
+                            </div>
+                        </div>
                     </form>
                 </div>
                 <div class="modal-footer">
@@ -642,5 +654,6 @@
 
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
     <script src="app.js"></script>
+    <script src="js/custom-speaking-order.js"></script>
 </body>
 </html>

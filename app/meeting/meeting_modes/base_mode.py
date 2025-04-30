@@ -9,11 +9,19 @@ class BaseMeetingMode(ABC):
         self.name = name
         self.description = description
         self.max_rounds = max_rounds  # 默认最大轮数，但允许在初始化时设置
+        self.custom_speaking_order = None  # 自定义发言顺序
     
     def set_max_rounds(self, max_rounds: int):
         """设置最大轮数"""
         if max_rounds > 0:
             self.max_rounds = max_rounds
+            return True
+        return False
+        
+    def set_custom_speaking_order(self, custom_speaking_order: List[str]):
+        """设置自定义发言顺序"""
+        if custom_speaking_order and isinstance(custom_speaking_order, list):
+            self.custom_speaking_order = custom_speaking_order
             return True
         return False
     

@@ -523,14 +523,14 @@ class Meeting:
             # 移动到下一位发言者
             self._move_to_next_speaker()
             
-            # 检查是否达到结束条件
-            if self._check_end_conditions():
+            # 检查是否达到结束条件 - 但要确保当前轮次是真正完成的
+            if self._check_end_conditions() and self.current_round > self.max_rounds:
                 logger.info(f"会议 {self.id} 达到结束条件，自动结束会议")
                 self._end_meeting()
             
-            # 特别检查：如果当前轮次已是最后一轮，且所有发言者都已发言(speaker_index回到0)，主动结束会议
-            if self.current_round >= self.max_rounds and self.current_speaker_index == 0:
-                logger.info(f"会议 {self.id} 已完成最后一轮且所有发言者已发言，自动结束会议")
+            # 特别检查：如果当前轮次大于最大轮次（说明所有轮次已完成），主动结束会议
+            if self.current_round > self.max_rounds:
+                logger.info(f"会议 {self.id} 已完成所有轮次 ({self.max_rounds} 轮)，自动结束会议")
                 if self.status != "已结束":
                     self._end_meeting()
             
@@ -554,7 +554,19 @@ class Meeting:
 
     def _check_end_conditions(self) -> bool:
         """检查会议是否应该结束"""
-        return self.current_round >= self.max_rounds or self.mode.should_end_meeting(self.current_round - 1, self.history)
+        # 只有当当前轮次大于最大轮次时，才结束会议
+        # 这确保到达最大轮次时，依然完成最后一轮发言
+        if self.current_round > self.max_rounds:
+            logger.info(f"会议 {self.id} 当前轮次 {self.current_round} 大于最大轮次 {self.max_rounds}，应结束会议")
+            return True
+            
+        # 检查模式特定的结束条件（如果有）
+        if hasattr(self.mode, 'should_end_meeting') and callable(getattr(self.mode, 'should_end_meeting')):
+            if self.mode.should_end_meeting(self.current_round - 1, self.history):
+                logger.info(f"会议 {self.id} 满足模式特定的结束条件，应结束会议")
+                return True
+                
+        return False
 
     def _build_meeting_context(self) -> List[Dict[str, str]]:
         """构建会议上下文 - 返回字典列表以便于在流式生成中正确处理"""

@@ -121,6 +121,7 @@ class DiscussionGroup(Base):
     max_rounds = Column(Integer, default=3)  # 最大轮数
     summary_model_id = Column(Integer, ForeignKey('models.id'), nullable=True)  # 总结使用的模型
     summary_prompt = Column(Text, nullable=True)  # 自定义总结提示模板
+    custom_speaking_order = Column(JSON, nullable=True)  # 自定义发言顺序
     created_at = Column(DateTime, default=datetime.now)
     updated_at = Column(DateTime, nullable=True)
     

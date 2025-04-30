@@ -39,13 +39,23 @@ class DiscussionMode(BaseMeetingMode):
     def determine_speaking_order(self, agents: List[Dict[str, Any]], 
                                 current_round: int) -> List[str]:
         """确定发言顺序"""
-        # 简单地按照提供的顺序发言
+        # 获取所有代理名称
         agent_names = [agent["name"] for agent in agents]
         
-        # 第一轮按顺序，后续轮次随机打乱顺序
-        # if current_round > 1:
-        #     random.shuffle(agent_names)
+        # 如果设置了自定义发言顺序，则使用自定义顺序
+        if self.custom_speaking_order:
+            # logger.info(f"使用自定义发言顺序: {self.custom_speaking_order}")
+            # 验证自定义顺序中的所有名称都在代理列表中
+            valid_names = [name for name in self.custom_speaking_order if name in agent_names]
             
+            # 添加自定义顺序中没有的代理（可能是后来添加的）
+            for name in agent_names:
+                if name not in valid_names:
+                    valid_names.append(name)
+                    
+            return valid_names
+        
+        # 否则使用默认顺序（按提供的顺序）
         return agent_names
     
     def should_end_meeting(self, rounds_completed: int, 

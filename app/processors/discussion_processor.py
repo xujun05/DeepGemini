@@ -47,7 +47,7 @@ class DiscussionProcessor:
             return meeting_id
         else:
             # TODO: 实现不依赖adapter的会议启动逻辑
-            # 这部分将在完全移除adapter依赖后完成
+
             raise NotImplementedError("尚未实现无adapter的会议启动功能")
     
     def get_groups(self) -> List[Dict[str, Any]]:
@@ -114,6 +114,8 @@ class DiscussionProcessor:
             group.summary_model_id = group_data['summary_model_id']
         if 'summary_prompt' in group_data:
             group.summary_prompt = group_data['summary_prompt']
+        if 'custom_speaking_order' in group_data:
+            group.custom_speaking_order = group_data['custom_speaking_order']
         
         # 更新角色关联
         if 'role_ids' in group_data:
@@ -156,6 +158,7 @@ class DiscussionProcessor:
             "max_rounds": group.max_rounds,
             "summary_model_id": group.summary_model_id,
             "summary_prompt": group.summary_prompt or "",
+            "custom_speaking_order": group.custom_speaking_order,
             "created_at": group.created_at.isoformat() if group.created_at else None,
             "updated_at": group.updated_at.isoformat() if group.updated_at else None,
             "roles": [
@@ -517,6 +520,9 @@ class DiscussionProcessor:
         # 检查是否是继续处理（在人类输入后）
         is_continuation = False
         last_human_agent = None
+        last_human_name = None
+        last_human_position = -1
+        
         if len(meeting.meeting_history) > 0:
             # 查找最近的消息，检查是否是人类消息
             recent_msgs = meeting.meeting_history[-5:]  # 获取最近5条消息，增加检查范围
@@ -527,6 +533,18 @@ class DiscussionProcessor:
                         logger.info(f"检测到人类 {agent.name} 刚刚发言，继续会议流程")
                         is_continuation = True
                         last_human_agent = agent
+                        last_human_name = agent.name
+                        
+                        # 获取上一轮的发言顺序来确定人类位置
+                        prev_speaking_order = meeting.mode.determine_speaking_order(
+                            [{"name": a.name, "role": a.role_description} for a in meeting.agents],
+                            meeting.current_round - 1  # 上一轮
+                        )
+                        
+                        # 在上一轮发言顺序中找到人类位置
+                        if last_human_name in prev_speaking_order:
+                            last_human_position = prev_speaking_order.index(last_human_name)
+                            logger.info(f"人类 {last_human_name} 在上一轮发言顺序中的位置: {last_human_position}")
                         break
                 if is_continuation:
                     break
@@ -552,9 +570,28 @@ class DiscussionProcessor:
                 # 记录用于调试
                 logger.info(f"最后发言的人类是 {last_human_agent.name}，将从下一个发言者开始")
                 
-                # 获取所有发言者名称，用于确认发言顺序
-                agent_names = [a.name for a in meeting.agents]
-                logger.info(f"当前发言顺序: {agent_names}，发言索引: {meeting.current_speaker_index}")
+                # 特别处理：我们需要确保人类后面的AI角色能够发言
+                # 先获取原始发言顺序（不考虑current_speaker_index）
+                original_speaking_order = meeting.mode.determine_speaking_order(
+                    [{"name": a.name, "role": a.role_description} for a in meeting.agents],
+                    meeting.current_round - 1  # 使用上一轮的发言顺序，因为我们实际上继续的是上一轮的发言
+                )
+                
+                logger.info(f"上一轮发言顺序: {original_speaking_order}")
+                
+                # 确保发言索引与发言顺序对齐
+                # 如果人类不是最后一个发言者，则我们从人类的下一个开始
+                if last_human_position >= 0 and last_human_position < len(original_speaking_order) - 1:
+                    # 确保角色还有要发言的
+                    next_speakers = original_speaking_order[last_human_position+1:]
+                    logger.info(f"人类后面还有角色未发言: {next_speakers}")
+                    
+                    # 将meeting.current_speaker_index设置为那个未发言的人
+                    for i, agent in enumerate(meeting.agents):
+                        if agent.name == next_speakers[0]:
+                            meeting.current_speaker_index = i
+                            logger.info(f"将发言索引设置为 {i}(角色: {agent.name})，以确保未发言的角色可以发言")
+                            break
         else:
             # 发送会话开始事件
             start_event = {
@@ -756,15 +793,237 @@ class DiscussionProcessor:
             # 跟踪本轮是否所有角色都已发言
             all_agents_spoke = True
             
-            # 每个智能体依次发言
-            for agent_name in speaking_order:
+            # 如果是人类发言后的继续处理，需要特别处理下一个发言者
+            if is_continuation and last_human_name:
+                logger.info(f"人类发言后继续处理，检查发言顺序")
+                
+                # 如果我们得到了上一轮的发言顺序和人类的位置
+                if last_human_position >= 0:
+                    # 如果人类不是上一轮的最后一个发言者
+                    prev_speaking_order = meeting.mode.determine_speaking_order(
+                        [{"name": a.name, "role": a.role_description} for a in meeting.agents],
+                        meeting.current_round - 1  # 上一轮
+                    )
+                    
+                    if last_human_position < len(prev_speaking_order) - 1:
+                        # 找到人类后面应该发言的角色
+                        remaining_speakers = prev_speaking_order[last_human_position+1:]
+                        logger.info(f"人类后面没发言的角色: {remaining_speakers}")
+                        
+                        # 重新排序发言顺序，优先完成上一轮
+                        reordered_speakers = remaining_speakers
+                        
+                        # 如果当前已经是新的一轮，还需要加上这一轮的发言者
+                        if meeting.current_round > 1:
+                            current_round_speakers = meeting.mode.determine_speaking_order(
+                                [{"name": a.name, "role": a.role_description} for a in meeting.agents],
+                                meeting.current_round  # 当前轮
+                            )
+                            # 添加没有在remaining_speakers中的发言者
+                            for speaker in current_round_speakers:
+                                if speaker not in reordered_speakers:
+                                    reordered_speakers.append(speaker)
+                        
+                        # 更新发言顺序
+                        speaking_order = reordered_speakers
+                        logger.info(f"重新排序后的发言顺序: {speaking_order}")
+                        
+                        # 更新当前发言者索引
+                        if speaking_order and speaking_order[0] in [a.name for a in meeting.agents]:
+                            for i, agent in enumerate(meeting.agents):
+                                if agent.name == speaking_order[0]:
+                                    meeting.current_speaker_index = i
+                                    logger.info(f"将当前发言者索引设置为 {i} ({agent.name})")
+                                    break
+            # 打印最终定义的发言顺序
+            logger.info(f"最终确定的发言顺序: {speaking_order}")
+            print(f"更新后的发言顺序: {', '.join(speaking_order)}\n")
+            
+            # 关键修复：确保发言顺序与当前发言者索引对应
+            # 记录每个角色在meeting.agents列表中的索引
+            agent_indices = {}
+            for i, agent in enumerate(meeting.agents):
+                agent_indices[agent.name] = i
+                logger.info(f"角色 {agent.name} 在agents列表中的索引为 {i}")
+            
+            # 获取当前发言者名称
+            current_speaker_name = None
+            if meeting.current_speaker_index < len(meeting.agents):
+                current_speaker_name = meeting.agents[meeting.current_speaker_index].name
+                logger.info(f"当前current_speaker_index={meeting.current_speaker_index}，对应角色: {current_speaker_name}")
+            
+            # 检查当前轮次已经发言过的角色 - 只考虑当前轮次
+            spoken_agents = []
+            
+            # 初始化已发言角色表（避免重复发言）
+            spoken_agents_in_current_round = []
+            
+            # 特别记录当前轮次的消息
+            current_round_msgs = []
+            
+            # 为了调试，打印所有消息记录
+            logger.info(f"当前会议历史消息数: {len(meeting.meeting_history)}")
+            for i, msg in enumerate(meeting.meeting_history):
+                round_info = msg.get('round', 'N/A')
+                agent_info = msg.get('agent', 'N/A')
+                logger.info(f"[DEBUG] 消息{i+1}: 轮次={round_info}, 角色={agent_info}")
+            
+            # 先从history检查当前轮次的发言记录
+            for msg in meeting.history:
+                # 先检查消息是否包含需要的键
+                if "round" in msg and "role" in msg:
+                    # 只考虑当前轮次的消息
+                    if msg["round"] == meeting.current_round and msg["role"] != "system":
+                        if msg["role"] not in spoken_agents_in_current_round:
+                            spoken_agents_in_current_round.append(msg["role"])
+                        current_round_msgs.append(msg)
+            
+            logger.info(f"从内部history找到当前轮次({meeting.current_round})消息: {len(current_round_msgs)}")
+            
+            # 再从完整的meeting_history检查，只强调当前轮次
+            current_round_meeting_history = []
+            for msg in meeting.meeting_history:
+                if "agent" in msg and msg["agent"] != "system":
+                    # 优先检查消息是否有round字段并匹配当前轮次
+                    if "round" in msg and msg["round"] == meeting.current_round:
+                        # 记录当前轮次的发言者，确保不重复添加
+                        if msg["agent"] not in spoken_agents_in_current_round:
+                            spoken_agents_in_current_round.append(msg["agent"])
+                            logger.info(f"从完整meeting_history找到当前轮次发言者: {msg['agent']}")
+                        current_round_meeting_history.append(msg)
+            
+            logger.info(f"从meeting_history找到当前轮次({meeting.current_round})消息: {len(current_round_meeting_history)}")
+                        
+            # 仅在当前讨论轮次中考虑最后发言的人类角色
+            human_has_spoken_in_current_round = False
+            
+            # 绿色在当前轮次中检查人类消息
+            human_has_spoken_in_current_round = False
+            
+            if hasattr(meeting, 'last_human_speaker') and meeting.last_human_speaker:
+                # 使用多种方法检测人类消息
+                
+                # 方法1: 检查当前消息历史 - 先尝试直接在当前轮次的历史消息中查找
+                current_round_msgs = [msg for msg in meeting.meeting_history 
+                                    if "agent" in msg and 
+                                       msg["agent"] == meeting.last_human_speaker and 
+                                       "round" in msg and msg["round"] == meeting.current_round]  # 严格要求消息必须有round字段并且等于current_round
+                
+                if current_round_msgs:
+                    human_has_spoken_in_current_round = True
+                    if meeting.last_human_speaker not in spoken_agents_in_current_round:
+                        spoken_agents_in_current_round.append(meeting.last_human_speaker)
+                        logger.info(f"从消息历史中确认当前轮次({meeting.current_round})中人类角色{meeting.last_human_speaker}已发言")
+                
+                # 方法2: 检查最新的一条消息
+                if not human_has_spoken_in_current_round and meeting.meeting_history:
+                    latest_msg = meeting.meeting_history[-1]  # 获取最后一条消息
+                    
+                    # 如果最后一条消息是人类的，我们可以假设它是当前轮次的
+                    if "agent" in latest_msg and latest_msg["agent"] == meeting.last_human_speaker:
+                        human_has_spoken_in_current_round = True
+                        if meeting.last_human_speaker not in spoken_agents_in_current_round:
+                            spoken_agents_in_current_round.append(meeting.last_human_speaker)
+                            logger.info(f"从最新消息确认当前轮次({meeting.current_round})中人类角色{meeting.last_human_speaker}已发言")
+                
+                # 方法3: 强制检测 - 只在满足更严格条件时使用
+                if not human_has_spoken_in_current_round and len(meeting.meeting_history) > 0:
+                    # 获取最后一条消息，检查是否是人类消息，并且必须是这轮新增的
+                    if meeting.meeting_history and meeting.current_round > 1:
+                        latest_msg = meeting.meeting_history[-1]  # 获取最后一条消息
+                        previous_msgs_count = len([msg for msg in meeting.meeting_history if "round" in msg and msg["round"] < meeting.current_round])
+                        
+                        # 确认这条消息是当前轮次的，通过检查它是否超过了上一轮所有消息的计数
+                        is_current_round_msg = len(meeting.meeting_history) > previous_msgs_count
+                        
+                        # 只有当消息确实是当前轮次的，并且是人类发的，才认为人类在本轮发言了
+                        if is_current_round_msg and "agent" in latest_msg and latest_msg["agent"] == meeting.last_human_speaker:
+                            logger.info(f"确认最新消息是当前轮次({meeting.current_round})的人类消息")
+                            human_has_spoken_in_current_round = True
+                            if meeting.last_human_speaker not in spoken_agents_in_current_round:
+                                spoken_agents_in_current_round.append(meeting.last_human_speaker)
+                                logger.info(f"精确确认当前轮次({meeting.current_round})中人类角色{meeting.last_human_speaker}已发言")
+                
+                # 如果所有方法都没找到该人类在当前轮中的发言
+                if not human_has_spoken_in_current_round:
+                    logger.info(f"人类角色{meeting.last_human_speaker}在当前轮次({meeting.current_round})中尚未发言")
+            
+            logger.info(f"从history找到已发言角色: {spoken_agents_in_current_round}")
+            spoken_agents = spoken_agents_in_current_round.copy()  # 同步数据到spoken_agents变量
+            
+            # 根据当前轮次已发言的角色，确定未发言的角色
+            remaining_speakers = []
+            # 只保留当前轮次未发言的角色，且保持原有发言顺序
+            for name in speaking_order:
+                # 确认设置松哒，完全基于原始顺序和是否已发言
+                if name not in spoken_agents_in_current_round:
+                    remaining_speakers.append(name)
+            
+            logger.info(f"第{meeting.current_round}轮已发言角色: {spoken_agents_in_current_round}")
+            logger.info(f"第{meeting.current_round}轮未发言角色: {remaining_speakers}")
+            
+            # 首先确保所有角色都能在当前轮次发言
+            if remaining_speakers:
+                # 如果还有未发言的角色，使用未发言角色列表
+                reordered_speaking_order = remaining_speakers
+                logger.info(f"使用未发言角色列表: {reordered_speaking_order}")
+            else:
+                # 当前轮次所有角色已发言，考虑进入下一轮
+                logger.info(f"第{meeting.current_round}轮所有角色已发言完毕")
+                
+                # 检查是否达到最大轮次
+                if meeting.current_round < meeting.max_rounds:
+                    # 尚未达到最大轮次，进入下一轮
+                    old_round = meeting.current_round
+                    meeting.current_round += 1
+                    logger.info(f"完成第{old_round}轮，开始第{meeting.current_round}轮讨论")
+                    
+                    # 使用原始发言顺序开始新轮讨论
+                    reordered_speaking_order = speaking_order.copy()
+                    
+                    # 显示当前轮次完成消息
+                    print(f"\n{'*'*40}")
+                    print(f"第 {old_round} 轮讨论全部完成！")
+                    print(f"所有 {len(speaking_order)} 个角色都已发言")
+                    print(f"{'*'*40}\n")
+                    print(f"\n{'='*80}")
+                    print(f"第 {old_round} 轮讨论完成")
+                    print(f"当前会议状态: {meeting.status}")
+                    print(f"当前轮次: {meeting.current_round}")
+                    print(f"历史消息数量: {len(meeting.meeting_history)}")
+                    print(f"{'='*80}\n")
+                else:
+                    # 已达到最大轮次，会议结束
+                    logger.info(f"已达到最大轮次 {meeting.max_rounds}，会议结束")
+                    # 返回空列表表示结束会议
+                    reordered_speaking_order = []
+                
+            logger.info(f"过滤已发言角色后的顺序: {reordered_speaking_order}")
+            print(f"实际发言顺序: {', '.join(reordered_speaking_order)}\n")
+            
+            # 每个智能体依次发言 - 使用过滤后的发言顺序
+            for agent_name in reordered_speaking_order:
+                # 再次检查该角色是否已经在本轮发言过，以防止重复发言
+                if agent_name in spoken_agents:
+                    logger.info(f"角色 {agent_name} 已经在当前轮次({meeting.current_round})发言过，跳过")
+                    continue
+                    
                 # 获取智能体
                 agent = next((a for a in meeting.agents if a.name == agent_name), None)
                 if not agent:
                     continue
                 
-                print(f"\n当前发言者: {agent_name}")
-                    
+                # 更新current_speaker_index为当前发言者对应的索引
+                # 只有当该角色在当前轮次中还没有发言时才更新发言者索引
+                for i, a in enumerate(meeting.agents):
+                    if a.name == agent_name and a.name not in spoken_agents:
+                        if meeting.current_speaker_index != i:
+                            logger.info(f"更新current_speaker_index从 {meeting.current_speaker_index} 到 {i} ({agent_name})")
+                            meeting.current_speaker_index = i
+                        break
+                
+                print(f"\n当前发言者: {agent_name} (索引: {meeting.current_speaker_index})")
+                
                 # 发送发言人信息 - 使用格式化的标题
                 speaker_info = {
                     "id": f"{conversation_id}-{agent_name}-start",
@@ -797,6 +1056,7 @@ class DiscussionProcessor:
                     # 设置等待人类输入状态
                     agent.wait_for_input()
                     
+                    logger.info(f"等待人类角色 {agent_name} (索引: {meeting.current_speaker_index}) 输入")
                     print(f"等待人类角色 {agent_name} 输入...")
                     
                     # 发送等待人类输入的通知
@@ -814,7 +1074,7 @@ class DiscussionProcessor:
                     }
                     yield f"data: {json.dumps(waiting_event, ensure_ascii=False)}\n\n"
                     
-                    # 暂停讨论，记录等待状态
+                    # 暂停讨论，记录等录状态
                     meeting.waiting_for_human_input = agent.name
                     
                     # 不添加等待消息到会议历史
@@ -1492,6 +1752,10 @@ class DiscussionProcessor:
         if not success:
             logger.error(f"无法为 {agent_name} 添加消息，会议ID={meeting_id}")
             raise ValueError(f"无法为 {agent_name} 添加消息")
+            
+        # 记录最后发言的人类角色
+        meeting.last_human_speaker = agent_name
+        logger.info(f"记录最后发言的人类角色: {agent_name}")
         
         # 重置等待状态
         if hasattr(human_agent, 'is_waiting_input'):
@@ -1510,6 +1774,18 @@ class DiscussionProcessor:
             meeting.status = "进行中"
             logger.info(f"已将会议状态从'{meeting.status}'更改为'进行中'")
         
+        # 记录当前轮次和发言者索引，便于日志分析
+        original_round = meeting.current_round
+        original_speaker_index = meeting.current_speaker_index
+        logger.info(f"人类输入处理前：轮次={original_round}，发言索引={original_speaker_index}")
+        
+        # 获取发言顺序，用于确定是否所有角色都已发言
+        speaking_order = meeting.mode.determine_speaking_order(
+            [{"name": agent.name, "role": agent.role_description} for agent in meeting.agents],
+            meeting.current_round
+        )
+        logger.info(f"本轮发言顺序: {speaking_order}")
+        
         # 处理人类输入后更新发言顺序和轮次
         # 检查当前发言者是否为该人类角色
         current_speaker_is_human = False
@@ -1517,17 +1793,40 @@ class DiscussionProcessor:
             current_speaker = meeting.agents[meeting.current_speaker_index]
             if current_speaker.name == agent_name:
                 current_speaker_is_human = True
-                
+        
+        # 找到人类在发言顺序中的位置
+        human_position_in_order = -1
+        for i, name in enumerate(speaking_order):
+            if name == agent_name:
+                human_position_in_order = i
+                break
+        
+        # 记录人类在发言顺序中的位置
+        logger.info(f"人类角色 {agent_name} 在发言顺序中的位置: {human_position_in_order}")
+        
         # 如果当前发言者是该人类角色，手动调用移动到下一个发言者的方法
         if current_speaker_is_human:
             logger.info(f"人类角色 {agent_name} 是当前发言者，处理响应并移到下一位发言者")
-            # 记录消息并移到下一个发言者，但不自动增加轮次
-            # 避免使用handle_agent_response，因为它可能自动增加轮次
-            # 直接使用_move_to_next_speaker方法
+            # 记录消息并移到下一个发言者
             meeting._move_to_next_speaker()
             logger.info(f"人类输入后移动到下一位发言者，当前索引: {meeting.current_speaker_index}")
+            
+            # 检查是否是本轮最后一个发言者
+            # 如果人类是最后一个发言者(或倒数第二个，且下一个已经发言过)，则需要增加轮次
+            is_last_speaker = human_position_in_order == len(speaking_order) - 1
+            
+            # 如果人类是第一个发言者，确保不要提前结束本轮发言
+            if human_position_in_order == 0:
+                logger.info(f"人类角色是本轮第一个发言者，确保本轮继续进行")
+                # 不需要特别处理，只需确保不增加轮次
+            
+            # 如果人类是最后一个发言者，则本轮结束
+            # 注意：轮次增加已经在meeting.py的add_human_message中处理过了，这里不要重复增加
+            elif is_last_speaker:
+                logger.info(f"人类角色是本轮最后一个发言者，准备进入下一轮")
+                # 不在此处增加轮次，避免重复增加
         else:
-            # 如果不是当前发言者，但我们需要确保正确更新，尝试强制移到下一个发言者
+            # 如果不是当前发言者，尝试找到其位置并更新发言索引
             logger.info(f"人类角色 {agent_name} 不是当前发言者，尝试找到其位置并更新")
             # 查找该人类智能体在发言顺序中的位置
             for i, agent in enumerate(meeting.agents):
@@ -1536,7 +1835,15 @@ class DiscussionProcessor:
                     # 将当前发言位置设置为该人类后面的位置，确保下一个发言者是人类后面的
                     meeting.current_speaker_index = (i + 1) % len(meeting.agents)
                     logger.info(f"人类输入后设置下一位发言者索引为: {meeting.current_speaker_index}")
+                    
+                    # 如果重新设置后索引为0，说明已经回到第一个发言者
+                    # 注意：轮次增加已经在meeting.py的add_human_message中处理过了，这里不要重复增加
+                    if meeting.current_speaker_index == 0:
+                        logger.info(f"发言索引回到首位，当前轮次为 {meeting.current_round}")
                     break
+        
+        # 记录处理后的轮次和发言者索引
+        logger.info(f"人类输入处理后：轮次={meeting.current_round}，发言索引={meeting.current_speaker_index}")
         
         # 确保人类消息被正确添加到会议历史
         logger.info(f"确认人类消息已添加到会议历史，当前历史长度: {len(meeting.meeting_history)}")

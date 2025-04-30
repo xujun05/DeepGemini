@@ -234,7 +234,8 @@ class MeetingAdapter:
     # ===== 讨论组管理功能 =====
     
     def create_discussion_group(self, name: str, description: str, mode: str,
-                               role_ids: List[int], max_rounds: int = None) -> Dict[str, Any]:
+                               role_ids: List[int], max_rounds: int = None,
+                               custom_speaking_order: List[str] = None) -> Dict[str, Any]:
         """创建新讨论组"""
         try:
             # 检查会议模式是否有效
@@ -254,9 +255,13 @@ class MeetingAdapter:
                 name=name,
                 description=description,
                 mode=mode,
-                max_rounds=max_rounds or 3,
+                max_rounds=max_rounds if max_rounds is not None else 3,  # 默认为3轮
                 created_at=datetime.now()
             )
+            
+            # 如果提供了自定义发言顺序且模式支持自定义发言顺序
+            if custom_speaking_order is not None and mode not in ['debate', 'six_thinking_hats']:
+                new_group.custom_speaking_order = custom_speaking_order
             
             # 添加角色
             for role in roles:
@@ -272,6 +277,7 @@ class MeetingAdapter:
                 "description": new_group.description,
                 "mode": new_group.mode,
                 "max_rounds": new_group.max_rounds,
+                "custom_speaking_order": new_group.custom_speaking_order,
                 "created_at": new_group.created_at.isoformat(),
                 "roles": [{"id": role.id, "name": role.name} for role in new_group.roles]
             }
@@ -295,6 +301,7 @@ class MeetingAdapter:
                     "description": group.description,
                     "mode": group.mode,
                     "max_rounds": group.max_rounds,
+                    "custom_speaking_order": group.custom_speaking_order,
                     "created_at": group.created_at.isoformat(),
                     "role_count": len(group.roles)
                 }
@@ -321,9 +328,11 @@ class MeetingAdapter:
                 "description": group.description,
                 "mode": group.mode,
                 "max_rounds": group.max_rounds,
+                "custom_speaking_order": group.custom_speaking_order,
                 "created_at": group.created_at.isoformat(),
                 "updated_at": group.updated_at.isoformat() if group.updated_at else None,
-                "roles": []
+                "roles": [],
+                "role_ids": [role.id for role in group.roles]
             }
             
             # 获取角色详情
@@ -352,7 +361,8 @@ class MeetingAdapter:
     def update_discussion_group(self, group_id: int, name: str = None, 
                                description: str = None, mode: str = None, 
                                role_ids: List[int] = None,
-                               max_rounds: int = None) -> Dict[str, Any]:
+                               max_rounds: int = None,
+                               custom_speaking_order: List[str] = None) -> Dict[str, Any]:
         """更新讨论组信息"""
         try:
             group = self.db.query(DiscussionGroup).filter(DiscussionGroup.id == group_id).first()
@@ -372,6 +382,12 @@ class MeetingAdapter:
                 group.mode = mode
             if max_rounds is not None:
                 group.max_rounds = max_rounds
+            if custom_speaking_order is not None:
+                # 检查自定义发言顺序是否有效（仅适用于特定模式）
+                if mode in ['debate', 'six_thinking_hats']:
+                    logger.warning(f"模式 {mode} 不支持自定义发言顺序，忽略此设置")
+                else:
+                    group.custom_speaking_order = custom_speaking_order
             
             # 更新角色列表
             if role_ids is not None:
@@ -400,6 +416,7 @@ class MeetingAdapter:
                 "description": group.description,
                 "mode": group.mode,
                 "max_rounds": group.max_rounds,
+                "custom_speaking_order": group.custom_speaking_order,
                 "created_at": group.created_at.isoformat(),
                 "updated_at": group.updated_at.isoformat(),
                 "roles": [{"id": role.id, "name": role.name} for role in group.roles]
@@ -448,6 +465,11 @@ class MeetingAdapter:
                 raise ValueError(f"不支持的会议模式: {mode_name}")
             
             meeting_mode = mode_class()
+            
+            # 设置自定义发言顺序（如果有）
+            if hasattr(group, 'custom_speaking_order') and group.custom_speaking_order and mode_name not in ['debate', 'six_thinking_hats']:
+                meeting_mode.set_custom_speaking_order(group.custom_speaking_order)
+                logger.info(f"已设置自定义发言顺序: {group.custom_speaking_order}")
             
             # 创建会议ID
             meeting_id = str(uuid.uuid4())
@@ -846,8 +868,8 @@ class MeetingAdapter:
             # 获取讨论组的最大轮数
             group_max_rounds = group.max_rounds if hasattr(group, 'max_rounds') and group.max_rounds else 3
             
-            # 创建会议模式
-            meeting_mode = self._create_meeting_mode(mode, group_max_rounds)
+            # 创建会议模式，传入组ID以便设置自定义发言顺序
+            meeting_mode = self._create_meeting_mode(mode, group_max_rounds, group_id)
             
             # 创建会议
             meeting = MeetingSession(
@@ -865,7 +887,7 @@ class MeetingAdapter:
             logger.error(f"创建会议失败: {str(e)}", exc_info=True)
             raise HTTPException(status_code=500, detail=f"创建会议失败: {str(e)}")
 
-    def _create_meeting_mode(self, mode_name: str, max_rounds: int = 3) -> BaseMeetingMode:
+    def _create_meeting_mode(self, mode_name: str, max_rounds: int = 3, group_id: int = None) -> BaseMeetingMode:
         """创建会议模式"""
         # 映射模式名称到类
         mode_classes = {
@@ -881,4 +903,13 @@ class MeetingAdapter:
         mode_class = mode_classes.get(mode_name.lower(), DiscussionMode)
         
         # 创建模式实例，传入最大轮数
-        return mode_class(max_rounds=max_rounds) 
+        mode_instance = mode_class(max_rounds=max_rounds)
+        
+        # 如果提供了讨论组ID，则获取自定义发言顺序
+        if group_id and mode_name.lower() not in ['debate', 'six_thinking_hats']:
+            group = self.db.query(DiscussionGroup).filter(DiscussionGroup.id == group_id).first()
+            if group and group.custom_speaking_order:
+                mode_instance.set_custom_speaking_order(group.custom_speaking_order)
+                logger.info(f"已设置自定义发言顺序: {group.custom_speaking_order}")
+        
+        return mode_instance

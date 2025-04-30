@@ -109,6 +109,8 @@ const translations = {
         promptTemplateCopied: 'Template inserted in the textarea',
         maxRounds: 'Maximum Discussion Rounds',
         maxRoundsHint: 'Set the maximum number of discussion rounds between AI agents, each agent speaks once per round',
+        customSpeakingOrder: 'Custom Speaking Order',
+        customSpeakingOrderHint: 'Drag role cards to adjust speaking order. This setting only applies to Discussion, Brainstorming, Role Playing, and SWOT Analysis modes.',
         
         // 角色管理相关翻译
         roleManagement: 'Role Management',
@@ -285,7 +287,9 @@ const translations = {
         insertTemplate: '插入模板',
         promptTemplateCopied: '模板已插入文本框',
         maxRounds: '最大讨论轮数',
-        maxRoundsHint: '设置AI角色之间的最大讨论轮数，每个角色在每轮中发言一次',
+        maxRoundsHint: '设置AI智能体之间的最大讨论轮数，每轮每个智能体会发言一次',
+        customSpeakingOrder: '自定义发言顺序',
+        customSpeakingOrderHint: '拖动角色卡片调整发言顺序。此设置仅适用于普通讨论、头脑风暴、角色扮演和SWOT分析模式。',
         
         // 角色管理相关翻译
         roleManagement: '角色管理',
@@ -2396,26 +2400,29 @@ function openAddGroupModal() {
 function saveGroup() {
     const form = document.getElementById('addGroupForm');
     
-    // 显示调试信息，帮助排查问题
-    console.log("表单内容:", form);
     const formData = new FormData(form);
     
     // 获取选中的角色ID
-    const roleIds = Array.from(formData.getAll('role_ids')).map(id => parseInt(id));
+    const roleIds = [];
+    const checkboxes = document.querySelectorAll('#roleCheckboxes input[type="checkbox"]:checked');
+    checkboxes.forEach(checkbox => {
+        roleIds.push(parseInt(checkbox.value));
+    });
     
-    // 构建请求数据
-    const data = {
+    const groupData = {
         name: formData.get('name'),
+        description: formData.get('description'),
         mode: formData.get('mode'),
-        role_ids: roleIds,
         max_rounds: parseInt(formData.get('max_rounds')) || 3,
         summary_model_id: formData.get('summary_model_id') ? parseInt(formData.get('summary_model_id')) : null,
-        summary_prompt: formData.get('summary_prompt')
+        summary_prompt: formData.get('summary_prompt'),
+        role_ids: roleIds,
+        custom_speaking_order: getCustomSpeakingOrder()
     };
     
     // 确保max_rounds在有效范围内
-    if (data.max_rounds < 1) data.max_rounds = 1;
-    if (data.max_rounds > 20) data.max_rounds = 20;
+    if (groupData.max_rounds < 1) groupData.max_rounds = 1;
+    if (groupData.max_rounds > 20) groupData.max_rounds = 20;
     
     // 获取组ID（如果是编辑）
     const hiddenInput = form.querySelector('input[name="id"]');
@@ -2435,7 +2442,7 @@ function saveGroup() {
     const url = groupId ? `discussion_groups/${groupId}` : 'discussion_groups';
     const method = groupId ? 'PUT' : 'POST';
     
-    fetchAPI(url, method, data)
+    fetchAPI(url, method, groupData)
     .then(response => {
         // 关闭模态框
         bootstrap.Modal.getInstance(document.getElementById('addGroupModal')).hide();
@@ -2501,6 +2508,11 @@ function editGroup(groupId) {
             hiddenInput.name = 'id';
             hiddenInput.value = groupId;
             form.appendChild(hiddenInput);
+            
+            // 设置自定义发言顺序
+            if (typeof setCustomSpeakingOrderForEdit === 'function') {
+                setCustomSpeakingOrderForEdit(group);
+            }
             
             // 显示模态框
             new bootstrap.Modal(document.getElementById('addGroupModal')).show();
@@ -2615,6 +2627,7 @@ function loadRolesForGroupModal() {
             checkbox.name = 'role_ids';
             checkbox.value = role.id;
             checkbox.id = `role_${role.id}`;
+            checkbox.setAttribute('data-role-name', role.name);
             
             const label = document.createElement('label');
             label.className = 'form-check-label';
@@ -2773,6 +2786,7 @@ function setupHumanRoleToggle() {
                 modelSection.style.display = 'none';
                 parametersSection.style.display = 'none';
                 hostRoleSection.style.display = 'block';
+                customSpeakingOrderSection.style.display = 'none';
                 
                 // 移除model_id的required属性，使其可选
                 const modelSelect = document.querySelector('select[name="model_id"]');
@@ -2787,6 +2801,7 @@ function setupHumanRoleToggle() {
                 modelSection.style.display = 'block';
                 parametersSection.style.display = 'block';
                 hostRoleSection.style.display = 'none';
+                customSpeakingOrderSection.style.display = 'block';
                 
                 // 恢复model_id的required属性
                 const modelSelect = document.querySelector('select[name="model_id"]');
