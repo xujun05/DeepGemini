@@ -484,7 +484,7 @@ async function loadModels() {
         // 获取模型配置
         const response = await fetchAPI('model_configs');
         models = response;
-        // console.log('Loaded models:', models); // 添加调试日志
+        // // console.log('Loaded models:', models); // 添加调试日志
         
         // 更新界面
         updateModelsList();
@@ -763,7 +763,7 @@ async function saveModel() {
 async function loadConfigurations() {
     try {
         configurations = await fetchAPI('configurations');
-        console.log('Loaded configurations:', configurations);
+        // console.log('Loaded configurations:', configurations);
         updateConfigurationsList();
     } catch (error) {
         console.error('Failed to load configurations:', error);
@@ -832,7 +832,7 @@ function updateConfigurationsList() {
 
 async function editConfiguration(configId) {
     try {
-        console.log(`正在编辑配置 ID: ${configId}`);
+        // console.log(`正在编辑配置 ID: ${configId}`);
         
         // 直接从 API 获取最新的配置数据
         const response = await fetch(`/v1/configurations/${configId}`);
@@ -841,7 +841,7 @@ async function editConfiguration(configId) {
         }
         
         const config = await response.json();
-        console.log('从 API 获取的配置数据:', config);
+        // console.log('从 API 获取的配置数据:', config);
         
         if (!config || !config.id) {
             showError('未找到配置或数据格式无效');
@@ -864,10 +864,10 @@ async function editConfiguration(configId) {
         
         // 添加已有步骤
         if (config.steps && config.steps.length > 0) {
-            console.log(`配置包含 ${config.steps.length} 个步骤`);
+            // console.log(`配置包含 ${config.steps.length} 个步骤`);
             
             for (const step of config.steps) {
-                console.log('正在添加步骤:', step);
+                // console.log('正在添加步骤:', step);
                 addConfigurationStep();
                 
                 // 等待DOM更新
@@ -882,7 +882,7 @@ async function editConfiguration(configId) {
                     
                     if (modelSelect) {
                         modelSelect.value = step.model_id;
-                        console.log(`设置模型 ID: ${step.model_id}`);
+                        // console.log(`设置模型 ID: ${step.model_id}`);
                         
                         // 等待模型选择器更新
                         await new Promise(resolve => setTimeout(resolve, 50));
@@ -896,24 +896,24 @@ async function editConfiguration(configId) {
                     
                     if (stepTypeSelect) {
                         stepTypeSelect.value = step.step_type;
-                        console.log(`设置步骤类型: ${step.step_type}`);
+                        // console.log(`设置步骤类型: ${step.step_type}`);
                     }
                     
                     if (stepOrderInput) {
                         stepOrderInput.value = step.step_order;
-                        console.log(`设置步骤顺序: ${step.step_order}`);
+                        // console.log(`设置步骤顺序: ${step.step_order}`);
                     }
                     
                     if (systemPromptInput) {
                         systemPromptInput.value = step.system_prompt || '';
-                        console.log(`设置系统提示: ${step.system_prompt || '(空)'}`); 
+                        // console.log(`设置系统提示: ${step.system_prompt || '(空)'}`); 
                     }
                 } else {
                     console.error(`找不到步骤元素 ${stepCounter}`);
                 }
             }
         } else {
-            console.log('没有步骤，添加默认步骤');
+            // console.log('没有步骤，添加默认步骤');
             // 如果没有步骤，添加一个默认步骤
             addConfigurationStep();
         }
@@ -1037,10 +1037,10 @@ async function saveConfiguration() {
         try {
             if (configId) {
                 await fetchAPI(`configurations/${configId}`, 'PUT', configData);
-                console.log('Configuration updated successfully');
+                // console.log('Configuration updated successfully');
             } else {
                 await fetchAPI('configurations', 'POST', configData);
-                console.log('Configuration created successfully');
+                // console.log('Configuration created successfully');
             }
             
             await loadConfigurations();
@@ -2080,15 +2080,15 @@ function loadRoles() {
         .then(data => {
             // 添加数据格式检查
             if (!Array.isArray(data)) {
-                console.log('角色数据格式不正确:', data);
+                // console.log('角色数据格式不正确:', data);
                 data = []; // 提供默认空数组
             }
             
-            console.log('获取到的角色数据:', data);
+            // console.log('获取到的角色数据:', data);
             
             const rolesContainer = document.getElementById('rolesList');
             if (!rolesContainer) {
-                console.log('未找到rolesList元素，可能在当前页面不存在');
+                // console.log('未找到rolesList元素，可能在当前页面不存在');
                 return; // 提前返回，避免null引用
             }
             
@@ -2157,15 +2157,15 @@ function loadModelsForRoles() {
         .then(data => {
             // 添加数据格式检查
             if (!Array.isArray(data)) {
-                console.log('模型配置数据格式不正确:', data);
+                // console.log('模型配置数据格式不正确:', data);
                 data = []; // 提供默认空数组
             }
             
-            console.log('获取到的模型配置数据:', data);
+            // console.log('获取到的模型配置数据:', data);
             
             const select = document.querySelector('#addRoleForm select[name="model_id"]');
             if (!select) {
-                console.log('未找到model_id选择器，可能在当前页面不存在');
+                // console.log('未找到model_id选择器，可能在当前页面不存在');
                 return data; // 提前返回，避免null引用
             }
             
@@ -2262,7 +2262,7 @@ function saveRole() {
         // 人类角色不需要model_id，但是后端仍需要一个默认值
         // 如果用户未选择模型，设置一个占位符值
         if (!roleData.model_id) {
-            console.log('人类角色，设置默认model_id为1');
+            // console.log('人类角色，设置默认model_id为1');
             roleData.model_id = 1; // 后端会处理此值
         }
     }
@@ -2378,13 +2378,13 @@ function loadGroups() {
         .then(data => {
             // 添加数据格式检查
             if (!Array.isArray(data)) {
-                console.log('讨论组数据格式不正确:', data);
+                // console.log('讨论组数据格式不正确:', data);
                 data = []; // 提供默认空数组
             }
             
             const groupsContainer = document.getElementById('groupsList');
             if (!groupsContainer) {
-                console.log('未找到groupsList元素，可能在当前页面不存在');
+                // console.log('未找到groupsList元素，可能在当前页面不存在');
                 return; // 提前返回，避免null引用
             }
             
@@ -2452,7 +2452,7 @@ function loadRolesForGroups() {
     .then(roles => {
         const container = document.getElementById('roleCheckboxes');
         if (!container) {
-            console.log('未找到roleCheckboxes元素，可能在当前页面不存在');
+            // console.log('未找到roleCheckboxes元素，可能在当前页面不存在');
             return data; // 提前返回，避免null引用
         }
         
@@ -2509,7 +2509,7 @@ function getModeDisplayName(mode) {
 
 // 移除重复的函数，统一使用openAddGroupModal
 function openAddGroupModal() {
-    console.log("正在打开添加讨论组模态框");
+    // console.log("正在打开添加讨论组模态框");
     
     const form = document.getElementById('addGroupForm');
     form.reset();
@@ -2517,7 +2517,7 @@ function openAddGroupModal() {
     // 一定要删除ID字段，这是关键步骤
     const hiddenInput = form.querySelector('input[name="id"]');
     if (hiddenInput) {
-        // console.log("发现并移除了隐藏的ID字段: " + hiddenInput.value);
+        // // console.log("发现并移除了隐藏的ID字段: " + hiddenInput.value);
         hiddenInput.remove();
     }
     
@@ -2563,7 +2563,7 @@ function saveGroup() {
     const groupId = hiddenInput ? hiddenInput.value : null;
     
     // 打印完整的请求信息，帮助调试
-    // console.log({
+    // // console.log({
     //    action: groupId ? '更新' : '创建',
     //    url: groupId ? `discussion_groups/${groupId}` : 'discussion_groups',
     //    method: groupId ? 'PUT' : 'POST',
@@ -2604,7 +2604,7 @@ function saveGroup() {
 }
 
 function editGroup(groupId) {
-    console.log("正在编辑讨论组，ID:", groupId); // 添加调试日志
+    // console.log("正在编辑讨论组，ID:", groupId); // 添加调试日志
     
     fetchAPI(`discussion_groups/${groupId}`)
     .then(group => {
@@ -2622,7 +2622,7 @@ function editGroup(groupId) {
         
         // 设置表单值
         setTimeout(() => {
-            console.log("为表单设置值，组ID:", groupId, "组数据:", group); // 添加调试日志
+            // console.log("为表单设置值，组ID:", groupId, "组数据:", group); // 添加调试日志
             
             form.elements['name'].value = group.name;
             form.elements['mode'].value = group.mode;
@@ -2755,7 +2755,7 @@ function loadRolesForGroupModal() {
     .then(roles => {
         const container = document.getElementById('roleCheckboxes');
         if (!container) {
-            console.log('未找到roleCheckboxes元素，可能在当前页面不存在');
+            // console.log('未找到roleCheckboxes元素，可能在当前页面不存在');
             return; // 提前返回，避免null引用
         }
         
@@ -2795,15 +2795,15 @@ function loadModelsForGroupModal() {
     .then(data => {
         // 添加数据格式检查
         if (!Array.isArray(data)) {
-            console.log('模型配置数据格式不正确:', data);
+            // console.log('模型配置数据格式不正确:', data);
             data = []; // 提供默认空数组
         }
         
-        // console.log('获取到的模型配置数据:', data);
+        // // console.log('获取到的模型配置数据:', data);
         
         const select = document.querySelector('#addGroupForm select[name="summary_model_id"]');
         if (!select) {
-            console.log('未找到summary_model_id选择器，可能在当前页面不存在');
+            // console.log('未找到summary_model_id选择器，可能在当前页面不存在');
             return; // 提前返回，避免null引用
         }
         
@@ -3022,7 +3022,7 @@ function loadModelsForRoleModal() {
                 return;
             }
             
-            console.log('获取到的模型数据:', models);
+            // console.log('获取到的模型数据:', models);
             
             // 添加模型选项
             models.forEach(model => {

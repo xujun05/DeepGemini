@@ -220,7 +220,7 @@ document.addEventListener('DOMContentLoaded', function() {
 function setCustomSpeakingOrderForEdit(groupData) {
     if (!groupData) return;
     
-    console.log('设置自定义发言顺序，组数据:', groupData);
+    // console.log('设置自定义发言顺序，组数据:', groupData);
     
     // 使用更长的延迟确保DOM已完全加载
     setTimeout(() => {
@@ -247,7 +247,7 @@ function setCustomSpeakingOrderForEdit(groupData) {
             
             // 如果有自定义发言顺序数据，使用它
             if (groupData.custom_speaking_order && Array.isArray(groupData.custom_speaking_order) && groupData.custom_speaking_order.length > 0) {
-                console.log('使用自定义发言顺序:', groupData.custom_speaking_order);
+                // console.log('使用自定义发言顺序:', groupData.custom_speaking_order);
                 
                 // 创建角色映射对象
                 const roleMap = {};
@@ -264,7 +264,7 @@ function setCustomSpeakingOrderForEdit(groupData) {
                     const roleName = groupData.custom_speaking_order[i];
                     if (roleMap[roleName]) {
                         const role = roleMap[roleName];
-                        console.log(`按顺序添加角色 ${i+1}: ${roleName} (ID: ${role.id})`);
+                        // console.log(`按顺序添加角色 ${i+1}: ${roleName} (ID: ${role.id})`);
                         
                         // 直接创建元素并添加到列表中
                         const roleItem = document.createElement('div');
@@ -286,7 +286,7 @@ function setCustomSpeakingOrderForEdit(groupData) {
                     const addedRoleNames = new Set(groupData.custom_speaking_order);
                     groupData.roles.forEach(role => {
                         if (!addedRoleNames.has(role.name)) {
-                            console.log(`添加未在自定义顺序中的角色: ${role.name}`);
+                            // console.log(`添加未在自定义顺序中的角色: ${role.name}`);
                             const roleItem = document.createElement('div');
                             roleItem.className = 'role-item';
                             roleItem.setAttribute('data-role-id', role.id);
@@ -300,7 +300,7 @@ function setCustomSpeakingOrderForEdit(groupData) {
                     });
                 }
             } else {
-                console.log('没有自定义顺序数据，使用默认顺序');
+                // console.log('没有自定义顺序数据，使用默认顺序');
                 // 如果没有自定义顺序，使用API返回的角色顺序
                 if (groupData.roles && Array.isArray(groupData.roles)) {
                     groupData.roles.forEach(role => {
