@@ -1,0 +1,118 @@
+/* 自定义发言顺序样式 */
+.custom-speaking-order-container {
+    margin: 15px 0;
+}
+
+.sortable-list {
+    border: 1px solid #e0e0e0;
+    border-radius: 5px;
+    padding: 10px;
+    background-color: #f9f9f9;
+    min-height: 50px;
+}
+
+.role-item {
+    display: flex;
+    align-items: center;
+    padding: 8px 12px;
+    margin-bottom: 8px;
+    background-color: white;
+    border: 1px solid #e0e0e0;
+    border-radius: 4px;
+    cursor: grab;
+    transition: all 0.2s ease;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+}
+
+.role-item:last-child {
+    margin-bottom: 0;
+}
+
+.role-item .handle {
+    margin-right: 10px;
+    color: #999;
+    cursor: grab;
+}
+
+.role-item .role-name {
+    flex-grow: 1;
+    font-weight: 500;
+}
+
+/* 拖拽状态样式 */
+.role-item.dragging {
+    opacity: 0.5;
+    background-color: #f0f0f0;
+}
+
+/* 目标元素样式 */
+.role-item.drag-over {
+    border: 2px dashed #3498db;
+    background-color: #ecf0f1;
+}
+
+/* 交换动画效果 */
+.role-item.swapped {
+    animation: swap-highlight 0.3s ease;
+}
+
+@keyframes swap-highlight {
+    0% {
+        background-color: #fff;
+        transform: scale(1);
+    }
+    50% {
+        background-color: #e3f2fd;
+        transform: scale(1.05);
+    }
+    100% {
+        background-color: #fff;
+        transform: scale(1);
+    }
+}
+
+/* 暗色模式样式 */
+.dark-theme .sortable-list {
+    border-color: #404040;
+    background-color: #252525;
+}
+
+.dark-theme .role-item {
+    background-color: #2d2d2d;
+    border-color: #404040;
+    color: #ecf0f1;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.3);
+}
+
+.dark-theme .role-item .handle {
+    color: #aaa;
+}
+
+.dark-theme .role-item.dragging {
+    opacity: 0.5;
+    background-color: #3d3d3d;
+}
+
+.dark-theme .role-item.drag-over {
+    border: 2px dashed #3498db;
+    background-color: #353535;
+}
+
+.dark-theme .role-item.swapped {
+    animation: dark-swap-highlight 0.3s ease;
+}
+
+@keyframes dark-swap-highlight {
+    0% {
+        background-color: #2d2d2d;
+        transform: scale(1);
+    }
+    50% {
+        background-color: #1a4971;
+        transform: scale(1.05);
+    }
+    100% {
+        background-color: #2d2d2d;
+        transform: scale(1);
+    }
+}

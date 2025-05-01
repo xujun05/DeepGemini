@@ -523,31 +523,6 @@ class DiscussionProcessor:
         last_human_name = None
         last_human_position = -1
         
-        if len(meeting.meeting_history) > 0:
-            # 查找最近的消息，检查是否是人类消息
-            recent_msgs = meeting.meeting_history[-5:]  # 获取最近5条消息，增加检查范围
-            for msg in reversed(recent_msgs):  # 从最近的消息开始检查
-                # 检查是否有人类角色刚刚发言
-                for agent in meeting.agents:
-                    if hasattr(agent, 'is_human') and agent.is_human and agent.name == msg.get('agent'):
-                        logger.info(f"检测到人类 {agent.name} 刚刚发言，继续会议流程")
-                        is_continuation = True
-                        last_human_agent = agent
-                        last_human_name = agent.name
-                        
-                        # 获取上一轮的发言顺序来确定人类位置
-                        prev_speaking_order = meeting.mode.determine_speaking_order(
-                            [{"name": a.name, "role": a.role_description} for a in meeting.agents],
-                            meeting.current_round - 1  # 上一轮
-                        )
-                        
-                        # 在上一轮发言顺序中找到人类位置
-                        if last_human_name in prev_speaking_order:
-                            last_human_position = prev_speaking_order.index(last_human_name)
-                            logger.info(f"人类 {last_human_name} 在上一轮发言顺序中的位置: {last_human_position}")
-                        break
-                if is_continuation:
-                    break
         
         # 打印历史消息内容
         print("\n当前会议历史消息:\n")
@@ -926,23 +901,6 @@ class DiscussionProcessor:
                             spoken_agents_in_current_round.append(meeting.last_human_speaker)
                             logger.info(f"从最新消息确认当前轮次({meeting.current_round})中人类角色{meeting.last_human_speaker}已发言")
                 
-                # 方法3: 强制检测 - 只在满足更严格条件时使用
-                if not human_has_spoken_in_current_round and len(meeting.meeting_history) > 0:
-                    # 获取最后一条消息，检查是否是人类消息，并且必须是这轮新增的
-                    if meeting.meeting_history and meeting.current_round > 1:
-                        latest_msg = meeting.meeting_history[-1]  # 获取最后一条消息
-                        previous_msgs_count = len([msg for msg in meeting.meeting_history if "round" in msg and msg["round"] < meeting.current_round])
-                        
-                        # 确认这条消息是当前轮次的，通过检查它是否超过了上一轮所有消息的计数
-                        is_current_round_msg = len(meeting.meeting_history) > previous_msgs_count
-                        
-                        # 只有当消息确实是当前轮次的，并且是人类发的，才认为人类在本轮发言了
-                        if is_current_round_msg and "agent" in latest_msg and latest_msg["agent"] == meeting.last_human_speaker:
-                            logger.info(f"确认最新消息是当前轮次({meeting.current_round})的人类消息")
-                            human_has_spoken_in_current_round = True
-                            if meeting.last_human_speaker not in spoken_agents_in_current_round:
-                                spoken_agents_in_current_round.append(meeting.last_human_speaker)
-                                logger.info(f"精确确认当前轮次({meeting.current_round})中人类角色{meeting.last_human_speaker}已发言")
                 
                 # 如果所有方法都没找到该人类在当前轮中的发言
                 if not human_has_spoken_in_current_round:
@@ -953,11 +911,25 @@ class DiscussionProcessor:
             
             # 根据当前轮次已发言的角色，确定未发言的角色
             remaining_speakers = []
-            # 只保留当前轮次未发言的角色，且保持原有发言顺序
-            for name in speaking_order:
-                # 确认设置松哒，完全基于原始顺序和是否已发言
-                if name not in spoken_agents_in_current_round:
+            # 只保留当前轮次spoken_agents_in_current_round角色之后的角色
+            # 找到最后一个已发言角色在speaking_order中的位置
+            last_spoken_index = -1
+            for name in spoken_agents_in_current_round:
+                if name in speaking_order:
+                    current_index = speaking_order.index(name)
+                    last_spoken_index = max(last_spoken_index, current_index)
+            
+            # 只添加最后一个已发言角色之后的未发言角色
+            for i in range(len(speaking_order)):
+                name = speaking_order[i]
+                if i > last_spoken_index and name not in spoken_agents_in_current_round:
                     remaining_speakers.append(name)
+            
+            # 如果没有找到任何角色（可能是第一轮开始），则添加所有未发言角色
+            if not remaining_speakers and last_spoken_index == -1:
+                for name in speaking_order:
+                    if name not in spoken_agents_in_current_round:
+                        remaining_speakers.append(name)
             
             logger.info(f"第{meeting.current_round}轮已发言角色: {spoken_agents_in_current_round}")
             logger.info(f"第{meeting.current_round}轮未发言角色: {remaining_speakers}")
@@ -1173,7 +1145,7 @@ class DiscussionProcessor:
                             # 标记未完成本轮讨论
                             all_agents_spoke = False
                             logger.info(f"流式讨论暂停，等待人类角色 {human_name} 输入")
-                            logger.info(f"当前轮次 {meeting.current_round} 未完成，需要等待人类输入后继续")
+                            logger.info(f"当前轮次 {meeting.current_round} 未完成，需要等待人类输入后继续粗糙")
                             return
                     
                     buffer += chunk

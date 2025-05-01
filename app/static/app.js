@@ -832,9 +832,19 @@ function updateConfigurationsList() {
 
 async function editConfiguration(configId) {
     try {
-        const config = configurations.find(c => c.id === configId);
-        if (!config) {
-            showError('Configuration not found');
+        console.log(`正在编辑配置 ID: ${configId}`);
+        
+        // 直接从 API 获取最新的配置数据
+        const response = await fetch(`/v1/configurations/${configId}`);
+        if (!response.ok) {
+            throw new Error(`获取配置失败: ${response.status} ${response.statusText}`);
+        }
+        
+        const config = await response.json();
+        console.log('从 API 获取的配置数据:', config);
+        
+        if (!config || !config.id) {
+            showError('未找到配置或数据格式无效');
             return;
         }
 
@@ -854,8 +864,15 @@ async function editConfiguration(configId) {
         
         // 添加已有步骤
         if (config.steps && config.steps.length > 0) {
+            console.log(`配置包含 ${config.steps.length} 个步骤`);
+            
             for (const step of config.steps) {
+                console.log('正在添加步骤:', step);
                 addConfigurationStep();
+                
+                // 等待DOM更新
+                await new Promise(resolve => setTimeout(resolve, 50));
+                
                 const stepElement = stepsContainer.querySelector(`[data-step="${stepCounter}"]`);
                 if (stepElement) {
                     const modelSelect = stepElement.querySelector('[name$="].model_id"]');
@@ -863,29 +880,70 @@ async function editConfiguration(configId) {
                     const stepOrderInput = stepElement.querySelector('[name$="].step_order"]');
                     const systemPromptInput = stepElement.querySelector('[name$="].system_prompt"]');
                     
-                    if (modelSelect) modelSelect.value = step.model_id;
-                    if (stepTypeSelect) stepTypeSelect.value = step.step_type;
-                    if (stepOrderInput) stepOrderInput.value = step.step_order;
-                    if (systemPromptInput) systemPromptInput.value = step.system_prompt || '';
-                    
-                    // 更新步骤类型选项
                     if (modelSelect) {
+                        modelSelect.value = step.model_id;
+                        console.log(`设置模型 ID: ${step.model_id}`);
+                        
+                        // 等待模型选择器更新
+                        await new Promise(resolve => setTimeout(resolve, 50));
+                        
+                        // 更新步骤类型选项
                         updateStepTypeOptions(modelSelect);
+                        
+                        // 等待步骤类型选项更新
+                        await new Promise(resolve => setTimeout(resolve, 50));
                     }
+                    
+                    if (stepTypeSelect) {
+                        stepTypeSelect.value = step.step_type;
+                        console.log(`设置步骤类型: ${step.step_type}`);
+                    }
+                    
+                    if (stepOrderInput) {
+                        stepOrderInput.value = step.step_order;
+                        console.log(`设置步骤顺序: ${step.step_order}`);
+                    }
+                    
+                    if (systemPromptInput) {
+                        systemPromptInput.value = step.system_prompt || '';
+                        console.log(`设置系统提示: ${step.system_prompt || '(空)'}`); 
+                    }
+                } else {
+                    console.error(`找不到步骤元素 ${stepCounter}`);
                 }
             }
         } else {
+            console.log('没有步骤，添加默认步骤');
             // 如果没有步骤，添加一个默认步骤
             addConfigurationStep();
         }
         
         // 显示模态框
-        const modal = new bootstrap.Modal(document.getElementById('addConfigModal'));
+        const modalElement = document.getElementById('addConfigModal');
+        const modal = new bootstrap.Modal(modalElement);
+        
+        // 在显示模态框前设置一个事件监听器，在模态框显示后将焦点设置到模态框标题
+        modalElement.addEventListener('shown.bs.modal', function() {
+            // 将焦点设置到模态框标题或第一个输入字段
+            const firstInput = modalElement.querySelector('input[name="name"]');
+            if (firstInput) {
+                firstInput.focus();
+            }
+        }, { once: true }); // 只触发一次
+        
+        // 添加模态框关闭事件处理
+        modalElement.addEventListener('hide.bs.modal', function() {
+            // 在模态框关闭前移除焦点
+            document.activeElement.blur();
+            // 将焦点设置到文档主体
+            document.body.focus();
+        }, { once: true }); // 只触发一次
+        
         modal.show();
         
     } catch (error) {
-        console.error('Failed to edit configuration:', error);
-        showError('Failed to edit configuration');
+        console.error('编辑配置失败:', error);
+        showError(`编辑配置失败: ${error.message}`);
     }
 }
 
@@ -2444,14 +2502,24 @@ function saveGroup() {
     
     fetchAPI(url, method, groupData)
     .then(response => {
-        // 关闭模态框
-        bootstrap.Modal.getInstance(document.getElementById('addGroupModal')).hide();
+        // 在关闭模态框前，先将焦点移出按钮
+        document.activeElement.blur();
         
-        // 重新加载讨论组列表
-        loadGroups();
-        
-        // 显示成功消息
-        showToast('success', groupId ? '讨论组更新成功' : '讨论组创建成功');
+        // 延迟关闭模态框，确保焦点已正确处理
+        setTimeout(() => {
+            // 关闭模态框
+            const modalElement = document.getElementById('addGroupModal');
+            const modalInstance = bootstrap.Modal.getInstance(modalElement);
+            if (modalInstance) {
+                modalInstance.hide();
+            }
+            
+            // 重新加载讨论组列表
+            loadGroups();
+            
+            // 显示成功消息
+            showToast('success', groupId ? '讨论组更新成功' : '讨论组创建成功');
+        }, 50);
     })
     .catch(error => {
         console.error('保存讨论组失败:', error);

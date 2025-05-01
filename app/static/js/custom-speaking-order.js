@@ -58,47 +58,113 @@ function initSortable() {
     const orderList = document.getElementById('customSpeakingOrderList');
     if (!orderList) return;
     
-    // 使用HTML5拖拽API实现简单排序
+    // 使用HTML5拖拽 API实现直接交换位置
     const items = orderList.querySelectorAll('.role-item');
+    let draggedItem = null;
+    let targetItem = null;
     
     items.forEach(item => {
         item.setAttribute('draggable', 'true');
         
+        // 开始拖拽
         item.addEventListener('dragstart', function(e) {
+            draggedItem = this;
+            setTimeout(() => this.classList.add('dragging'), 0);
             e.dataTransfer.setData('text/plain', item.getAttribute('data-role-id'));
-            this.classList.add('dragging');
         });
         
+        // 拖拽结束
         item.addEventListener('dragend', function() {
             this.classList.remove('dragging');
+            draggedItem = null;
+            targetItem = null;
+            
+            // 清除所有项的拖拽目标样式
+            items.forEach(item => {
+                item.classList.remove('drag-over');
+            });
         });
-    });
-    
-    orderList.addEventListener('dragover', function(e) {
-        e.preventDefault();
-        const afterElement = getDragAfterElement(orderList, e.clientY);
-        const draggable = document.querySelector('.dragging');
-        if (afterElement == null) {
-            orderList.appendChild(draggable);
-        } else {
-            orderList.insertBefore(draggable, afterElement);
-        }
+        
+        // 拖拽进入目标区域
+        item.addEventListener('dragenter', function(e) {
+            e.preventDefault();
+            if (this !== draggedItem) {
+                this.classList.add('drag-over');
+                targetItem = this;
+            }
+        });
+        
+        // 拖拽移出目标区域
+        item.addEventListener('dragleave', function() {
+            this.classList.remove('drag-over');
+            if (this === targetItem) {
+                targetItem = null;
+            }
+        });
+        
+        // 拖拽经过目标区域
+        item.addEventListener('dragover', function(e) {
+            e.preventDefault();
+        });
+        
+        // 放置拖拽项
+        item.addEventListener('drop', function(e) {
+            e.preventDefault();
+            if (this !== draggedItem) {
+                // 直接交换位置
+                swapElements(draggedItem, this);
+                this.classList.remove('drag-over');
+            }
+        });
     });
 }
 
-// 辅助函数，用于确定拖拽元素的放置位置
-function getDragAfterElement(container, y) {
-    const draggableElements = [...container.querySelectorAll('.role-item:not(.dragging)')];
+// 辅助函数，用于直接交换两个元素的位置
+function swapElements(el1, el2) {
+    if (!el1 || !el2) return;
     
-    return draggableElements.reduce((closest, child) => {
-        const box = child.getBoundingClientRect();
-        const offset = y - box.top - box.height / 2;
-        if (offset < 0 && offset > closest.offset) {
-            return { offset: offset, element: child };
+    // 获取两个元素的父元素
+    const parent = el1.parentNode;
+    if (!parent) return;
+    
+    // 获取两个元素的位置
+    const el1Next = el1.nextElementSibling;
+    const el2Next = el2.nextElementSibling;
+    
+    // 如果第一个元素是第二个元素的下一个元素
+    if (el1Next === el2) {
+        parent.insertBefore(el2, el1);
+    } 
+    // 如果第二个元素是第一个元素的下一个元素
+    else if (el2Next === el1) {
+        parent.insertBefore(el1, el2);
+    } 
+    // 其他情况，直接交换位置
+    else {
+        // 先将第一个元素移到第二个元素的位置
+        if (el2Next) {
+            parent.insertBefore(el1, el2Next);
         } else {
-            return closest;
+            parent.appendChild(el1);
         }
-    }, { offset: Number.NEGATIVE_INFINITY }).element;
+        
+        // 然后将第二个元素移到第一个元素的原始位置
+        if (el1Next) {
+            parent.insertBefore(el2, el1Next);
+        } else {
+            parent.appendChild(el2);
+        }
+    }
+    
+    // 添加交换动画效果
+    el1.classList.add('swapped');
+    el2.classList.add('swapped');
+    
+    // 移除动画类
+    setTimeout(() => {
+        el1.classList.remove('swapped');
+        el2.classList.remove('swapped');
+    }, 300);
 }
 
 // 监听角色选择变化，更新发言顺序列表
@@ -154,53 +220,107 @@ document.addEventListener('DOMContentLoaded', function() {
 function setCustomSpeakingOrderForEdit(groupData) {
     if (!groupData) return;
     
-    // 等待DOM更新完成后再设置自定义发言顺序
+    console.log('设置自定义发言顺序，组数据:', groupData);
+    
+    // 使用更长的延迟确保DOM已完全加载
     setTimeout(() => {
-        const orderList = document.getElementById('customSpeakingOrderList');
-        if (!orderList) return;
-        
-        // 清空当前列表
-        orderList.innerHTML = '';
-        
-        // 如果有自定义发言顺序数据，使用它
-        if (groupData.custom_speaking_order && Array.isArray(groupData.custom_speaking_order)) {
-            // 获取所有选中的角色
-            const selectedRoles = [];
-            const checkboxes = document.querySelectorAll('#roleCheckboxes input[type="checkbox"]:checked');
-            checkboxes.forEach(checkbox => {
-                const roleId = parseInt(checkbox.value);
-                const roleName = checkbox.getAttribute('data-role-name');
-                selectedRoles.push({ id: roleId, name: roleName });
-            });
-            
-            // 创建一个映射，方便查找角色信息
-            const roleMap = {};
-            selectedRoles.forEach(role => {
-                roleMap[role.name] = role;
-            });
-            
-            // 首先添加自定义顺序中的角色
-            groupData.custom_speaking_order.forEach(roleName => {
-                if (roleMap[roleName]) {
-                    const role = roleMap[roleName];
-                    addRoleItemToOrderList(orderList, role.id, role.name);
-                    // 从映射中删除，表示已处理
-                    delete roleMap[roleName];
+        // 先确保所有角色复选框已正确选中
+        if (groupData.role_ids && Array.isArray(groupData.role_ids)) {
+            groupData.role_ids.forEach(roleId => {
+                const checkbox = document.querySelector(`#roleCheckboxes input[value="${roleId}"]`);
+                if (checkbox) {
+                    checkbox.checked = true;
                 }
             });
-            
-            // 添加剩余的选中角色（可能是新选择的，不在自定义顺序中的）
-            Object.values(roleMap).forEach(role => {
-                addRoleItemToOrderList(orderList, role.id, role.name);
-            });
-        } else {
-            // 如果没有自定义顺序，使用默认顺序（按照选中的角色顺序）
-            updateCustomSpeakingOrderUI();
         }
         
-        // 初始化拖拽排序
-        initSortable();
-    }, 100);
+        // 等待复选框状态更新后再处理自定义发言顺序
+        setTimeout(() => {
+            const orderList = document.getElementById('customSpeakingOrderList');
+            if (!orderList) {
+                console.error('找不到自定义发言顺序列表元素');
+                return;
+            }
+            
+            // 强制清空当前列表
+            orderList.innerHTML = '';
+            
+            // 如果有自定义发言顺序数据，使用它
+            if (groupData.custom_speaking_order && Array.isArray(groupData.custom_speaking_order) && groupData.custom_speaking_order.length > 0) {
+                console.log('使用自定义发言顺序:', groupData.custom_speaking_order);
+                
+                // 创建角色映射对象
+                const roleMap = {};
+                
+                // 使用API响应中的roles数据创建映射
+                if (groupData.roles && Array.isArray(groupData.roles)) {
+                    groupData.roles.forEach(role => {
+                        roleMap[role.name] = role;
+                    });
+                }
+                
+                // 按照自定义发言顺序添加角色
+                for (let i = 0; i < groupData.custom_speaking_order.length; i++) {
+                    const roleName = groupData.custom_speaking_order[i];
+                    if (roleMap[roleName]) {
+                        const role = roleMap[roleName];
+                        console.log(`按顺序添加角色 ${i+1}: ${roleName} (ID: ${role.id})`);
+                        
+                        // 直接创建元素并添加到列表中
+                        const roleItem = document.createElement('div');
+                        roleItem.className = 'role-item';
+                        roleItem.setAttribute('data-role-id', role.id);
+                        roleItem.setAttribute('data-role-name', roleName);
+                        roleItem.innerHTML = `
+                            <span class="handle"><i class="fas fa-grip-lines"></i></span>
+                            <span class="role-name">${roleName}</span>
+                        `;
+                        orderList.appendChild(roleItem);
+                    } else {
+                        console.warn(`找不到角色: ${roleName}`);
+                    }
+                }
+                
+                // 添加任何不在自定义发言顺序中的角色
+                if (groupData.roles) {
+                    const addedRoleNames = new Set(groupData.custom_speaking_order);
+                    groupData.roles.forEach(role => {
+                        if (!addedRoleNames.has(role.name)) {
+                            console.log(`添加未在自定义顺序中的角色: ${role.name}`);
+                            const roleItem = document.createElement('div');
+                            roleItem.className = 'role-item';
+                            roleItem.setAttribute('data-role-id', role.id);
+                            roleItem.setAttribute('data-role-name', role.name);
+                            roleItem.innerHTML = `
+                                <span class="handle"><i class="fas fa-grip-lines"></i></span>
+                                <span class="role-name">${role.name}</span>
+                            `;
+                            orderList.appendChild(roleItem);
+                        }
+                    });
+                }
+            } else {
+                console.log('没有自定义顺序数据，使用默认顺序');
+                // 如果没有自定义顺序，使用API返回的角色顺序
+                if (groupData.roles && Array.isArray(groupData.roles)) {
+                    groupData.roles.forEach(role => {
+                        const roleItem = document.createElement('div');
+                        roleItem.className = 'role-item';
+                        roleItem.setAttribute('data-role-id', role.id);
+                        roleItem.setAttribute('data-role-name', role.name);
+                        roleItem.innerHTML = `
+                            <span class="handle"><i class="fas fa-grip-lines"></i></span>
+                            <span class="role-name">${role.name}</span>
+                        `;
+                        orderList.appendChild(roleItem);
+                    });
+                }
+            }
+            
+            // 初始化拖拽排序
+            initSortable();
+        }, 200); // 内部延迟确保复选框状态已更新
+    }, 300); // 外部延迟确保DOM已完全加载
 }
 
 // 辅助函数：添加角色项到顺序列表
