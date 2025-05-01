@@ -887,7 +887,10 @@ document.addEventListener("DOMContentLoaded", function() {
                     const groupSelect = document.getElementById('discussionGroupSelect');
                     
                     if (groupSelect && groupSelect.value && topicInput && topicInput.value && topicInput.value.trim()) {
-                        handleGroupChat(topicInput.value.trim());
+                        const topicText = topicInput.value.trim();
+                        handleGroupChat(topicText);
+                        // 清除讨论主题输入框
+                        topicInput.value = '';
                     } else {
                         let errorMsg = '创建讨论失败: ';
                         if (!groupSelect || !groupSelect.value) {

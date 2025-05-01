@@ -29,6 +29,43 @@
     </script>
     <script src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js"></script>
     <style>
+        /* 可调整高度的文本区域 */
+        .resizable-textarea {
+            position: relative;
+            resize: none;
+            min-height: 50px;
+            max-height: 300px;
+            transition: height 0.2s ease;
+        }
+        
+        /* 自定义调整大小的手柄 */
+        .resizable-textarea-container {
+            position: relative;
+            flex: 1;
+        }
+        
+        .resize-handle {
+            position: absolute;
+            top: 0;
+            right: 0;
+            width: 20px;
+            height: 20px;
+            background-color: transparent;
+            cursor: ns-resize;
+            z-index: 10;
+        }
+        
+        .resize-handle::before {
+            content: '';
+            position: absolute;
+            top: 4px;
+            right: 4px;
+            width: 8px;
+            height: 8px;
+            border-top: 2px solid rgba(0, 0, 0, 0.3);
+            border-right: 2px solid rgba(0, 0, 0, 0.3);
+        }
+        
         /* 消息名称样式 */
         .message-name {
             font-size: 0.85rem;
@@ -249,22 +286,31 @@
                             <span data-translate="identity">身份发言</span>
                         </div>
                     </div>
-                    <div class="human-input-content">
-                        <textarea class="form-control" id="humanInputMessage" placeholder="输入您的发言内容..."></textarea>
-                        <button class="btn btn-primary" id="sendHumanInput" data-translate="submitMessage">提交发言</button>
+                    <div class="human-input-content d-flex align-items-center">
+                        <div class="resizable-textarea-container">
+                            <textarea class="form-control resizable-textarea" id="humanInputMessage" placeholder="输入您的发言内容..."></textarea>
+                            <div class="resize-handle" id="humanInputResizeHandle"></div>
+                        </div>
+                        <button class="btn btn-primary ms-2 align-self-center" id="sendHumanInput" data-translate="submitMessage">提交发言</button>
                     </div>
                 </div>
 
                 <!-- Chat Input (隐藏在讨论组模式) -->
-                <div class="chat-input" id="normalChatInput">
-                    <textarea class="form-control" id="userMessage" placeholder="输入消息..."></textarea>
-                    <button class="btn btn-primary" id="sendMessage" data-translate="send">发送</button>
+                <div class="chat-input d-flex align-items-center" id="normalChatInput">
+                    <div class="resizable-textarea-container">
+                        <textarea class="form-control resizable-textarea" id="userMessage" placeholder="输入消息..."></textarea>
+                        <div class="resize-handle" id="userMessageResizeHandle"></div>
+                    </div>
+                    <button class="btn btn-primary ms-2 align-self-center" id="sendMessage" data-translate="send">发送</button>
                 </div>
                 
                 <!-- 讨论组主题发送区域 (只在讨论组模式显示) -->
                 <div class="chat-input d-none d-flex align-items-center gap-2" id="discussionTopicInput">
-                    <textarea class="form-control flex-grow-1" id="discussionTopicMessage" placeholder="输入讨论主题..."></textarea>
-                    <button class="btn btn-primary" id="startDiscussionBtn" data-translate="startDiscussion">开始讨论</button>
+                    <div class="resizable-textarea-container">
+                        <textarea class="form-control resizable-textarea" id="discussionTopicMessage" placeholder="输入讨论主题..."></textarea>
+                        <div class="resize-handle" id="discussionTopicResizeHandle"></div>
+                    </div>
+                    <button class="btn btn-primary ms-2 align-self-center" id="startDiscussionBtn" data-translate="startDiscussion">开始讨论</button>
                 </div>
             </div>
         </div>
@@ -282,5 +328,47 @@
     <script src="app.js"></script>
     <script src="js/thinking.js"></script>
     <script src="js/chatllm.js"></script>
+    
+    <!-- 自定义调整大小的脚本 -->
+    <script>
+        document.addEventListener('DOMContentLoaded', function() {
+            // 获取所有调整大小的手柄和对应的文本区域
+            const resizeHandles = document.querySelectorAll('.resize-handle');
+            
+            resizeHandles.forEach(handle => {
+                handle.addEventListener('mousedown', initResize);
+            });
+            
+            function initResize(e) {
+                e.preventDefault();
+                
+                // 获取当前手柄对应的文本区域
+                const textarea = e.target.parentElement.querySelector('textarea');
+                const initialHeight = textarea.offsetHeight;
+                const initialY = e.clientY;
+                
+                // 添加鼠标移动和鼠标释放事件监听器
+                document.addEventListener('mousemove', resize);
+                document.addEventListener('mouseup', stopResize);
+                
+                function resize(e) {
+                    // 计算高度变化 - 反转方向（向上增加高度，向下减小高度）
+                    const deltaY = initialY - e.clientY;
+                    const newHeight = initialHeight + deltaY;
+                    
+                    // 设置新高度，确保在最小和最大高度范围内
+                    if (newHeight >= 50 && newHeight <= 300) {
+                        textarea.style.height = newHeight + 'px';
+                    }
+                }
+                
+                function stopResize() {
+                    // 移除事件监听器
+                    document.removeEventListener('mousemove', resize);
+                    document.removeEventListener('mouseup', stopResize);
+                }
+            }
+        });
+    </script>
 </body>
 </html>
