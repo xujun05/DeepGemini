@@ -114,7 +114,7 @@ const translations = {
         
         // 角色管理相关翻译
         roleManagement: 'Role Management',
-        roleDescription: 'Create and manage AI roles for intelligent discussion groups',
+        roleDescription: 'Role Description',
         addRole: 'Add Role',
         roleName: 'Role Name',
         personality: 'Personality',
@@ -135,7 +135,7 @@ const translations = {
         
         // 讨论组管理相关翻译
         groupManagement: 'Discussion Group Management',
-        groupDescription: 'Create and manage AI role discussion groups for multi-agent conversations',
+        groupDescription: 'Create and manage AI role discussion groups for multi-roles conversations',
         addGroup: 'Add Group',
         groupName: 'Group Name',
         meetingMode: 'Meeting Mode',
@@ -293,7 +293,7 @@ const translations = {
         
         // 角色管理相关翻译
         roleManagement: '角色管理',
-        roleDescription: '创建和管理AI角色，用于智能讨论组',
+        roleDescription: '角色描述',
         addRole: '添加角色',
         roleName: '角色名称',
         personality: '性格特点',
@@ -314,7 +314,7 @@ const translations = {
         
         // 讨论组管理相关翻译
         groupManagement: '讨论组管理',
-        groupDescription: '创建和管理AI角色讨论组，用于多智能体对话',
+        groupDescription: '创建和管理AI角色讨论组，用于多角色对话',
         addGroup: '添加讨论组',
         groupName: '讨论组名称',
         meetingMode: '会议模式',
@@ -1505,6 +1505,82 @@ document.querySelectorAll('.sidebar-menu li').forEach(item => {
         document.getElementById(pageId).classList.remove('d-none');
     });
 });
+
+function updateWorkflowVisualization(config) {
+    const container = document.getElementById('workflowCircle');
+    const steps = config.steps;
+    const centerX = 250;
+    const centerY = 250;
+    const radius = 180;
+
+    // Clear previous visualization
+    container.innerHTML = '';
+
+    // Add steps
+    steps.forEach((step, index) => {
+        const angle = (index / steps.length) * 2 * Math.PI - Math.PI / 2;
+        const x = centerX + radius * Math.cos(angle);
+        const y = centerY + radius * Math.sin(angle);
+
+        const stepEl = document.createElement('div');
+        stepEl.className = `workflow-step ${step.step_type}`;
+        stepEl.style.left = `${x - 70}px`;
+        stepEl.style.top = `${y - 70}px`;
+        
+        // 获取关联的模型信息
+        const model = models.find(m => m.id === step.model_id);
+        const modelName = model ? model.name : 'Unknown Model';
+        
+        stepEl.innerHTML = `
+            <div class="step-content">
+                <div class="step-number">${index + 1}</div>
+                <div class="step-type">${step.step_type}</div>
+                <div class="step-model">${modelName}</div>
+            </div>
+        `;
+
+        // 添加悬停提示
+        stepEl.title = `Step ${index + 1}\nType: ${step.step_type}\nModel: ${modelName}`;
+
+        container.appendChild(stepEl);
+
+        // Add connector if not last step
+        if (index < steps.length - 1) {
+            const nextAngle = ((index + 1) / steps.length) * 2 * Math.PI - Math.PI / 2;
+            const nextX = centerX + radius * Math.cos(nextAngle);
+            const nextY = centerY + radius * Math.sin(nextAngle);
+
+            const connector = document.createElement('div');
+            connector.className = 'workflow-connector';
+            const length = Math.sqrt(Math.pow(nextX - x, 2) + Math.pow(nextY - y, 2));
+            const angle = Math.atan2(nextY - y, nextX - x);
+
+            connector.style.width = `${length}px`;
+            connector.style.left = `${x}px`;
+            connector.style.top = `${y}px`;
+            connector.style.transform = `rotate(${angle}rad)`;
+
+            container.appendChild(connector);
+        }
+    });
+}
+
+function showWorkflowVisualization(configId) {
+    const config = configurations.find(c => c.id === configId);
+    if (!config) {
+        showError('Configuration not found');
+        return;
+    }
+
+    // 清空并更新可视化
+    const container = document.getElementById('workflowCircle');
+    container.innerHTML = '';
+    updateWorkflowVisualization(config);
+
+    // 显示模态框
+    const modal = new bootstrap.Modal(document.getElementById('workflowVisualizationModal'));
+    modal.show();
+}
 
 // Language change
 function changeLanguage(lang) {
