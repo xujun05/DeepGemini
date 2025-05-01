@@ -1,4 +1,4 @@
-<div align="center">
+ <div align="center">
 <h1>DeepGemini 🌟</h1>
 <p>一个灵活的多模型编排 API，兼容 OpenAI 接口</p>
 
@@ -37,6 +37,9 @@
 - **高级配置**：精细控制模型参数和系统提示词
 - **Web 管理界面**：内置模型和配置管理界面
 - **多语言支持**：支持中文和英文界面
+- **人类参与**：支持人类加入AI讨论组进行发言
+- **对话界面**：支持模型、角色、接力链、讨论组在线对话
+- **灵活部署**：支持Docker或本地安装的简易部署方式
 
 ## 预览
 
@@ -47,6 +50,8 @@
 ![image](https://img.pub/p/9051bfc02883dbceaf90.png)
 
 ![image](https://img.pub/p/058205dff608609b7d58.png)
+
+![image](https://img.pub/p/d4f09719c2a5a2315fc5.png)
 
 ![image](https://img.pub/p/439520386b4927c91688.png)
 
@@ -86,6 +91,8 @@ uv run uvicorn app.main:app --host 0.0.0.0 --port 8000
 
 ```bash
 cp .env.example .env
+touch deepgemini.db
+echo "" > deepgemini.db
 ```
 
 2. 构建并启动容器：
@@ -103,7 +110,7 @@ docker-compose up -d
 docker pull bradleylzh/deepgemini:latest
 ```
 
-2. 运行容器：
+2. 创建必要文件：
 
 Linux/Mac 用户：
 ```bash
@@ -125,16 +132,15 @@ Windows PowerShell 用户：
 
 ```powershell
 cp .env.example .env
-echo "" > deepgemini.db
+python -c "import sqlite3; sqlite3.connect('deepgemini.db').close()"
 ```
 
 运行容器
 ```powershell
-docker run -d \
--p 8000:8000 \
--v $(pwd)/.env:/app/.env \
--v $(pwd)/deepgemini.db:/app/deepgemini.db \
---name deepgemini \
+docker run -d -p 8000:8000 `
+-v ${PWD}\.env:/app/.env `
+-v ${PWD}\deepgemini.db:/app/deepgemini.db `
+--name deepgemini `
 bradleylzh/deepgemini:latest
 ```
 
@@ -172,6 +178,14 @@ DeepGemini 支持多种 AI 提供商：
   - 角色扮演
   - SWOT 分析
   - 六顶思考帽
+- **人类参与**：允许人类加入AI讨论并发言
+
+## 🔍 API 兼容性
+DeepGemini 提供兼容的API接口，可作为OpenAI API的直接替代品：
+
+- **/v1/chat/completions**：与OpenAI聊天完成端点兼容
+- **/v1/models**：以OpenAI兼容格式列出所有可用模型
+- 支持流式响应、工具和其他OpenAI API功能
 
 ## 🛠 技术栈
 
@@ -192,4 +206,4 @@ DeepGemini 支持多种 AI 提供商：
 
 ## 📬 联系
 
-如有问题和支持需求，请在 GitHub 上开启 Issue。 
+如有问题和支持需求，请在 GitHub 上开启 Issue。

@@ -1,4 +1,4 @@
-<div align="center">
+ <div align="center">
 <h1>DeepGemini 🌟</h1>
 <p>A Flexible Multi-Model Orchestration API with OpenAI Compatibility</p>
 
@@ -38,6 +38,9 @@
 - **Database Integration**: SQLite-based configuration storage with Alembic migrations
 - **Web Management UI**: Built-in interface for managing models and configurations
 - **Multi-language Support**: English and Chinese interface
+- **Human Interaction**: Supports human participation in AI discussions
+- **Chat Interface**: Supports online conversations with models, roles, relay chains, and discussion groups
+- **Flexible Deployment**: Easy deployment with Docker or local installation
 
 ## Preview
 
@@ -48,6 +51,8 @@
 ![image](https://img.pub/p/9051bfc02883dbceaf90.png)
 
 ![image](https://img.pub/p/058205dff608609b7d58.png)
+
+![image](https://img.pub/p/d4f09719c2a5a2315fc5.png)
 
 ![image](https://img.pub/p/439520386b4927c91688.png)
 
@@ -123,7 +128,7 @@ For Windows PowerShell:
 ```powershell
 # Create .env file
 cp .env.example .env
-echo "" > deepgemini.db
+python -c "import sqlite3; sqlite3.connect('deepgemini.db').close()"
 ```
 
 3. Run the container:
@@ -182,6 +187,14 @@ Create custom Relay Chain by combining models:
   - Role-playing
   - SWOT Analysis
   - Six Thinking Hats
+- **Human Participation**: Allow humans to join AI discussions and contribute
+
+## 🔍 API Compatibility
+DeepGemini provides a compatible API interface that allows it to serve as a drop-in replacement for OpenAI's API:
+
+- **/v1/chat/completions**: Compatible with OpenAI chat completion endpoint
+- **/v1/models**: Lists all available models in OpenAI-compatible format
+- Support for streaming responses, tools, and other OpenAI API features
 
 ## 🛠 Tech Stack
 
@@ -203,5 +216,3 @@ Contributions are welcome! Please feel free to submit a Pull Request.
 ## 📬 Contact
 
 For questions and support, please open an issue on GitHub.
-
-

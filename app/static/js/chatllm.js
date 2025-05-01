@@ -891,6 +891,8 @@ document.addEventListener("DOMContentLoaded", function() {
                         handleGroupChat(topicText);
                         // 清除讨论主题输入框
                         topicInput.value = '';
+                        // 隐藏讨论输入界面
+                        if (discussionTopicInput) discussionTopicInput.classList.add('d-none');
                     } else {
                         let errorMsg = '创建讨论失败: ';
                         if (!groupSelect || !groupSelect.value) {
