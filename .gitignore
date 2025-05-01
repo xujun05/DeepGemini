@@ -10,9 +10,11 @@ wheels/
 .env
 .env.*
 !.env.example
-
+scripts/
 # Virtual environments
 .venv
+logs/
+logger/
+backups/
+data/
 
-# Windsurf
-.windsurfrules
