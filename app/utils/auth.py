@@ -8,11 +8,41 @@ from dotenv import load_dotenv
 from app.utils.logger import logger
 from typing import Optional
 import json
+import secrets
+import string
+import random
 
 # 加载 .env 文件
 logger.info(f"当前工作目录: {os.getcwd()}")
 logger.info("尝试加载.env文件...")
+
+# 检查.env文件是否存在，不存在则创建
+env_path = '.env'
+if not os.path.exists(env_path):
+    # 生成随机JWT密钥
+    jwt_secret = secrets.token_hex(32)
+    
+    # 生成随机API密钥
+    api_key = 'sk-api-' + ''.join(secrets.choice(string.ascii_lowercase + string.digits) for _ in range(32))
+    api_key_id = 1  
+    
+    logger.info("未找到.env文件，正在创建默认配置...")
+    with open(env_path, 'w', encoding='utf-8') as f:
+        f.write(f"JWT_SECRET={jwt_secret}\n")
+        f.write("ADMIN_USERNAME=admin\n")
+        f.write("ADMIN_PASSWORD=admin123\n")
+        f.write(f"ALLOW_API_KEY=[{{\"id\": {api_key_id},\"key\":\"{api_key}\",\"description\":\"默认API密钥\"}}]\n")
+    logger.info("已创建默认.env文件")
+    logger.info(f"已生成随机JWT密钥: {jwt_secret[:8]}...")
+    logger.info(f"已生成随机API密钥: {api_key[:8]}...")
+
 load_dotenv(override=True)  # 添加override=True强制覆盖已存在的环境变量
+
+# 打印环境变量中的用户名和密码，用于调试
+admin_username = os.getenv("ADMIN_USERNAME", "未设置")
+admin_password = os.getenv("ADMIN_PASSWORD", "未设置")
+logger.info(f"当前管理员用户名: {admin_username}")
+logger.info(f"当前管理员密码: {admin_password}")
 
 # 获取环境变量
 try:
@@ -22,7 +52,9 @@ try:
     api_keys_data = json.loads(api_keys_json)
     # 确保 api_keys_data 是列表
     if isinstance(api_keys_data, list):
-        ALLOW_API_KEYS = [key_data["key"] for key_data in api_keys_data if isinstance(key_data, dict) and "key" in key_data]
+        # 确保我们只使用有效的密钥
+        ALLOW_API_KEYS = [key_data["key"] for key_data in api_keys_data 
+                         if isinstance(key_data, dict) and "key" in key_data]
     else:
         logger.error("API 密钥数据格式错误，应为 JSON 数组")
         ALLOW_API_KEYS = []
@@ -116,13 +148,18 @@ def verify_api_key(api_key: str = Depends(get_api_key_header)):
     try:
         api_keys_json = os.getenv('ALLOW_API_KEY', '[]')
         api_keys_data = json.loads(api_keys_json)
-        available_keys = [key_data["key"] for key_data in api_keys_data]
+        # 确保我们只使用有效的密钥
+        available_keys = [key_data["key"] for key_data in api_keys_data 
+                         if isinstance(key_data, dict) and "key" in key_data]
         
-        logger.debug(f"正在验证 API 密钥: {api_key[:8]}...")
-        logger.debug(f"可用的 API 密钥: {[k[:8] for k in available_keys]}")
+        logger.debug(f"正在验证 API 密钥: {api_key[:8] if len(api_key) >= 8 else api_key}...")
+        if available_keys:
+            logger.debug(f"可用的 API 密钥: {[k[:8] if len(k) >= 8 else k for k in available_keys]}")
+        else:
+            logger.warning("没有可用的API密钥配置")
         
         if api_key not in available_keys:
-            logger.warning(f"无效的API密钥: {api_key[:8]}...")
+            logger.warning(f"无效的API密钥: {api_key[:8] if len(api_key) >= 8 else api_key}...")
             raise HTTPException(
                 status_code=401,
                 detail="Invalid API key",
