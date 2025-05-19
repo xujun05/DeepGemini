@@ -196,6 +196,10 @@ DeepGemini 提供兼容的API接口，可作为OpenAI API的直接替代品：
 - [aiohttp](https://docs.aiohttp.org/)：异步 HTTP 客户端
 - [deepclaude](https://github.com/getasterisk/deepclaude)
 
+## ✨ 鸣谢
+
+[VTEXS](https://vtexs.com) 是一家高性能云基础设施和 VPS 托管服务提供商，注重资源保障、全天候专家支持以及 99.99% 的正常运行时间 SLA。他们通过向获得批准的贡献者提供托管资源来支持开源项目。
+
 ## 📝 许可证
 
 本项目采用 MIT 许可证 - 详见 [LICENSE](LICENSE) 文件。
