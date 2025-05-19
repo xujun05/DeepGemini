@@ -205,6 +205,10 @@ DeepGemini provides a compatible API interface that allows it to serve as a drop
 - [aiohttp](https://docs.aiohttp.org/): Async HTTP client
 - [deepclaude](https://github.com/getasterisk/deepclaude)
 
+## ✨ Acknowledgements
+
+[VTEXS](https://vtexs.com/) is a provider of high-performance cloud infrastructure and VPS hosting services, emphasizing guaranteed resources, 24/7 expert support, and a 99.99% uptime SLA. They support open-source projects by offering hosting resources,  to approved contributors.
+
 ## 📝 License
 
 This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
