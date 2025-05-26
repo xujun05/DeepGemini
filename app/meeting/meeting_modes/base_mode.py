@@ -1,5 +1,5 @@
 from abc import ABC, abstractmethod
-from typing import List, Dict, Any
+from typing import List, Dict, Any, Optional # Added Optional
 from app.meeting.utils.summary_generator import SummaryGenerator
 
 class BaseMeetingMode(ABC):
