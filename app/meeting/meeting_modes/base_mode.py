@@ -33,7 +33,8 @@ class BaseMeetingMode(ABC):
     
     @abstractmethod
     def determine_speaking_order(self, agents: List[Dict[str, Any]], 
-                                current_round: int) -> List[str]:
+                                 current_round: int,
+                                 suggested_next_speaker: Optional[str] = None) -> List[str]:
         """确定发言顺序"""
         pass
     

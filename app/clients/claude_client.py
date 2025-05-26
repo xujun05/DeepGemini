@@ -69,9 +69,12 @@ class ClaudeClient(BaseClient):
 
         if self.provider == "anthropic":
             headers = {
-                "Authorization": f"Bearer {self.api_key}",
+                "x-api-key": self.api_key,
                 "Content-Type": "application/json",
+                "anthropic-version": "2023-06-01",  # Standard Claude API version
                 "Accept": "text/event-stream" if stream else "application/json",
+                # Add other necessary headers if required by your specific Claude setup/version
+                # For example, some versions might need: "anthropic-beta": "tools-2024-04-04" if using tools
             }
 
             # 用于收集推理内容

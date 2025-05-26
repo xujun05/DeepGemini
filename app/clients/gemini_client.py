@@ -2,7 +2,7 @@
 import json
 from typing import AsyncGenerator
 import re
-from urllib.parse import urlparse, parse_qs
+from urllib.parse import urlparse, parse_qs, urlunparse, urlencode
 from app.utils.logger import logger
 from .base_client import BaseClient
 
@@ -122,7 +122,14 @@ class GeminiClient(BaseClient):
             if 'key' not in query_params:
                 final_url += f'key={self.api_key}'
             
-        logger.debug(f"Gemini 最终请求URL: {final_url}")
+        # Redact API key for logging
+        parsed_url_for_log = urlparse(final_url)
+        query_params_for_log = parse_qs(parsed_url_for_log.query)
+        if 'key' in query_params_for_log:
+            query_params_for_log['key'] = ['[REDACTED]'] # Mask the API key
+        masked_query_for_log = urlencode(query_params_for_log, doseq=True)
+        masked_final_url_for_log = urlunparse(parsed_url_for_log._replace(query=masked_query_for_log))
+        logger.debug(f"Gemini 最终请求URL (Key Redacted): {masked_final_url_for_log}")
         
         if stream:
             async for chunk in self._make_request(headers, gemini_data, final_url):

@@ -23,6 +23,7 @@ class DiscussionProcessor:
         self.group_id = None
         self.current_meeting_id = None  # 添加一个属性来跟踪当前会议ID
         self.active_meetings = {}  # 自己管理活跃会议
+        self.suggested_speaker_for_next_round = None
     
     def start_meeting(self, group_id: int, topic: str = None) -> str:
         """启动一个新的讨论会议"""
@@ -759,8 +760,10 @@ class DiscussionProcessor:
             # 确定发言顺序 - 使用会议模式的定义
             speaking_order = meeting.mode.determine_speaking_order(
                 [{"name": agent.name, "role": agent.role_description} for agent in meeting.agents],
-                meeting.current_round
+                meeting.current_round,
+                suggested_next_speaker=self.suggested_speaker_for_next_round
             )
+            self.suggested_speaker_for_next_round = None
             
             # 打印发言顺序
             print(f"本轮发言顺序: {', '.join(speaking_order)}\n")
@@ -1050,6 +1053,17 @@ class DiscussionProcessor:
                     current_round=meeting.current_round
                 )
                 
+                # Prompt Enrichment for AI agents
+                if not (hasattr(agent, 'is_human') and agent.is_human):
+                    other_ai_participants = []
+                    for other_agent in meeting.agents:
+                        if other_agent.name != agent.name and not (hasattr(other_agent, 'is_human') and other_agent.is_human):
+                            other_ai_participants.append(f"- {other_agent.name} ({other_agent.role_description})")
+                    
+                    if other_ai_participants:
+                        prompt += "\n\nYou can suggest another AI participant to speak next by ending your response with [NEXT_SPEAKER: ExactAgentName]."
+                        prompt += "\nOther AI participants in this discussion:\n" + "\n".join(other_ai_participants)
+
                 # 获取当前上下文
                 context = meeting._get_current_context()
                 
@@ -1223,6 +1237,23 @@ class DiscussionProcessor:
                 # 获取生成的完整回应
                 response = agent.last_response
                 
+                # Parse suggestion from AI response
+                if not (hasattr(agent, 'is_human') and agent.is_human):
+                    match = re.search(r"\[NEXT_SPEAKER:\s*([^\]]+?)\s*\]", response)
+                    if match:
+                        parsed_name = match.group(1).strip()
+                        # Validate that parsed_name corresponds to one of the *other* currently active, non-human AI agents
+                        is_valid_suggestion = False
+                        for other_agent in meeting.agents:
+                            if other_agent.name == parsed_name and other_agent.name != agent.name and not (hasattr(other_agent, 'is_human') and other_agent.is_human):
+                                is_valid_suggestion = True
+                                break
+                        if is_valid_suggestion:
+                            self.suggested_speaker_for_next_round = parsed_name
+                            logger.info(f"AI agent {agent_name} suggested {parsed_name} for next round.")
+                        else:
+                            logger.warning(f"AI agent {agent_name} suggested an invalid name: {parsed_name}")
+
                 # 打印智能体回应
                 print(f"\n{agent_name} 的回应: {response[:100]}...\n")
                 

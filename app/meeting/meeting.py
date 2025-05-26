@@ -629,4 +629,80 @@ class Meeting:
         返回:
             List[Dict[str, Any]]: 会议历史记录列表
         """
-        return self.history 
+        return self.history
+    
+    def _check_consensus_reached(self) -> bool:
+        """
+        Checks if a consensus has been reached among AI participants.
+        Consensus is determined by analyzing the last round of statements from all AI agents.
+        """
+        # Filter for active, non-human AI agents
+        ai_agents = [agent for agent in self.agents if not (hasattr(agent, 'is_human') and agent.is_human)]
+
+        if len(ai_agents) < 2:
+            # Consensus is typically meaningful with 2 or more AI participants.
+            return False
+
+        if self.current_round <= 1 and len(ai_agents) > 0: # Only check after the first round for AI agents
+            return False
+
+        # Get the names of all AI agents
+        ai_agent_names = [agent.name for agent in ai_agents]
+
+        # Collect the last messages from each AI agent in the most recent round of discussion
+        # We need to find messages from the current_round - 1 if current_speaker_index is 0,
+        # or current_round if current_speaker_index > 0, to ensure we are looking at the completed last round.
+        
+        # Determine which round to check based on current_speaker_index
+        # If current_speaker_index is 0, it means a full round has just completed (round number already incremented).
+        # So, we look at messages from `self.current_round - 1`.
+        # Otherwise, the current round is still in progress, so we look at `self.current_round`.
+        # However, consensus should be checked on a *completed* round of发言.
+        # The logic in discussion_processor.py updates self.current_round *after* a full round of AI speech.
+        # So, we should look for messages from `self.current_round -1` if it's > 0.
+        # If `self.current_round` is 1, it means no full round has completed yet.
+        
+        round_to_check = self.current_round -1
+        if round_to_check == 0: # No full round completed by AIs yet.
+            return False
+
+        last_ai_messages = {}
+        # Iterate backwards through history to find the latest message from each AI in the target round
+        for message in reversed(self.history):
+            agent_name = message.get("agent")
+            message_round = message.get("round") # Assuming messages are tagged with their round
+
+            if agent_name in ai_agent_names and message_round == round_to_check:
+                if agent_name not in last_ai_messages:
+                    last_ai_messages[agent_name] = message.get("content", "").lower()
+            
+            # If we've found messages for all AIs, we can stop
+            if len(last_ai_messages) == len(ai_agent_names):
+                break
+        
+        # If not all AI agents spoke in the last round, consensus cannot be determined
+        if len(last_ai_messages) < len(ai_agent_names):
+            logger.info(f"Consensus check: Not all AI agents spoke in round {round_to_check}. Found {len(last_ai_messages)} messages out of {len(ai_agent_names)} AIs.")
+            return False
+
+        # Define keywords that indicate agreement or similar conclusions
+        agreement_keywords = [
+            "agree", "consensus", "same conclusion", "similar view", "support this",
+            "concur", "affirm", "likewise", "joint understanding", "shared perspective",
+            "no objections", "settled on this", "we're aligned", "that's correct", "i'm with you"
+        ]
+        
+        # Check if all last AI messages contain at least one agreement keyword
+        # This is a simplified check; more sophisticated NLP could be used.
+        all_agree = True
+        for agent_name, msg_content in last_ai_messages.items():
+            if not any(keyword in msg_content for keyword in agreement_keywords):
+                all_agree = False
+                logger.info(f"Consensus check: Agent {agent_name}'s message in round {round_to_check} did not indicate agreement. Message: '{msg_content[:100]}...'")
+                break
+        
+        if all_agree:
+            logger.info(f"Consensus reached among AI agents in round {round_to_check}.")
+            return True
+            
+        return False

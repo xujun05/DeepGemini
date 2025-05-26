@@ -35,28 +35,72 @@ class DiscussionMode(BaseMeetingMode):
 这是讨论的最后一轮。
 请根据之前的讨论内容，进一步总结你的观点，或回应其他参与者的意见。
 """
+from typing import List, Dict, Any, Optional # Added Optional
+import random
+
+from app.meeting.meeting_modes.base_mode import BaseMeetingMode
+from app.meeting.utils.summary_generator import SummaryGenerator
+
+class DiscussionMode(BaseMeetingMode):
+    """普通讨论模式"""
+    
+    def __init__(self):
+        super().__init__(
+            name="discussion",
+            description="普通讨论模式，参与者轮流发言，共同讨论主题"
+        )
+        self.summary_generator = SummaryGenerator()
+    
+    def get_agent_prompt(self, agent_name: str, agent_role: str, 
+                         meeting_topic: str, current_round: int) -> str:
+        """获取智能体提示"""
+        if current_round == 1:
+            return f"""你是{agent_name}，{agent_role}。
+你正在参加一个关于"{meeting_topic}"的讨论。
+这是第一轮讨论，请分享你对这个主题的初步看法和观点。
+请考虑你的专业背景和角色，提供有价值的见解。
+"""
+        elif current_round != 1 and current_round != self.max_rounds:
+            return f"""你是{agent_name}，{agent_role}。
+你正在参加一个关于"{meeting_topic}"的讨论。
+这是第{current_round}轮讨论，请根据之前的讨论内容，进一步发展你的观点，或回应其他参与者的意见。
+你可以提出新的见解，也可以对之前的观点进行补充或质疑。
+"""
+        else:
+            return f"""你是{agent_name}，{agent_role}。
+你正在参加一个关于"{meeting_topic}"的讨论。
+这是讨论的最后一轮。
+请根据之前的讨论内容，进一步总结你的观点，或回应其他参与者的意见。
+"""
     
     def determine_speaking_order(self, agents: List[Dict[str, Any]], 
-                                current_round: int) -> List[str]:
+                                 current_round: int,
+                                 suggested_next_speaker: Optional[str] = None) -> List[str]:
         """确定发言顺序"""
-        # 获取所有代理名称
         agent_names = [agent["name"] for agent in agents]
-        
-        # 如果设置了自定义发言顺序，则使用自定义顺序
+        final_order = []
+
+        # Determine base order (custom or default)
+        base_order = []
         if self.custom_speaking_order:
-            # logger.info(f"使用自定义发言顺序: {self.custom_speaking_order}")
-            # 验证自定义顺序中的所有名称都在代理列表中
-            valid_names = [name for name in self.custom_speaking_order if name in agent_names]
-            
-            # 添加自定义顺序中没有的代理（可能是后来添加的）
+            valid_custom_names = [name for name in self.custom_speaking_order if name in agent_names]
+            # Add any agents not in custom_speaking_order to the end
             for name in agent_names:
-                if name not in valid_names:
-                    valid_names.append(name)
-                    
-            return valid_names
-        
-        # 否则使用默认顺序（按提供的顺序）
-        return agent_names
+                if name not in valid_custom_names:
+                    valid_custom_names.append(name)
+            base_order = valid_custom_names
+        else:
+            base_order = agent_names[:] # shallow copy
+
+        if suggested_next_speaker and isinstance(suggested_next_speaker, str) and suggested_next_speaker in agent_names:
+            final_order.append(suggested_next_speaker)
+            for name in base_order:
+                if name != suggested_next_speaker:
+                    final_order.append(name)
+        else:
+            final_order = base_order
+            
+        return final_order
     
     def should_end_meeting(self, rounds_completed: int, 
                           meeting_history: List[Dict[str, Any]]) -> bool:
