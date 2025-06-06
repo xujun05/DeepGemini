@@ -207,6 +207,8 @@ DeepGemini provides a compatible API interface that allows it to serve as a drop
 
 ## ✨ Acknowledgements
 
+[![Powered by DartNode](https://dartnode.com/branding/DN-Open-Source-sm.png)](https://dartnode.com "Powered by DartNode - Free VPS for Open Source")
+
 [VTEXS](https://vtexs.com/) is a provider of high-performance cloud infrastructure and VPS hosting services, emphasizing guaranteed resources, 24/7 expert support, and a 99.99% uptime SLA. They support open-source projects by offering hosting resources,  to approved contributors.
 
 ## 📝 License
